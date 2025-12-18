@@ -3,7 +3,7 @@ use jni::objects::{JByteBuffer, JClass, JString, JValue};
 use jni::sys::jstring;
 use jni::JNIEnv;
 use lazy_static::lazy_static;
-use log::{debug, error, info, warn};
+use log::{error, info};
 use memmap2::MmapOptions;
 use serde::{Deserialize, Serialize};
 use std::fs::OpenOptions;
@@ -12,6 +12,8 @@ use std::process::{Command, Stdio};
 use std::sync::Mutex;
 use std::{thread, time};
 use ts_rs::TS;
+
+use crate::constants::{NATVIE_LIB_PATH, SERVER_CLASS_NAME, SHARED_FILE_PATH, SHARED_MEMORY_SIZE};
 
 mod constants;
 
@@ -138,7 +140,7 @@ fn perform_click(env: &mut JNIEnv, use_root: bool, x: i32, y: i32) {
         let cmd = format!("input tap {} {}", real_x, real_y);
         let _ = Command::new("su").arg("-c").arg(cmd).output();
     } else {
-        let class_name = "org/eu/freex/app/NativeLib";
+        let class_name = NATVIE_LIB_PATH;
         let _ = env.call_static_method(
             class_name,
             "dispatchClick",
@@ -151,15 +153,11 @@ fn perform_click(env: &mut JNIEnv, use_root: bool, x: i32, y: i32) {
 // --- 4. 核心逻辑：Root Server 启动 (修复版) ---
 
 fn start_root_server_internal(jar_path: String) {
-    let main_class = "org.eu.freex.server.Main"; // ⚠️ 请确认你的 Server 包名类名是否正确
-    let shared_file_path = "/data/local/tmp/screen_buffer.raw";
-    let buffer_size = 4 * 1024 * 1024; // 4MB
-
     info!("Rust: 正在清理旧的 Java 进程...");
     // 杀死旧进程
     let _ = Command::new("su")
         .arg("-c")
-        .arg(format!("pkill -f {}", main_class))
+        .arg(format!("pkill -f {}", SERVER_CLASS_NAME))
         .output();
     thread::sleep(time::Duration::from_millis(200));
 
@@ -168,7 +166,7 @@ fn start_root_server_internal(jar_path: String) {
     info!("Rust: 委托 Root 创建共享内存文件...");
     let setup_cmd = format!(
         "touch {} && chmod 777 {} && truncate -s {} {}",
-        shared_file_path, shared_file_path, buffer_size, shared_file_path
+        SHARED_FILE_PATH, SHARED_FILE_PATH, SHARED_MEMORY_SIZE, SHARED_FILE_PATH
     );
 
     // 如果系统没有 truncate 命令，可以用 dd (Android通常有dd)
@@ -187,7 +185,7 @@ fn start_root_server_internal(jar_path: String) {
     // 你可能需要通过 JNI 把 packageCodePath 传进来，或者暂时写死
     let cmd = format!(
         "CLASSPATH={} /system/bin/app_process /system/bin {}",
-        jar_path, main_class
+        jar_path, SERVER_CLASS_NAME
     );
 
     let mut child = Command::new("su")
@@ -230,7 +228,7 @@ fn start_root_server_internal(jar_path: String) {
         let file = match OpenOptions::new()
             .read(true)
             .write(true) // App 需要写吗？通常是 Java 写，Rust 读。如果 Rust 不写，可以去掉 write(true)
-            .open(shared_file_path)
+            .open(SHARED_FILE_PATH)
         {
             Ok(f) => f,
             Err(e) => {
