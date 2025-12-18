@@ -1,0 +1,57 @@
+# ========================
+# Android / Gradle
+# ========================
+.gradle/
+build/
+app/build/
+server/build/
+android/app/build/
+android/server/build/
+
+# 本地配置 (绝对路径敏感)
+local.properties
+
+# 临时文件
+captures/
+.externalNativeBuild/
+.cxx/
+*.apk
+*.ap_
+
+# ========================
+# AutoGM 特有生成产物
+# ========================
+# 忽略 Rust 编译生成的 .so 文件
+android/app/src/main/jniLibs/
+# 忽略 Server 编译生成的 .jar 文件
+android/app/src/main/assets/server.jar
+# 忽略 Server 编译生成的中间 dex 文件
+android/server/libs/
+
+# ========================
+# Rust / Cargo
+# ========================
+/rust_core/target/
+**/*.rs.bk
+
+# ========================
+# Frontend (Node.js/Vue)
+# ========================
+node_modules/
+/script_template/dist/
+/script_template/dist-ssr/
+*.local
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ========================
+# IDE / System
+# ========================
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db
+ehthumbs.db
