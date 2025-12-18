@@ -4,6 +4,8 @@ import android.graphics.Bitmap;
 import android.graphics.Rect;
 import android.os.IBinder;
 
+import org.eu.freex.server.GeneratedConstants;
+
 import java.io.RandomAccessFile;
 import java.lang.reflect.Method;
 import java.nio.MappedByteBuffer;
@@ -11,8 +13,7 @@ import java.nio.channels.FileChannel;
 
 public class Main {
 
-    private static final String SHARED_FILE = "/data/local/tmp/screen_buffer.raw";
-    private static final byte[] SIGNAL_FRAME = new byte[] { (byte)0xAA };
+    private static final byte[] SIGNAL_FRAME = new byte[] { GeneratedConstants.SIGNAL_BYTE };
     // 智能降维：固定短边 540p
     private static final int TARGET_SHORT_SIDE = 540;
 
@@ -41,7 +42,7 @@ public class Main {
         MappedByteBuffer sharedMemory = null;
         try {
             // Rust 已经创建并 chmod 777 了文件，直接打开
-            RandomAccessFile file = new RandomAccessFile(SHARED_FILE, "rw");
+            RandomAccessFile file = new RandomAccessFile(GeneratedConstants.SHARED_FILE_PATH, "rw");
             sharedMemory = file.getChannel().map(FileChannel.MapMode.READ_WRITE, 0, 4 * 1024 * 1024);
         } catch (Exception e) {
             System.err.println("Fatal: Failed to open shared memory: " + e.getMessage());
