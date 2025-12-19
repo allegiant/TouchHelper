@@ -3,7 +3,7 @@ use std::path::Path;
 
 use ts_rs::TS;
 
-use crate::{Action, MacroConfig};
+use crate::uniffi_binding::{Action, MacroConfig};
 
 // 🔥 新增：Android Java 常量输出路径
 
