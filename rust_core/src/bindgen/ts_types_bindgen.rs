@@ -1,7 +1,9 @@
-use super::*;
 use std::fs::{self};
 use std::path::Path;
+
 use ts_rs::TS;
+
+use crate::{Action, MacroConfig};
 
 // 🔥 新增：Android Java 常量输出路径
 
@@ -25,7 +27,7 @@ pub fn export_ts_types(path_str: &str) {
     // ts_content.push_str(&AnotherStruct::decl());
 
     // 2. 写入文件
-    let path = Path::new(TS_OUTPUT_PATH);
+    let path = Path::new(path_str);
 
     // 确保父目录存在
     if let Some(parent) = path.parent() {
@@ -34,5 +36,5 @@ pub fn export_ts_types(path_str: &str) {
 
     fs::write(path, ts_content).expect("Failed to write TypeScript definitions");
 
-    println!("✅ TypeScript types exported to: {}", TS_OUTPUT_PATH);
+    println!("✅ TypeScript types exported to: {}", path_str);
 }

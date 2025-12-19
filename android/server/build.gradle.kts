@@ -116,3 +116,19 @@ val buildDex = tasks.register("buildDex") {
 tasks.named("assemble") {
     dependsOn(buildDex)
 }
+
+// (可选) 增加一个清理任务：运行 clean 时删除生成的 .so 文件
+tasks.named("clean") {
+    doLast {
+        val bindConstantsPath = project.rootProject.file("server/src/main/java/bind")
+        val serverJarPath = project.rootProject.file("app/src/main/assets/server.jar")
+        if (bindConstantsPath.exists()) {
+            delete(bindConstantsPath)
+            println("🧹 Cleaned up GeneratedConstants.")
+        }
+        if (serverJarPath.exists()) {
+            delete(serverJarPath)
+            println("🧹 Cleaned up server.jar.")
+        }
+    }
+}

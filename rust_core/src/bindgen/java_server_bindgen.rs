@@ -2,6 +2,8 @@ use std::fs::{self, File};
 use std::io::Write;
 use std::path::Path;
 
+use crate::constants;
+
 pub fn export_java_constants(path_str: &str) {
     println!("🔄 Generating Java constants to: {}", path_str);
     let path = Path::new(path_str);
@@ -16,7 +18,7 @@ pub fn export_java_constants(path_str: &str) {
     let definitions = constants::generate_java_definitions();
 
     let java_content = format!(
-        r#"package org.eu.freex.server.bind;
+        r#"package bind;
 
 /**
  * ⚠️ AUTO-GENERATED FILE. DO NOT EDIT. ⚠️

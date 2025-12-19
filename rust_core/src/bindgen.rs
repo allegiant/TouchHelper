@@ -1,3 +1,3 @@
-pub mod export;
-pub mod gen_constants;
-pub mod uniffi_bindgen;
+pub mod java_server_bindgen;
+pub mod kotlin_bindgen;
+pub mod ts_types_bindgen;

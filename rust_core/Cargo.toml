@@ -4,11 +4,14 @@ version = "0.1.0"
 edition = "2021"
 
 [lib]
-crate-type = ["cdylib"]
+crate-type = ["cdylib", "rlib"]
 name = "rust_core" # 确保库名是 rust_core，生成 librust_core.so
 [[bin]]
 name = "gen_all"
 path = "src/bin/gen_all.rs"
+[[bin]]
+name = "uniffi-bindgen"
+path = "src/bin/uniffi-bindgen.rs"
 
 [dependencies]
 android_logger = "0.15.1"

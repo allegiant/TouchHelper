@@ -14,9 +14,9 @@ use ts_rs::TS;
 
 use crate::constants::{SERVER_CLASS_NAME, SHARED_FILE_PATH};
 
-pub mod bindgen;
 #[macro_use]
 pub mod macros;
+pub mod bindgen;
 pub mod constants;
 
 // 🔥 启用 UniFFI

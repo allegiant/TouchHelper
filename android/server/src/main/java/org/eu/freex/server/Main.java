@@ -4,7 +4,7 @@ import android.graphics.Bitmap;
 import android.graphics.Rect;
 import android.os.IBinder;
 
-import org.eu.freex.server.bind.GeneratedConstants;
+import bind.GeneratedConstants;
 
 import java.io.RandomAccessFile;
 import java.lang.reflect.Method;

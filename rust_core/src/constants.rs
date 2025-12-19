@@ -1,8 +1,7 @@
 // 生成ts types路径
 pub const TS_OUTPUT_PATH: &str = "../script_template/src/types/touch-helper.d.ts";
 // 生成server端Java常量路径
-pub const JAVA_OUTPUT_PATH: &str =
-    "../android/server/src/main/java/org/eu/freex/server/bind/GeneratedConstants.java";
+pub const JAVA_OUTPUT_PATH: &str = "../android/server/src/main/java/bind/GeneratedConstants.java";
 
 // 2. Java Server 的完整类名 (Rust 启动命令需要，Java 本身也可以校验)
 pub const SERVER_CLASS_NAME: &str = "org.eu.freex.server.Main";

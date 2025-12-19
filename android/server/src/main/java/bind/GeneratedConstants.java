@@ -1,4 +1,4 @@
-package org.eu.freex.server.bind;
+package bind;
 
 /**
  * ⚠️ AUTO-GENERATED FILE. DO NOT EDIT. ⚠️
