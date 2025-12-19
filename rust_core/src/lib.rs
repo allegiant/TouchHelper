@@ -1,6 +1,5 @@
 use android_logger::Config;
-use jni::objects::{JByteBuffer, JClass, JString, JValue};
-use jni::sys::jstring;
+use jni::objects::{JByteBuffer, JClass};
 use jni::JNIEnv;
 use lazy_static::lazy_static;
 use log::{error, info};
@@ -13,12 +12,12 @@ use std::sync::Mutex;
 use std::{thread, time};
 use ts_rs::TS;
 
-use crate::constants::{NATVIE_LIB_PATH, SERVER_CLASS_NAME, SHARED_FILE_PATH};
+use crate::constants::{SERVER_CLASS_NAME, SHARED_FILE_PATH};
 
-mod constants;
-
-#[cfg(test)]
-mod export;
+pub mod bindgen;
+#[macro_use]
+pub mod macros;
+pub mod constants;
 
 // 🔥 启用 UniFFI
 uniffi::setup_scaffolding!();

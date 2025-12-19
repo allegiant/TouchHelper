@@ -1,3 +1,6 @@
+val appId = "org.eu.freex.app"
+val uniFfiGeneratedPath = "src/main/java/org/eu/freex/app/generated"
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -5,14 +8,15 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
 }
 
+
 android {
-    namespace = "org.eu.freex.app"
+    namespace = appId
     compileSdk {
         version = release(36)
     }
 
     defaultConfig {
-        applicationId = "org.eu.freex.app"
+        applicationId = appId
         minSdk = 26
         targetSdk = 36
         versionCode = 1
@@ -42,7 +46,7 @@ android {
     }
     // 🔥 关键配置 1: 将 UniFFI 生成的 Kotlin 代码加入源码集
     sourceSets.getByName("main") {
-        java.srcDir("src/main/java/generated")
+        java.srcDir(uniFfiGeneratedPath)
     }
 }
 
@@ -130,7 +134,7 @@ val generateUniFFIBindings = tasks.register<Exec>("generateUniFFIBindings") {
     description = "Generate Kotlin bindings from compiled .so"
     workingDir = rustDir
 
-    val outDir = file("src/main/java/org/eu/freex/app/generated/")
+    val outDir = file(uniFfiGeneratedPath)
 
     // 指向编译好的 .so 文件 (任选一个架构即可，接口是一样的)
     // 这里我们用 arm64-v8a 下的库
@@ -171,8 +175,8 @@ tasks.named("preBuild") {
 // (可选) 增加一个清理任务：运行 clean 时删除生成的 .so 文件
 tasks.named("clean") {
     doLast {
-        val jniLibsDir = project.file("src/main/jniLibs")
-        val generatedDir = project.file("src/main/java/generated")
+        val jniLibsDir = project.file(jniLibsDir)
+        val generatedDir = project.file(uniFfiGeneratedPath)
 
         if (jniLibsDir.exists()) {
             delete(jniLibsDir)

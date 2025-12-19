@@ -4,7 +4,7 @@ import android.graphics.Bitmap;
 import android.graphics.Rect;
 import android.os.IBinder;
 
-import org.eu.freex.server.GeneratedConstants;
+import org.eu.freex.server.bind.GeneratedConstants;
 
 import java.io.RandomAccessFile;
 import java.lang.reflect.Method;
@@ -43,7 +43,7 @@ public class Main {
         try {
             // Rust 已经创建并 chmod 777 了文件，直接打开
             RandomAccessFile file = new RandomAccessFile(GeneratedConstants.SHARED_FILE_PATH, "rw");
-            sharedMemory = file.getChannel().map(FileChannel.MapMode.READ_WRITE, 0, 4 * 1024 * 1024);
+            sharedMemory = file.getChannel().map(FileChannel.MapMode.READ_WRITE, 0, GeneratedConstants.SHARED_MEMORY_SIZE);
         } catch (Exception e) {
             System.err.println("Fatal: Failed to open shared memory: " + e.getMessage());
             return;
