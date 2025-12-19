@@ -13,7 +13,7 @@ android {
 
     defaultConfig {
         applicationId = "org.eu.freex.app"
-        minSdk = 31
+        minSdk = 26
         targetSdk = 36
         versionCode = 1
         versionName = "1.0"
@@ -40,6 +40,10 @@ android {
     buildFeatures {
         compose = true
     }
+    // 🔥 关键配置 1: 将 UniFFI 生成的 Kotlin 代码加入源码集
+    sourceSets.getByName("main") {
+        java.srcDir("src/main/java/generated")
+    }
 }
 
 dependencies {
@@ -52,6 +56,7 @@ dependencies {
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.0")
+    implementation("net.java.dev.jna:jna:5.18.1@aar")
     implementation(libs.androidx.appcompat)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
@@ -62,10 +67,15 @@ dependencies {
     debugImplementation(libs.androidx.compose.ui.test.manifest)
 }
 
-// ==========================================
-// 🦀 Rust 自动化构建配置
-// ==========================================
+// ==========================================================================
+// 🦀 Rust 自动化构建任务
+// ==========================================================================
 
+// 定义 Rust 项目根目录
+val rustDir = file("../../rust_core")
+val jniLibsDir = file("src/main/jniLibs")
+
+// 2. 编译 Rust 动态库 (.so)
 val buildRust = tasks.register<Exec>("buildRust") {
     group = "build"
     description = "Builds the Rust core library using cargo-ndk"
@@ -83,8 +93,6 @@ val buildRust = tasks.register<Exec>("buildRust") {
     if (!rustDir.exists()) {
         throw GradleException("❌ 找不到 rust_core 目录！请检查文件夹结构。\n搜索路径: $rustDir")
     }
-
-    val jniLibsDir = project.file("src/main/jniLibs")
 
     // 2. 准备 Cargo 路径
     val homeDir = File(System.getProperty("user.home"))
@@ -116,14 +124,43 @@ val buildRust = tasks.register<Exec>("buildRust") {
     }
 }
 
+// 1. 生成 Kotlin 绑定代码 (UniFFI)
+val generateUniFFIBindings = tasks.register<Exec>("generateUniFFIBindings") {
+    group = "rust"
+    description = "Generate Kotlin bindings from compiled .so"
+    workingDir = rustDir
+
+    val outDir = file("src/main/java/org/eu/freex/app/generated/")
+
+    // 指向编译好的 .so 文件 (任选一个架构即可，接口是一样的)
+    // 这里我们用 arm64-v8a 下的库
+    val libFile = file("${jniLibsDir.absolutePath}/arm64-v8a/librust_core.so")
+
+    doFirst {
+        if (!outDir.exists()) outDir.mkdirs()
+        if (!libFile.exists()) {
+            throw GradleException("Rust library not found at: ${libFile.absolutePath}. Build failed.")
+        }
+    }
+
+    // 🔥 关键修复：使用 --library 指向 .so 文件，而不是 src/lib.rs
+    commandLine(
+        "cargo", "run", "--bin", "uniffi-bindgen",
+        "generate",
+        "--library", libFile.absolutePath,
+        "--language", "kotlin",
+        "--out-dir", outDir.absolutePath
+    )
+}
+
 
 // ==========================================
 // 🔗 依赖钩子：把所有任务串起来
 // ==========================================
 
 tasks.named("preBuild") {
-    // 1. 让 App 编译前，先编译 Rust
     dependsOn(buildRust)
+    dependsOn(generateUniFFIBindings)
 
     // 2. 同时也依赖 Server (之前配置的)
     if (rootProject.findProject(":server") != null) {
@@ -135,24 +172,15 @@ tasks.named("preBuild") {
 tasks.named("clean") {
     doLast {
         val jniLibsDir = project.file("src/main/jniLibs")
+        val generatedDir = project.file("src/main/java/generated")
+
         if (jniLibsDir.exists()) {
             delete(jniLibsDir)
             println("🧹 Cleaned up jniLibs directory.")
         }
+        if (generatedDir.exists()) {
+            delete(generatedDir)
+            println("🧹 Cleaned up rust generated directory.")
+        }
     }
-}
-
-// 🔥 关键配置：让 App 编译前先编译 Server
-// ==========================================
-
-// 1. 判断 :server 模块是否存在 (防止以后移除模块报错)
-if (rootProject.findProject(":server") != null) {
-
-    // 2. 获取 App 的 preBuild 任务 (这是 Android 构建的最开始)
-    tasks.named("preBuild") {
-        // 3. 声明依赖关系：必须先执行 :server 模块的 buildDex 任务
-        dependsOn(":server:buildDex")
-    }
-
-    println("🔗 已链接依赖: app:preBuild -> server:buildDex")
 }

@@ -44,12 +44,9 @@ class MainActivity : ComponentActivity() {
 
             Log.i("TouchHelper", "Server JAR deployed to: ${serverFile.absolutePath}")
 
-            // 3. 获取屏幕尺寸
-            val metrics = resources.displayMetrics
-
             // 4. 让 Rust 启动 Java Server
             // 注意：Rust 端需要修改 start_root_server_internal 接收这个 path
-            NativeLib.startRootServer(serverFile.absolutePath, metrics.widthPixels, metrics.heightPixels)
+            NativeLib.startRootServer(serverFile.absolutePath)
 
         } catch (e: Exception) {
             Log.e("TouchHelper", "Failed to init server environment", e)
