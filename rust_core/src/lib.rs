@@ -13,7 +13,7 @@ use std::sync::Mutex;
 use std::{thread, time};
 use ts_rs::TS;
 
-use crate::constants::{NATVIE_LIB_PATH, SERVER_CLASS_NAME, SHARED_FILE_PATH, SHARED_MEMORY_SIZE};
+use crate::constants::{NATVIE_LIB_PATH, SERVER_CLASS_NAME, SHARED_FILE_PATH};
 
 mod constants;
 
@@ -166,7 +166,7 @@ fn start_root_server_internal(jar_path: String) {
     info!("Rust: 委托 Root 创建共享内存文件...");
     let setup_cmd = format!(
         "touch {} && chmod 777 {} && truncate -s {} {}",
-        SHARED_FILE_PATH, SHARED_FILE_PATH, SHARED_MEMORY_SIZE, SHARED_FILE_PATH
+        SHARED_FILE_PATH, SHARED_FILE_PATH, shared_m, SHARED_FILE_PATH
     );
 
     // 如果系统没有 truncate 命令，可以用 dd (Android通常有dd)
