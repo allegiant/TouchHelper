@@ -11,7 +11,10 @@ use lazy_static::lazy_static;
 use log::{error, info};
 use memmap2::MmapOptions;
 
-use crate::constants::{SERVER_CLASS_NAME, SHARED_FILE_PATH, SHARED_MEMORY_SIZE};
+use crate::{
+    constants::{SERVER_CLASS_NAME, SHARED_FILE_PATH, SHARED_MEMORY_SIZE},
+    types::PlatformCallback,
+};
 // --- 1. 全局变量 ---
 lazy_static! {
     pub static ref SCREEN_BUFFER: Mutex<(Vec<u8>, usize, usize, usize, f32)> =
@@ -72,10 +75,70 @@ pub fn find_color_in_buffer(
     None
 }
 
+// 只负责算坐标，不负责点
+pub fn map_coordinates(x: i32, y: i32) -> (i32, i32) {
+    let scale = {
+        let guard = SCREEN_BUFFER.lock().unwrap();
+        guard.4
+    };
+    let real_x = (x as f32 * scale) as i32;
+    let real_y = (y as f32 * scale) as i32;
+    (real_x, real_y)
+}
+
 // 简单的 Root 点击命令
 pub fn perform_root_click_cmd(x: i32, y: i32) {
     let cmd = format!("input tap {} {}", x, y);
     let _ = Command::new("su").arg("-c").arg(cmd).output();
+}
+
+// 🔥 修复：参数改为接收 callback，不再需要 JNIEnv
+pub fn perform_click(callback: &Box<dyn PlatformCallback>, use_root: bool, x: i32, y: i32) {
+    let scale = {
+        let guard = SCREEN_BUFFER.lock().unwrap();
+        guard.4
+    };
+    let real_x = (x as f32 * scale) as i32;
+    let real_y = (y as f32 * scale) as i32;
+
+    if use_root {
+        perform_root_click_cmd(real_x, real_y);
+    } else {
+        // 🔥 修复：使用 UniFFI 回调，而不是 JNI 调用
+        callback.dispatch_click(real_x, real_y);
+    }
+}
+
+// 🔥 新增：封装找色逻辑辅助函数
+pub fn find_color_helper(
+    target_rgb: (u8, u8, u8),
+    tolerance: u8,
+    region: Option<Vec<i32>>,
+) -> Option<(i32, i32)> {
+    let guard = SCREEN_BUFFER.lock().unwrap();
+    let pixels = &guard.0;
+    let w = guard.1;
+    let h = guard.2;
+    let stride = guard.3;
+    let scale = guard.4;
+
+    if pixels.is_empty() {
+        return None;
+    }
+
+    let rect = region
+        .map(|r| {
+            (
+                (r[0] as f32 / scale) as usize,
+                (r[1] as f32 / scale) as usize,
+                (r[2] as f32 / scale) as usize,
+                (r[3] as f32 / scale) as usize,
+            )
+        })
+        .unwrap_or((0, 0, w, h));
+
+    // 调用底层的 find_color_in_buffer
+    find_color_in_buffer(pixels, w, h, stride, target_rgb, tolerance, rect)
 }
 
 // --- 5. 核心逻辑：Root Server 启动 (保持原样) ---
