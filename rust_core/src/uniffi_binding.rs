@@ -1,13 +1,12 @@
+use std::{collections::HashMap, sync::Mutex, thread};
+
 use log::info;
-use serde::{Deserialize, Serialize};
-use ts_rs::TS;
 
 use crate::{
-    actions::{control, device, touch, vision},
-    core::start_root_server_internal,
     input::{AccessibilityStrategy, InputController, RootStrategy},
+    js_engine,
     logger::init_android_logger,
-    types::PlatformCallback,
+    types::{AccessibilityService, PlatformLogger},
 };
 
 // ⚠️ UniFFI 的 callback 是 Box<dyn ...>，它是唯一的。
@@ -26,75 +25,82 @@ use crate::{
 // 🔥 启用 UniFFI
 uniffi::setup_scaffolding!();
 
-// 1. 顶层 Action 包装器
-#[derive(Serialize, Deserialize, Debug, TS)]
-#[ts(export)]
-#[serde(tag = "module", content = "action")]
-pub enum Action {
-    Touch(touch::TouchAction),
-    Vision(vision::VisionAction),
-    Device(device::DeviceAction),
-    Control(control::ControlAction),
+// ==========================================
+// 1. 全局状态存储
+// ==========================================
+
+lazy_static::lazy_static! {
+    // 硬件控制器 (Root/无障碍)
+    pub static ref CONTROLLER: Mutex<Option<Box<dyn InputController>>> = Mutex::new(None);
+
+    // 配置池 (Vue 写, JS 读)
+    pub static ref CONFIG_STORE: Mutex<HashMap<String, String>> = Mutex::new(HashMap::new());
 }
 
-#[derive(Serialize, Deserialize, Debug, TS)]
-#[ts(export)]
-pub struct MacroConfig {
-    loop_count: i32,
+// 内部辅助函数：给 JS 引擎读取配置用
+pub fn internal_get_config(key: &str) -> Option<String> {
+    let store = CONFIG_STORE.lock().unwrap();
+    store.get(key).cloned()
+}
+
+// ==========================================
+// 2. 对外 API (Kotlin 调用)
+// ==========================================
+
+/// 初始化服务 (App 启动时调用)
+#[uniffi::export]
+pub fn init_service(
     use_root: bool,
-    actions: Vec<Action>,
-}
-
-#[uniffi::export]
-pub fn start_core_root_server(jar_path: String) {
-    init_android_logger();
-    start_root_server_internal(jar_path);
-}
-
-#[uniffi::export]
-pub fn run_core_macro(config_json: String, callback: Box<dyn PlatformCallback>) {
+    logger: Box<dyn PlatformLogger>,
+    service: Option<Box<dyn AccessibilityService>>,
+) {
     init_android_logger();
 
-    // 错误处理：保留原有的格式返回给 Log 回调
-    let config: MacroConfig = match serde_json::from_str(&config_json) {
-        Ok(c) => c,
-        Err(e) => {
-            let msg = format!("JSON Error: {}", e);
-            callback.log(msg);
+    let ctrl: Box<dyn InputController> = if use_root {
+        info!("Initializing Root Strategy");
+        Box::new(RootStrategy)
+    } else {
+        info!("Initializing Accessibility Strategy");
+        if let Some(s) = service {
+            Box::new(AccessibilityStrategy::new(s))
+        } else {
+            logger.log("Error: Accessibility Service is required for non-root mode".into());
             return;
         }
     };
 
-    let controller: Box<dyn InputController> = if config.use_root {
-        info!("Using Root Strategy");
-        Box::new(RootStrategy)
-    } else {
-        info!("Using Accessibility Strategy");
-        // 无障碍策略需要持有 Callback 的所有权或克隆
-        // 由于 Box<dyn Trait> 很难克隆，我们这里需要特殊处理
-        // 方案 A: 让 Callback 支持 Clone (比较麻烦)
-        // 方案 B: 这里的 callback 已经被 move 进来了。
-        // 如果 AccessibilityStrategy 拿走了 callback，那 Vision 模块要打印日志怎么办？
+    let mut guard = CONTROLLER.lock().unwrap();
+    *guard = Some(ctrl);
+    logger.log(format!(
+        "Service Initialized. Mode: {}",
+        if use_root { "Root" } else { "Accessibility" }
+    ));
+}
 
-        // 💡 最佳实践：将 Controller 和 Logger 分离
-        // 但为了简单，我们可以 clone callback 的引用，或者 wrap 进 Arc<Mutex<...>>
-        // 考虑到 UniFFI 的限制，我们这里直接构造一个新的 Box
-        Box::new(AccessibilityStrategy::new(callback_clone_hack(&callback)))
-    };
+/// 设置配置 (Vue v-model 绑定调用)
+#[uniffi::export]
+pub fn set_config(key: String, value: String) {
+    info!("Config Set: {} = {}", key, value);
+    let mut store = CONFIG_STORE.lock().unwrap();
+    store.insert(key, value.clone());
+}
 
-    for _ in 0..config.loop_count {
-        for action in &config.actions {
-            // 🔥 路由分发：将 Action 派发给对应的处理模块
-            match action {
-                // 传入 &*controller (解引用 Box 得到 dyn Trait)
-                Action::Control(cmd) => control::handle(cmd, &callback),
-                Action::Touch(cmd) => touch::handle(cmd, &callback, &*controller),
-                // Vision 可能既需要 Logger 又需要 Input
-                Action::Vision(cmd) => vision::handle(cmd, &callback, &*controller),
-                Action::Device(cmd) => device::handle(cmd, &callback, &*controller),
-                Action::Control(cmd) => control::handle(cmd, &callback),
+/// 运行 JS 脚本 (点击开始按钮调用)
+#[uniffi::export]
+pub fn run_js_script(script_content: String) {
+    // 开启新线程运行 Tokio + QuickJS，避免阻塞主线程
+    thread::spawn(move || {
+        // 创建 Tokio Runtime
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+
+        rt.block_on(async {
+            match js_engine::run_script_async(script_content).await {
+                Ok(_) => info!("✅ Script execution finished."),
+                Err(e) => info!("❌ Script execution failed: {}", e),
             }
-        }
-    }
-    callback.log("Rust: Macro Finished".to_string());
+        });
+    });
 }

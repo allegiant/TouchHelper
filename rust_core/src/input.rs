@@ -1,4 +1,4 @@
-use crate::types::PlatformCallback;
+use crate::types::AccessibilityService;
 use std::process::Command;
 
 /// 🎮 输入控制策略接口
@@ -65,48 +65,51 @@ impl InputController for RootStrategy {
 // ==================================================
 pub struct AccessibilityStrategy {
     // 必须持有回调引用，以便通知 App 层
-    callback: Box<dyn PlatformCallback>,
+    service: Box<dyn AccessibilityService>,
 }
 
 impl AccessibilityStrategy {
-    pub fn new(callback: Box<dyn PlatformCallback>) -> Self {
-        Self { callback }
+    pub fn new(service: Box<dyn AccessibilityService>) -> Self {
+        Self { service }
     }
 }
 
 impl InputController for AccessibilityStrategy {
     fn click(&self, x: i32, y: i32) {
-        self.callback.dispatch_click(x, y);
+        self.service.dispatch_click(x, y);
     }
 
     fn swipe(&self, points: &Vec<Vec<i32>>, duration_ms: u64) {
         // 暂时只打印日志，需要你在 PlatformCallback 加接口
-        self.callback.log(format!(
+        log::warn!(
             "[Accessibility] Swipe requested: {:?} over {}ms",
-            points, duration_ms
-        ));
-        // self.callback.dispatch_swipe(...) // TODO: 需要扩展 Callback 接口
+            points,
+            duration_ms
+        );
+        // self.callback.dispatch_swipe(...) // TODO: 需要扩展 servie 接口
     }
 
     fn input_text(&self, text: &str) {
         // 无障碍输入文字比较麻烦（需要粘贴板或AccessibilityNodeInfo），暂时 Log
-        self.callback.log(format!(
-            "[Accessibility] Input text not fully implemented: {}",
-            text
-        ));
+        let msg = format!("[Accessibility] Input text not fully implemented: {}", text);
+
+        log::warn!("input_text 功能待实现,暂时只打印日志: {}", msg);
     }
 
     fn key_event(&self, key_code: i32) {
-        self.callback.log(format!(
+        let msg = format!(
             "[Accessibility] Key event {} not supported without Root",
             key_code
-        ));
+        );
+        log::warn!("key_event 功能待实现,暂时只打印日志: {}", msg);
     }
 
     fn shell(&self, cmd: &str) {
-        self.callback.log(format!(
+        let msg = format!(
             "[Permission Denied] Cannot execute shell in Accessibility mode: {}",
             cmd
-        ));
+        );
+
+        log::warn!("shell 功能待实现,暂时只打印日志: {}", msg);
     }
 }

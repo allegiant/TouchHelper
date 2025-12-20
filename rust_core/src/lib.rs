@@ -9,6 +9,7 @@ pub mod uniffi_binding;
 
 pub use uniffi_binding::UniFfiTag;
 
-pub mod actions;
+pub mod api;
 pub mod input;
+pub mod js_engine;
 pub mod types;

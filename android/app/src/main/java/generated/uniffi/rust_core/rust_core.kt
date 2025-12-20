@@ -610,30 +610,46 @@ internal open class UniffiForeignFutureResultVoid(
 internal interface UniffiForeignFutureCompleteVoid : com.sun.jna.Callback {
     fun callback(`callbackData`: Long,`result`: UniffiForeignFutureResultVoid.UniffiByValue,)
 }
-internal interface UniffiCallbackInterfacePlatformCallbackMethod0 : com.sun.jna.Callback {
+internal interface UniffiCallbackInterfaceAccessibilityServiceMethod0 : com.sun.jna.Callback {
     fun callback(`uniffiHandle`: Long,`x`: Int,`y`: Int,`uniffiOutReturn`: Pointer,uniffiCallStatus: UniffiRustCallStatus,)
 }
-internal interface UniffiCallbackInterfacePlatformCallbackMethod1 : com.sun.jna.Callback {
+internal interface UniffiCallbackInterfacePlatformLoggerMethod0 : com.sun.jna.Callback {
     fun callback(`uniffiHandle`: Long,`msg`: RustBuffer.ByValue,`uniffiOutReturn`: Pointer,uniffiCallStatus: UniffiRustCallStatus,)
 }
-@Structure.FieldOrder("uniffiFree", "uniffiClone", "dispatchClick", "log")
-internal open class UniffiVTableCallbackInterfacePlatformCallback(
+@Structure.FieldOrder("uniffiFree", "uniffiClone", "dispatchClick")
+internal open class UniffiVTableCallbackInterfaceAccessibilityService(
     @JvmField internal var `uniffiFree`: UniffiCallbackInterfaceFree? = null,
     @JvmField internal var `uniffiClone`: UniffiCallbackInterfaceClone? = null,
-    @JvmField internal var `dispatchClick`: UniffiCallbackInterfacePlatformCallbackMethod0? = null,
-    @JvmField internal var `log`: UniffiCallbackInterfacePlatformCallbackMethod1? = null,
+    @JvmField internal var `dispatchClick`: UniffiCallbackInterfaceAccessibilityServiceMethod0? = null,
 ) : Structure() {
     class UniffiByValue(
         `uniffiFree`: UniffiCallbackInterfaceFree? = null,
         `uniffiClone`: UniffiCallbackInterfaceClone? = null,
-        `dispatchClick`: UniffiCallbackInterfacePlatformCallbackMethod0? = null,
-        `log`: UniffiCallbackInterfacePlatformCallbackMethod1? = null,
-    ): UniffiVTableCallbackInterfacePlatformCallback(`uniffiFree`,`uniffiClone`,`dispatchClick`,`log`,), Structure.ByValue
+        `dispatchClick`: UniffiCallbackInterfaceAccessibilityServiceMethod0? = null,
+    ): UniffiVTableCallbackInterfaceAccessibilityService(`uniffiFree`,`uniffiClone`,`dispatchClick`,), Structure.ByValue
 
-   internal fun uniffiSetValue(other: UniffiVTableCallbackInterfacePlatformCallback) {
+   internal fun uniffiSetValue(other: UniffiVTableCallbackInterfaceAccessibilityService) {
         `uniffiFree` = other.`uniffiFree`
         `uniffiClone` = other.`uniffiClone`
         `dispatchClick` = other.`dispatchClick`
+    }
+
+}
+@Structure.FieldOrder("uniffiFree", "uniffiClone", "log")
+internal open class UniffiVTableCallbackInterfacePlatformLogger(
+    @JvmField internal var `uniffiFree`: UniffiCallbackInterfaceFree? = null,
+    @JvmField internal var `uniffiClone`: UniffiCallbackInterfaceClone? = null,
+    @JvmField internal var `log`: UniffiCallbackInterfacePlatformLoggerMethod0? = null,
+) : Structure() {
+    class UniffiByValue(
+        `uniffiFree`: UniffiCallbackInterfaceFree? = null,
+        `uniffiClone`: UniffiCallbackInterfaceClone? = null,
+        `log`: UniffiCallbackInterfacePlatformLoggerMethod0? = null,
+    ): UniffiVTableCallbackInterfacePlatformLogger(`uniffiFree`,`uniffiClone`,`log`,), Structure.ByValue
+
+   internal fun uniffiSetValue(other: UniffiVTableCallbackInterfacePlatformLogger) {
+        `uniffiFree` = other.`uniffiFree`
+        `uniffiClone` = other.`uniffiClone`
         `log` = other.`log`
     }
 
@@ -661,13 +677,15 @@ internal object IntegrityCheckingUniffiLib {
         uniffiCheckContractApiVersion(this)
         uniffiCheckApiChecksums(this)
     }
-    external fun uniffi_rust_core_checksum_func_run_core_macro(
+    external fun uniffi_rust_core_checksum_func_init_service(
     ): Short
-    external fun uniffi_rust_core_checksum_func_start_core_root_server(
+    external fun uniffi_rust_core_checksum_func_run_js_script(
     ): Short
-    external fun uniffi_rust_core_checksum_method_platformcallback_dispatch_click(
+    external fun uniffi_rust_core_checksum_func_set_config(
     ): Short
-    external fun uniffi_rust_core_checksum_method_platformcallback_log(
+    external fun uniffi_rust_core_checksum_method_accessibilityservice_dispatch_click(
+    ): Short
+    external fun uniffi_rust_core_checksum_method_platformlogger_log(
     ): Short
     external fun ffi_rust_core_uniffi_contract_version(
     ): Int
@@ -680,14 +698,19 @@ internal object UniffiLib {
 
     init {
         Native.register(UniffiLib::class.java, findLibraryName(componentName = "rust_core"))
-        uniffiCallbackInterfacePlatformCallback.register(this)
+        uniffiCallbackInterfaceAccessibilityService.register(this)
+        uniffiCallbackInterfacePlatformLogger.register(this)
         
     }
-    external fun uniffi_rust_core_fn_init_callback_vtable_platformcallback(`vtable`: UniffiVTableCallbackInterfacePlatformCallback,
+    external fun uniffi_rust_core_fn_init_callback_vtable_accessibilityservice(`vtable`: UniffiVTableCallbackInterfaceAccessibilityService,
     ): Unit
-    external fun uniffi_rust_core_fn_func_run_core_macro(`configJson`: RustBuffer.ByValue,`callback`: Long,uniffi_out_err: UniffiRustCallStatus, 
+    external fun uniffi_rust_core_fn_init_callback_vtable_platformlogger(`vtable`: UniffiVTableCallbackInterfacePlatformLogger,
     ): Unit
-    external fun uniffi_rust_core_fn_func_start_core_root_server(`jarPath`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    external fun uniffi_rust_core_fn_func_init_service(`useRoot`: Byte,`logger`: Long,`service`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): Unit
+    external fun uniffi_rust_core_fn_func_run_js_script(`scriptContent`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): Unit
+    external fun uniffi_rust_core_fn_func_set_config(`key`: RustBuffer.ByValue,`value`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): Unit
     external fun ffi_rust_core_rustbuffer_alloc(`size`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
@@ -808,16 +831,19 @@ private fun uniffiCheckContractApiVersion(lib: IntegrityCheckingUniffiLib) {
 }
 @Suppress("UNUSED_PARAMETER")
 private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
-    if (lib.uniffi_rust_core_checksum_func_run_core_macro() != 12160.toShort()) {
+    if (lib.uniffi_rust_core_checksum_func_init_service() != 23820.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_rust_core_checksum_func_start_core_root_server() != 4774.toShort()) {
+    if (lib.uniffi_rust_core_checksum_func_run_js_script() != 10495.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_rust_core_checksum_method_platformcallback_dispatch_click() != 16187.toShort()) {
+    if (lib.uniffi_rust_core_checksum_func_set_config() != 41135.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_rust_core_checksum_method_platformcallback_log() != 14872.toShort()) {
+    if (lib.uniffi_rust_core_checksum_method_accessibilityservice_dispatch_click() != 18860.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_rust_core_checksum_method_platformlogger_log() != 36563.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
 }
@@ -970,6 +996,29 @@ public object FfiConverterInt: FfiConverter<Int, Int> {
 /**
  * @suppress
  */
+public object FfiConverterBoolean: FfiConverter<Boolean, Byte> {
+    override fun lift(value: Byte): Boolean {
+        return value.toInt() != 0
+    }
+
+    override fun read(buf: ByteBuffer): Boolean {
+        return lift(buf.get())
+    }
+
+    override fun lower(value: Boolean): Byte {
+        return if (value) 1.toByte() else 0.toByte()
+    }
+
+    override fun allocationSize(value: Boolean) = 1UL
+
+    override fun write(value: Boolean, buf: ByteBuffer) {
+        buf.put(lower(value))
+    }
+}
+
+/**
+ * @suppress
+ */
 public object FfiConverterString: FfiConverter<String, RustBuffer.ByValue> {
     // Note: we don't inherit from FfiConverterRustBuffer, because we use a
     // special encoding when lowering/lifting.  We can use `RustBuffer.len` to
@@ -1028,11 +1077,9 @@ public object FfiConverterString: FfiConverter<String, RustBuffer.ByValue> {
 
 
 
-public interface PlatformCallback {
+public interface AccessibilityService {
     
     fun `dispatchClick`(`x`: kotlin.Int, `y`: kotlin.Int)
-    
-    fun `log`(`msg`: kotlin.String)
     
     companion object
 }
@@ -1040,10 +1087,10 @@ public interface PlatformCallback {
 
 
 // Put the implementation in an object so we don't pollute the top-level namespace
-internal object uniffiCallbackInterfacePlatformCallback {
-    internal object `dispatchClick`: UniffiCallbackInterfacePlatformCallbackMethod0 {
+internal object uniffiCallbackInterfaceAccessibilityService {
+    internal object `dispatchClick`: UniffiCallbackInterfaceAccessibilityServiceMethod0 {
         override fun callback(`uniffiHandle`: Long,`x`: Int,`y`: Int,`uniffiOutReturn`: Pointer,uniffiCallStatus: UniffiRustCallStatus,) {
-            val uniffiObj = FfiConverterTypePlatformCallback.handleMap.get(uniffiHandle)
+            val uniffiObj = FfiConverterTypeAccessibilityService.handleMap.get(uniffiHandle)
             val makeCall = { ->
                 uniffiObj.`dispatchClick`(
                     FfiConverterInt.lift(`x`),
@@ -1054,9 +1101,57 @@ internal object uniffiCallbackInterfacePlatformCallback {
             uniffiTraitInterfaceCall(uniffiCallStatus, makeCall, writeReturn)
         }
     }
-    internal object `log`: UniffiCallbackInterfacePlatformCallbackMethod1 {
+
+    internal object uniffiFree: UniffiCallbackInterfaceFree {
+        override fun callback(handle: Long) {
+            FfiConverterTypeAccessibilityService.handleMap.remove(handle)
+        }
+    }
+
+    internal object uniffiClone: UniffiCallbackInterfaceClone {
+        override fun callback(handle: Long): Long {
+            return FfiConverterTypeAccessibilityService.handleMap.clone(handle)
+        }
+    }
+
+    internal var vtable = UniffiVTableCallbackInterfaceAccessibilityService.UniffiByValue(
+        uniffiFree,
+        uniffiClone,
+        `dispatchClick`,
+    )
+
+    // Registers the foreign callback with the Rust side.
+    // This method is generated for each callback interface.
+    internal fun register(lib: UniffiLib) {
+        lib.uniffi_rust_core_fn_init_callback_vtable_accessibilityservice(vtable)
+    }
+}
+
+/**
+ * The ffiConverter which transforms the Callbacks in to handles to pass to Rust.
+ *
+ * @suppress
+ */
+public object FfiConverterTypeAccessibilityService: FfiConverterCallbackInterface<AccessibilityService>()
+
+
+
+
+
+public interface PlatformLogger {
+    
+    fun `log`(`msg`: kotlin.String)
+    
+    companion object
+}
+
+
+
+// Put the implementation in an object so we don't pollute the top-level namespace
+internal object uniffiCallbackInterfacePlatformLogger {
+    internal object `log`: UniffiCallbackInterfacePlatformLoggerMethod0 {
         override fun callback(`uniffiHandle`: Long,`msg`: RustBuffer.ByValue,`uniffiOutReturn`: Pointer,uniffiCallStatus: UniffiRustCallStatus,) {
-            val uniffiObj = FfiConverterTypePlatformCallback.handleMap.get(uniffiHandle)
+            val uniffiObj = FfiConverterTypePlatformLogger.handleMap.get(uniffiHandle)
             val makeCall = { ->
                 uniffiObj.`log`(
                     FfiConverterString.lift(`msg`),
@@ -1069,27 +1164,26 @@ internal object uniffiCallbackInterfacePlatformCallback {
 
     internal object uniffiFree: UniffiCallbackInterfaceFree {
         override fun callback(handle: Long) {
-            FfiConverterTypePlatformCallback.handleMap.remove(handle)
+            FfiConverterTypePlatformLogger.handleMap.remove(handle)
         }
     }
 
     internal object uniffiClone: UniffiCallbackInterfaceClone {
         override fun callback(handle: Long): Long {
-            return FfiConverterTypePlatformCallback.handleMap.clone(handle)
+            return FfiConverterTypePlatformLogger.handleMap.clone(handle)
         }
     }
 
-    internal var vtable = UniffiVTableCallbackInterfacePlatformCallback.UniffiByValue(
+    internal var vtable = UniffiVTableCallbackInterfacePlatformLogger.UniffiByValue(
         uniffiFree,
         uniffiClone,
-        `dispatchClick`,
         `log`,
     )
 
     // Registers the foreign callback with the Rust side.
     // This method is generated for each callback interface.
     internal fun register(lib: UniffiLib) {
-        lib.uniffi_rust_core_fn_init_callback_vtable_platformcallback(vtable)
+        lib.uniffi_rust_core_fn_init_callback_vtable_platformlogger(vtable)
     }
 }
 
@@ -1098,21 +1192,71 @@ internal object uniffiCallbackInterfacePlatformCallback {
  *
  * @suppress
  */
-public object FfiConverterTypePlatformCallback: FfiConverterCallbackInterface<PlatformCallback>() fun `runCoreMacro`(`configJson`: kotlin.String, `callback`: PlatformCallback)
+public object FfiConverterTypePlatformLogger: FfiConverterCallbackInterface<PlatformLogger>()
+
+
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterOptionalTypeAccessibilityService: FfiConverterRustBuffer<AccessibilityService?> {
+    override fun read(buf: ByteBuffer): AccessibilityService? {
+        if (buf.get().toInt() == 0) {
+            return null
+        }
+        return FfiConverterTypeAccessibilityService.read(buf)
+    }
+
+    override fun allocationSize(value: AccessibilityService?): ULong {
+        if (value == null) {
+            return 1UL
+        } else {
+            return 1UL + FfiConverterTypeAccessibilityService.allocationSize(value)
+        }
+    }
+
+    override fun write(value: AccessibilityService?, buf: ByteBuffer) {
+        if (value == null) {
+            buf.put(0)
+        } else {
+            buf.put(1)
+            FfiConverterTypeAccessibilityService.write(value, buf)
+        }
+    }
+}
+        /**
+         * 初始化服务 (App 启动时调用)
+         */ fun `initService`(`useRoot`: kotlin.Boolean, `logger`: PlatformLogger, `service`: AccessibilityService?)
         = 
     uniffiRustCall() { _status ->
-    UniffiLib.uniffi_rust_core_fn_func_run_core_macro(
+    UniffiLib.uniffi_rust_core_fn_func_init_service(
     
-        FfiConverterString.lower(`configJson`),FfiConverterTypePlatformCallback.lower(`callback`),_status)
+        FfiConverterBoolean.lower(`useRoot`),FfiConverterTypePlatformLogger.lower(`logger`),FfiConverterOptionalTypeAccessibilityService.lower(`service`),_status)
 }
     
     
- fun `startCoreRootServer`(`jarPath`: kotlin.String)
+
+        /**
+         * 运行 JS 脚本 (点击开始按钮调用)
+         */ fun `runJsScript`(`scriptContent`: kotlin.String)
         = 
     uniffiRustCall() { _status ->
-    UniffiLib.uniffi_rust_core_fn_func_start_core_root_server(
+    UniffiLib.uniffi_rust_core_fn_func_run_js_script(
     
-        FfiConverterString.lower(`jarPath`),_status)
+        FfiConverterString.lower(`scriptContent`),_status)
+}
+    
+    
+
+        /**
+         * 设置配置 (Vue v-model 绑定调用)
+         */ fun `setConfig`(`key`: kotlin.String, `value`: kotlin.String)
+        = 
+    uniffiRustCall() { _status ->
+    UniffiLib.uniffi_rust_core_fn_func_set_config(
+    
+        FfiConverterString.lower(`key`),FfiConverterString.lower(`value`),_status)
 }
     
     

@@ -62,7 +62,7 @@ object ScreenCaptureManager {
                 val width = image.width
                 val height = image.height
                 val pixelStride = plane.pixelStride
-                val rowStride = plane.rowStride // ⚠️ 这里通常不等于 width * 4
+                val rowStride = plane.rowStride
 
                 // 将 Buffer 传给 Rust
                 // 注意：Rust 端会自动处理 stride，我们直接把原始数据扔进去

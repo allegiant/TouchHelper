@@ -1,6 +1,5 @@
 package org.eu.freex.app
 
-
 import android.annotation.SuppressLint
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -12,10 +11,15 @@ import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
 import android.webkit.WebView
 import android.webkit.WebViewClient
-import androidx.core.app.ComponentActivity
+import androidx.activity.ComponentActivity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+
+// 引入 UniFFI 生成的全局函数
+// 如果生成的代码就在 org.eu.freex.app 包下，这两行通常不需要手动写
+// import org.eu.freex.app.runJsScript
+// import org.eu.freex.app.setConfig
 
 class WebViewActivity : ComponentActivity() {
 
@@ -42,20 +46,18 @@ class WebViewActivity : ComponentActivity() {
 
         setupWebView()
 
-        // 1. 优先检查是否有 Intent 传来的开发地址 (通过 adb 启动时)
+        // 1. 优先检查是否有 Intent 传来的开发地址
         val devUrl = intent.getStringExtra("path")
         if (devUrl != null) {
             webView.loadUrl(devUrl)
         } else {
             // 2. 默认加载打包好的 assets 资源
-            // 这里假设你 npm run build 后的 dist 放在了 assets/dist 目录
             webView.loadUrl("file:///android_asset/dist/index.html")
         }
     }
 
     override fun onResume() {
         super.onResume()
-        // 注册广播接收器
         val filter = IntentFilter("org.eu.freex.LOAD_UI")
         registerReceiver(devReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
     }
@@ -71,7 +73,6 @@ class WebViewActivity : ComponentActivity() {
             javaScriptEnabled = true
             domStorageEnabled = true
             allowFileAccess = true
-            // 允许跨域 (开发方便)
             allowUniversalAccessFromFileURLs = true
         }
 
@@ -82,25 +83,48 @@ class WebViewActivity : ComponentActivity() {
         webView.addJavascriptInterface(JSBridge(), "TouchHelper")
     }
 
-    // 🔥 JS 交互接口
+    // 🔥 核心修改：JS 交互接口适配 UniFFI
     inner class JSBridge {
+
+        /**
+         * 运行 JS 脚本 (替代原来的 runMacro)
+         * 前端调用: window.TouchHelper.runScript("Device.click(100, 200);")
+         */
         @JavascriptInterface
-        fun runConfig(json: String) {
-            Log.d("TouchHelper", "Receive Config from JS: $json")
+        fun runScript(script: String) {
+            Log.d("TouchHelper", "Running JS Script...")
 
-            // 在后台线程运行 Rust 宏，防止阻塞 UI
+            // 虽然 runJsScript 在 Rust 内部是新开线程，但为了防止 JNI 调用本身卡顿 UI，
+            // 建议放在 IO 线程调用
             CoroutineScope(Dispatchers.IO).launch {
-                val result = NativeLib.runMacro(json)
-                Log.i("TouchHelper", "Macro Result: $result")
-
-                // TODO: 如果需要，可以把 result 回调给 WebView
-                // runOnUiThread { webView.evaluateJavascript("...", null) }
+                try {
+                    // 直接调用 UniFFI 生成的函数
+                    uniffi.rust_core.runJsScript(script)
+                } catch (e: Exception) {
+                    Log.e("TouchHelper", "Script Error", e)
+                }
             }
         }
 
+        /**
+         * 保存配置
+         * 前端调用: window.TouchHelper.setConfig("game_mode", "1")
+         */
+        @JavascriptInterface
+        fun setConfig(key: String, value: String) {
+            Log.d("TouchHelper", "Set Config: $key = $value")
+            CoroutineScope(Dispatchers.IO).launch {
+                // 直接调用 UniFFI 生成的函数
+                uniffi.rust_core.setConfig(key, value)
+            }
+        }
+
+        /**
+         * 日志打印
+         */
         @JavascriptInterface
         fun log(msg: String) {
-            Log.i("TouchHelper-JS", msg)
+            Log.i("TouchHelper-Web", msg)
         }
     }
 }
