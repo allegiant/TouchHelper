@@ -11,10 +11,12 @@ import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import androidx.core.content.edit
 
 // 引入 UniFFI 生成的全局函数
 // 如果生成的代码就在 org.eu.freex.app 包下，这两行通常不需要手动写
@@ -113,9 +115,28 @@ class WebViewActivity : ComponentActivity() {
         @JavascriptInterface
         fun setConfig(key: String, value: String) {
             Log.d("TouchHelper", "Set Config: $key = $value")
+
+            // ✅ 1. 同步保存到 Android SharedPreferences
+            // 只有保存了，下次 MainActivity 启动时才能读到正确的值
+            val prefs = getSharedPreferences("config", MODE_PRIVATE)
+            prefs.edit {
+                if (key == "use_root") {
+                    // 特殊处理 bool 类型
+                    putBoolean(key, value == "true")
+                } else {
+                    // 其他配置存字符串
+                    putString(key, value)
+                }
+            } // 异步提交
+
+            // ✅ 2. 通知 Rust (内存更新)
             CoroutineScope(Dispatchers.IO).launch {
-                // 直接调用 UniFFI 生成的函数
                 uniffi.rust_core.setConfig(key, value)
+            }
+
+            // 可选：如果是切换 Root 模式，通常需要提示用户重启 App 才能生效
+            if (key == "use_root") {
+                Toast.makeText(this@WebViewActivity, "配置已保存，请重启应用生效", Toast.LENGTH_LONG).show()
             }
         }
 

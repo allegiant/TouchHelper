@@ -45,7 +45,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
-import { Bridge } from './utils/native-bridge';
+import { Bridge } from '../utils/native-bridge';
 
 // --- 状态定义 ---
 const useRoot = ref(false); // 默认关闭，实际应从配置读取
