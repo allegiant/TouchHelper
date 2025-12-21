@@ -1,101 +1,135 @@
 <template>
-  <div class="card config-card">
-    <div class="card-header">
-      <h3>⚙️ 参数配置 (Settings)</h3>
-      <button class="btn-small" @click="syncAllConfigs">强制保存</button>
+  <div class="app-container">
+    <header>
+      <h2>TouchHelper Pro</h2>
+      <select v-model="selectedGame" class="game-select">
+        <option value="Legend">传奇脚本 (Legend)</option>
+        <option value="Custom">自定义 (编辑器)</option>
+      </select>
+    </header>
+
+    <div class="card config-card">
     </div>
 
-    <div class="form-grid">
-      <div class="form-item highlight-item">
-        <label class="label-with-desc">
-          <span>运行模式 (Root Mode)</span>
-          <small class="desc">切换后需重启 App 生效</small>
-        </label>
-        <label class="switch">
-          <input type="checkbox" v-model="useRoot" @change="handleRootChange">
-          <span class="slider round"></span>
-        </label>
+    <div class="card script-card">
+      <div class="card-header">
+        <h3>
+          {{ selectedGame === 'Custom' ? '📝 编辑代码' : '📦 编译预览' }}
+        </h3>
       </div>
-
-      <div class="divider"></div>
-
-      <div class="form-item">
-        <label>循环次数 (Loop):</label>
-        <input type="number" v-model="loopCount" @change="syncConfig('loop_times', loopCount)">
+      <div class="editor-container">
+        <textarea v-model="displayContent" :readonly="selectedGame !== 'Custom'"
+          :placeholder="selectedGame !== 'Custom' ? '点击运行后这里将显示编译后的代码...' : '在此编写...'"></textarea>
       </div>
+    </div>
 
-      <div class="form-item">
-        <label>启用 Boss 模式:</label>
-        <label class="switch">
-          <input type="checkbox" v-model="enableBoss" @change="syncConfig('enable_boss', enableBoss)">
-          <span class="slider round"></span>
-        </label>
-      </div>
-
-      <div class="form-item">
-        <label>目标颜色 (Hex):</label>
-        <div class="color-picker-wrapper">
-          <input type="color" v-model="targetColor" @change="syncConfig('target_color', targetColor)">
-          <span>{{ targetColor }}</span>
-        </div>
-      </div>
+    <div class="actions">
+      <button class="btn-primary" @click="run" :disabled="isCompiling">
+        {{ isCompiling ? '⏳ 编译中...' : '▶️ 编译并运行' }}
+      </button>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, computed } from 'vue';
 import { Bridge } from './utils/native-bridge';
+import { bundleScript } from './utils/bundler';
 
-// --- 状态定义 ---
-const useRoot = ref(false); // 默认关闭，实际应从配置读取
+// 1. 动态加载 src/scripts 下的所有 TS 文件源码
+// eager=true 确保直接拿到内容字符串
+const rawGameFiles = import.meta.glob('./scripts/**/*.ts', { as: 'raw', eager: true });
+
 const loopCount = ref(5);
 const enableBoss = ref(true);
 const targetColor = ref("#ff0000");
 
-// --- 核心方法 ---
+const selectedGame = ref('Legend');
+const customCode = ref('// 在此写简单的单文件代码\nlog("Hello");');
+const compiledCode = ref(''); // 存储编译后的结果
+const isCompiling = ref(false);
 
-// 1. 处理 Root 模式切换 (特殊处理：需要存 SharedPref 并提示重启)
-function handleRootChange() {
-  const valStr = useRoot.value ? "true" : "false";
-  // 调用 Bridge 保存到 SharedPreferences
-  Bridge.setConfig("use_root", valStr);
+// 显示逻辑：如果是Custom模式显示用户代码，否则显示编译结果
+const displayContent = computed({
+  get: () => selectedGame.value === 'Custom' ? customCode.value : compiledCode.value,
+  set: (v) => { if (selectedGame.value === 'Custom') customCode.value = v; }
+});
 
-  // 提示用户 (实际生产中可以使用 Toast)
-  alert(`模式已切换为 [${useRoot.value ? 'Root' : '无障碍'}]\n请完全关闭并重启 App 以生效！`);
-}
-
-// 2. 同步普通脚本参数
-function syncConfig(key: string, val: any) {
-  Bridge.setConfig(key, String(val));
-}
-
-// 3. 批量同步 (暴露给父组件调用)
+// 同步配置 (原有逻辑)
 function syncAllConfigs() {
-  syncConfig('loop_times', loopCount.value);
-  syncConfig('enable_boss', enableBoss.value);
-  syncConfig('target_color', targetColor.value);
-  // Root 模式通常不需要每次运行都同步，因为它是在 App 启动时读取的
-  // 但为了保险也可以同步一次
-  syncConfig('use_root', useRoot.value ? "true" : "false");
-
-  Bridge.log("配置已同步到 Native 层");
+  Bridge.setConfig('loop_times', String(loopCount.value));
+  Bridge.setConfig('enable_boss', String(enableBoss.value));
+  Bridge.setConfig('target_color', targetColor.value);
 }
 
-// 4. 初始化
-onMounted(() => {
-  // 这里理想情况是能从 Rust/Android 获取当前配置回显
-  // 目前因为没有 getConfig 接口，我们先做简单的初始化同步
+// 核心运行逻辑
+// 修改 run 函数部分
+async function run() {
   syncAllConfigs();
-});
+  isCompiling.value = true;
 
-// 5. 暴露方法给 App.vue
-defineExpose({
-  syncAllConfigs
-});
+  try {
+    let finalScript = '';
+
+    if (selectedGame.value === 'Custom') {
+      finalScript = customCode.value;
+    } else {
+      const gamePrefix = `./scripts/${selectedGame.value}/`;
+      const files: Record<string, string> = {};
+
+      console.log(`[Vue] 正在扫描路径前缀: ${gamePrefix}`);
+
+      // 遍历所有读取到的文件
+      for (const path in rawGameFiles) {
+        // 打印所有发现的文件路径，方便调试
+        // console.log(`[Vue] 发现文件: ${path}`);
+
+        if (path.startsWith(gamePrefix)) {
+          const virtualPath = path.replace(gamePrefix, '/');
+          // 确保内容是字符串
+          const content = rawGameFiles[path];
+          files[virtualPath] = typeof content === 'string' ? content : String(content);
+        }
+      }
+
+      // 🔥 关键调试：打印最终生成的文件映射表 Key
+      console.log('[Vue] 虚拟文件系统 Keys:', JSON.stringify(Object.keys(files)));
+
+      if (!files['/index.ts']) {
+        alert(`错误：未找到入口文件 /index.ts\n请检查 src/scripts/${selectedGame.value}/ 目录`);
+        isCompiling.value = false;
+        return;
+      }
+
+      finalScript = await bundleScript(files);
+      compiledCode.value = finalScript;
+    }
+
+    if (!finalScript || finalScript.length === 0) {
+      alert("严重错误：打包产物为空！请检查控制台日志。");
+      return;
+    }
+
+    Bridge.log(`[Vue] 下发脚本长度: ${finalScript.length}`);
+    Bridge.runScript(finalScript);
+
+  } catch (e: any) {
+    alert("执行/编译错误: " + e.message);
+    console.error(e);
+  } finally {
+    isCompiling.value = false;
+  }
+}
 </script>
 
 <style scoped>
+.game-select {
+  padding: 8px;
+  border-radius: 4px;
+  border: 1px solid #ccc;
+  font-size: 14px;
+}
+
 .card {
   background: white;
   border-radius: 12px;
