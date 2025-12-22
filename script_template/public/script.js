@@ -25,8 +25,8 @@ var GameScript = (() => {
   });
 
   // src/scripts/Legend/tasks.ts
-  async function fightLoop() {
-    const color = GameSettings.monsterColor;
+  async function fightLoop(config) {
+    const color = config.monsterColor;
     log(`[Task] 开始找怪，颜色: ${color}`);
     for (let i = 0; i < 3; i++) {
       const point = Colors.findColorPoint(color);
@@ -41,11 +41,22 @@ var GameScript = (() => {
     }
   }
 
+  // src/scripts/Legend/config.ts
+  var DEFAULT_CONFIG = {
+    loopTimes: 5,
+    monsterColor: "#FF0000",
+    maps: [
+      { id: 101, name: "猪洞七层", x: 100, y: 200 },
+      { id: 102, name: "祖玛大厅", x: 150, y: 300 }
+    ]
+  };
+
   // src/scripts/Legend/index.ts
   async function main() {
-    log(`🚀 脚本启动1...`);
+    const config = typeof GameSettings !== "undefined" ? GameSettings : DEFAULT_CONFIG;
+    log(`🚀 脚本启动...`);
     while (true) {
-      await fightLoop();
+      await fightLoop(config);
       log("休息 3 秒...");
       await Thread.sleep(3e3);
     }

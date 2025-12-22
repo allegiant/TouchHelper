@@ -1,9 +1,8 @@
 import { type GameConfig } from './config';
 
-declare const GameSettings: GameConfig;
 
-export async function fightLoop() {
-  const color = GameSettings.monsterColor;
+export async function fightLoop(config: GameConfig) {
+  const color = config.monsterColor;
   log(`[Task] 开始找怪，颜色: ${color}`);
 
   for (let i = 0; i < 3; i++) {
