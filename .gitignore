@@ -41,6 +41,7 @@ android/server/libs/
 node_modules/
 /script_template/dist/
 /script_template/dist-ssr/
+/script_template/public/script.*
 *.local
 npm-debug.log*
 yarn-debug.log*
