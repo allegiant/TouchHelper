@@ -1,5 +1,4 @@
 use crate::api::colors::Colors;
-use crate::api::config::Config;
 use crate::api::device::Device;
 use crate::api::thread::Thread;
 use crate::uniffi_binding::CONTROLLER;
@@ -8,7 +7,6 @@ use rquickjs::prelude::Func;
 use rquickjs::{Class, Ctx, Object, Result};
 
 pub mod colors;
-pub mod config;
 pub mod device;
 pub mod thread;
 
@@ -42,13 +40,11 @@ pub fn register_globals<'js>(globals: &Object<'js>, ctx: &Ctx<'js>) -> Result<()
 
     // 2. 注册类 (Class Definition)
     Class::<Colors>::define(globals)?;
-    Class::<Config>::define(globals)?;
     Class::<Device>::define(globals)?;
     Class::<Thread>::define(globals)?;
 
     // 将实例绑定到全局变量
     globals.set("Colors", Class::instance(ctx.clone(), Colors::new()))?;
-    globals.set("Config", Class::instance(ctx.clone(), Config::new()))?;
     globals.set("Device", Class::instance(ctx.clone(), Device::new()))?;
     globals.set("Thread", Class::instance(ctx.clone(), Thread::new()))?;
 

@@ -1,5 +1,4 @@
 use std::{
-    collections::HashMap,
     sync::{
         atomic::{AtomicBool, Ordering},
         Mutex,
@@ -41,15 +40,6 @@ pub static IS_PAUSED: AtomicBool = AtomicBool::new(false);
 lazy_static::lazy_static! {
     // 硬件控制器 (Root/无障碍)
     pub static ref CONTROLLER: Mutex<Option<Box<dyn InputController>>> = Mutex::new(None);
-
-    // 配置池 (Vue 写, JS 读)
-    pub static ref CONFIG_STORE: Mutex<HashMap<String, String>> = Mutex::new(HashMap::new());
-}
-
-// 内部辅助函数：给 JS 引擎读取配置用
-pub fn internal_get_config(key: &str) -> Option<String> {
-    let store = CONFIG_STORE.lock().unwrap();
-    store.get(key).cloned()
 }
 
 // ==========================================
@@ -84,14 +74,6 @@ pub fn init_service(
         "Service Initialized. Mode: {}",
         if use_root { "Root" } else { "Accessibility" }
     ));
-}
-
-/// 设置配置 (Vue v-model 绑定调用)
-#[uniffi::export]
-pub fn set_config(key: String, value: String) {
-    info!("Config Set: {} = {}", key, value);
-    let mut store = CONFIG_STORE.lock().unwrap();
-    store.insert(key, value.clone());
 }
 
 /// 运行 JS 脚本 (点击开始按钮调用)

@@ -1,12 +1,12 @@
 package org.eu.freex.app
 
-import android.provider.Settings
 import android.annotation.SuppressLint
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.os.Bundle
+import android.provider.Settings
 import android.util.Log
 import android.view.ViewGroup
 import android.webkit.JavascriptInterface
@@ -23,20 +23,30 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.BottomAppBar
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.core.content.edit
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.BufferedReader
+import java.io.File
+import java.io.InputStreamReader
 
 // 引入 UniFFI 生成的全局函数
 // 如果生成的代码就在 org.eu.freex.app 包下，这两行通常不需要手动写
@@ -46,6 +56,11 @@ import kotlinx.coroutines.launch
 class WebViewActivity : ComponentActivity() {
 
     private lateinit var webView: WebView
+    // 用于控制 UI 状态
+    private var isScriptRunning = mutableStateOf(false)
+    private var isScriptPaused = mutableStateOf(false)
+
+    private val SCRIPT_FILENAME = "current_script.js"
 
     // 动态接收器，用于处理 Activity 运行时的热重载
     private val devReceiver = object : BroadcastReceiver() {
@@ -92,41 +107,150 @@ class WebViewActivity : ComponentActivity() {
         // 3. 使用 Compose 布局
         setContent {
             MaterialTheme {
-                MainScreen()
+                Scaffold(
+                    // 顶部栏：原有设置入口
+                    topBar = {
+                        IconButton(
+                            onClick = {
+                                startActivity(Intent(this@WebViewActivity, SettingsActivity::class.java))
+                            },
+                            modifier = Modifier
+                                .padding(top = 48.dp, end = 16.dp) // 避开状态栏和圆角
+                                .background(Color.White.copy(alpha = 0.7f), CircleShape) // 半透明白色背景
+                                .size(40.dp)
+                        ) {
+                            // 使用内置图标，或者你可以用 Text("⚙️")
+                            Icon(
+                                imageVector = Icons.Default.Settings,
+                                contentDescription = "Settings",
+                                tint = Color.Black
+                            )
+                        }
+                    },
+                    // 🔥 核心：原生底部控制栏
+                    bottomBar = {
+                        ScriptControlBar(
+                            isRunning = isScriptRunning.value,
+                            isPaused = isScriptPaused.value,
+                            onRun = { runScript() },
+                            onStop = { stopScript() },
+                            onPause = { pauseScript(it) },
+                            onSettings = {
+                                startActivity(Intent(this@WebViewActivity, SettingsActivity::class.java))
+                            }
+                        )
+                    }
+                ) { innerPadding ->
+                    // 主体内容：WebView
+                    Box(modifier = Modifier.padding(innerPadding).fillMaxSize()) {
+                        AndroidView(factory = { webView }, modifier = Modifier.fillMaxSize())
+                    }
+                }
             }
         }
     }
 
-    @Composable
-    fun MainScreen() {
-        Box(modifier = Modifier.fillMaxSize()) {
-            // 底层：WebView
-            // AndroidView 允许在 Compose 中显示传统 View
-            AndroidView(
-                factory = { webView }, // 直接返回已经初始化好的 webView 实例
-                modifier = Modifier.fillMaxSize()
-            )
+    /**
+     * 🔥 核心逻辑：直接从 Assets 读取 script.js 并运行
+     */
+    private fun runScript() {
+        // 1. 环境检查 (CheckEnvironment)
+        val prefs = getSharedPreferences("app_config", MODE_PRIVATE)
+        val useRoot = prefs.getBoolean("use_root", false)
 
-            // 上层：设置按钮 (右上角)
-            IconButton(
-                onClick = {
-                    startActivity(Intent(this@WebViewActivity, SettingsActivity::class.java))
-                },
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(top = 48.dp, end = 16.dp) // 避开状态栏和圆角
-                    .background(Color.White.copy(alpha = 0.7f), CircleShape) // 半透明白色背景
-                    .size(40.dp)
-            ) {
-                // 使用内置图标，或者你可以用 Text("⚙️")
-                Icon(
-                    imageVector = Icons.Default.Settings,
-                    contentDescription = "Settings",
-                    tint = Color.Black
-                )
+        if (useRoot) {
+            initRust(true) // 确保 Rust 服务已连接
+        } else {
+            if (MacroAccessibilityService.instance == null) {
+                Toast.makeText(this, "请先开启无障碍服务", Toast.LENGTH_SHORT).show()
+                startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                return
+            }
+            initRust(false)
+        }
+
+        // 2. 读取脚本内容
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                // 直接读取 public/script.js (在 Android 中对应 assets/script.js)
+                // 注意：Vite 打包后 script.js 会在 assets 根目录下，或者是 dist/script.js
+                // 如果是 dev 模式，这里需要通过 HTTP 请求 localhost:5173/script.js 获取
+                // 为了生产环境稳定，我们假设 assets 里有文件
+                val file = File(filesDir, SCRIPT_FILENAME)
+                val scriptContent = if (file.exists()) {
+                    file.readText()
+                } else {
+                    // 2. 兜底：如果没保存过，读取 Assets 里的默认模板
+                    readAssetFile("script.js")
+                }
+
+                if (scriptContent.isEmpty()) {
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(this@WebViewActivity, "未找到脚本文件", Toast.LENGTH_SHORT).show()
+                    }
+                    return@launch
+                }
+
+                // 3. 调用 Rust 执行
+                uniffi.rust_core.runJsScript(scriptContent)
+
+                // 更新 UI 状态
+                isScriptRunning.value = true
+                isScriptPaused.value = false
+
+            } catch (e: Exception) {
+                Log.e("TouchHelper", "Run failed", e)
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(this@WebViewActivity, "启动失败: ${e.message}", Toast.LENGTH_SHORT).show()
+                }
             }
         }
     }
+
+
+    private fun initRust(isRoot: Boolean) {
+        try {
+            if (isRoot) {
+                uniffi.rust_core.initService(true, AndroidLogger(), null)
+            } else {
+                val adapter = AccessibilityImpl()
+                uniffi.rust_core.initService(false, AndroidLogger(), adapter)
+            }
+        } catch (e: Exception) {
+            Log.e("TouchHelper", "Init Rust failed", e)
+        }
+    }
+    private fun stopScript() {
+        CoroutineScope(Dispatchers.IO).launch {
+            uniffi.rust_core.stopScript()
+            isScriptRunning.value = false
+            isScriptPaused.value = false
+        }
+    }
+
+    private fun pauseScript(paused: Boolean) {
+        CoroutineScope(Dispatchers.IO).launch {
+            uniffi.rust_core.setPaused(paused)
+            isScriptPaused.value = paused
+        }
+    }
+
+    private fun readAssetFile(fileName: String): String {
+        return try {
+            // 注意：Vite 打包通常会把 public 下的文件放在 assets 根目录
+            // 但如果用了 subfolder，路径需要调整
+            assets.open(fileName).use { inputStream ->
+                InputStreamReader(inputStream).use { reader ->
+                    BufferedReader(reader).readText()
+                }
+            }
+        } catch (e: Exception) {
+            Log.e("TouchHelper", "Read asset failed", e)
+            ""
+        }
+    }
+
+
 
 
     override fun onResume() {
@@ -142,94 +266,18 @@ class WebViewActivity : ComponentActivity() {
 
     // 🔥 核心修改：JS 交互接口适配 UniFFI
     inner class JSBridge {
-        /**
-         * 🔥 新增：检查运行环境
-         * 返回 true 表示环境就绪，可以运行；false 表示已触发跳转设置或权限不足
-         */
         @JavascriptInterface
-        fun checkEnvironment(): Boolean {
-            val prefs = getSharedPreferences("app_config", MODE_PRIVATE)
-            val useRoot = prefs.getBoolean("use_root", false)
-            Log.d("TouchHelper", "Check Env (Native Config): RootMode=$useRoot")
-
-            if (useRoot) {
-                // Root 模式
-                initRust(true)
-                return true
-            } else {
-                // 无障碍模式
-                if (MacroAccessibilityService.instance == null) {
-                    Toast.makeText(this@WebViewActivity, "请开启无障碍服务", Toast.LENGTH_SHORT).show()
-                    startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
-                    return false
-                }
-                initRust(false)
-                return true
-            }
-        }
-
-        private fun initRust(isRoot: Boolean) {
-            try {
-                if (isRoot) {
-                    uniffi.rust_core.initService(true, AndroidLogger(), null)
-                } else {
-                    val adapter = AccessibilityImpl()
-                    uniffi.rust_core.initService(false, AndroidLogger(), adapter)
-                }
-            } catch (e: Exception) {
-                Log.e("TouchHelper", "Init Rust failed", e)
-            }
-        }
-
-        /**
-         * 运行 JS 脚本
-         * 前端调用: window.TouchHelper.runScript("Device.click(100, 200);")
-         */
-        @JavascriptInterface
-        fun runScript(script: String) {
-            Log.d("TouchHelper", "Running Script...")
+        fun saveScript(script: String) {
+            Log.d("TouchHelper", "Saving script, length=${script.length}")
             CoroutineScope(Dispatchers.IO).launch {
                 try {
-                    uniffi.rust_core.runJsScript(script)
+                    openFileOutput(SCRIPT_FILENAME, MODE_PRIVATE).use {
+                        it.write(script.toByteArray())
+                    }
+                    Log.i("TouchHelper", "Script saved to $SCRIPT_FILENAME,${script.length} bytes")
                 } catch (e: Exception) {
-                    Log.e("TouchHelper", "Run Error", e)
+                    Log.e("TouchHelper", "Save failed", e)
                 }
-            }
-        }
-
-        /**
-         * 🔥 新增：停止脚本
-         * 注意：需要在 Rust 端实现对应的 stopScript 导出函数
-         */
-        @JavascriptInterface
-        fun stopScript() {
-            Log.d("TouchHelper", "Stop Script Signal")
-            CoroutineScope(Dispatchers.IO).launch {
-                try {
-                    uniffi.rust_core.stopScript()
-                } catch (e: Exception) {
-                    Log.e("TouchHelper", "Stop Error", e)
-                }
-            }
-        }
-
-        /**
-         * 🔥 新增：暂停脚本
-         */
-        @JavascriptInterface
-        fun pauseScript(isPaused: Boolean) {
-            Log.d("TouchHelper", "Pause Script: $isPaused")
-            CoroutineScope(Dispatchers.IO).launch {
-                uniffi.rust_core.setPaused(isPaused)
-            }
-        }
-
-        @JavascriptInterface
-        fun setConfig(key: String, value: String) {
-            val prefs = getSharedPreferences("config", MODE_PRIVATE)
-            prefs.edit { putString(key, value) }
-            CoroutineScope(Dispatchers.IO).launch {
-                uniffi.rust_core.setConfig(key, value)
             }
         }
 
@@ -238,4 +286,52 @@ class WebViewActivity : ComponentActivity() {
             Log.i("TouchHelper-Web", msg)
         }
     }
+}
+
+/**
+ * Compose 组件：底部控制栏
+ */
+@Composable
+fun ScriptControlBar(
+    isRunning: Boolean,
+    isPaused: Boolean,
+    onRun: () -> Unit,
+    onStop: () -> Unit,
+    onPause: (Boolean) -> Unit,
+    onSettings: () -> Unit
+) {
+    BottomAppBar(
+        actions = {
+            // 设置按钮
+            IconButton(onClick = onSettings) {
+                Icon(Icons.Default.Settings, contentDescription = "Settings")
+            }
+            // 暂停/继续 (仅运行时显示)
+            if (isRunning) {
+                Button(
+                    onClick = { onPause(!isPaused) },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (isPaused) Color(0xFFFAAD14) else Color(0xFF52C41A)
+                    )
+                ) {
+                    Text(if (isPaused) "继续" else "暂停")
+                }
+            }
+        },
+        floatingActionButton = {
+            FloatingActionButton(
+                onClick = { if (isRunning) onStop() else onRun() },
+                containerColor = if (isRunning) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+                contentColor = Color.White
+            ) {
+                // 这里可以使用 Stop 和 Play 的图标
+                if (isRunning) {
+                    // Icon(Icons.Default.Stop, ...)
+                    Text("停止", modifier = Modifier.padding(horizontal = 8.dp))
+                } else {
+                    Icon(Icons.Default.PlayArrow, contentDescription = "Run")
+                }
+            }
+        }
+    )
 }

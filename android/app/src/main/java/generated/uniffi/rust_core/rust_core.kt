@@ -681,8 +681,6 @@ internal object IntegrityCheckingUniffiLib {
     ): Short
     external fun uniffi_rust_core_checksum_func_run_js_script(
     ): Short
-    external fun uniffi_rust_core_checksum_func_set_config(
-    ): Short
     external fun uniffi_rust_core_checksum_func_set_paused(
     ): Short
     external fun uniffi_rust_core_checksum_func_stop_script(
@@ -713,8 +711,6 @@ internal object UniffiLib {
     external fun uniffi_rust_core_fn_func_init_service(`useRoot`: Byte,`logger`: Long,`service`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): Unit
     external fun uniffi_rust_core_fn_func_run_js_script(`scriptContent`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-    ): Unit
-    external fun uniffi_rust_core_fn_func_set_config(`key`: RustBuffer.ByValue,`value`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): Unit
     external fun uniffi_rust_core_fn_func_set_paused(`paused`: Byte,uniffi_out_err: UniffiRustCallStatus, 
     ): Unit
@@ -843,9 +839,6 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_rust_core_checksum_func_run_js_script() != 10495.toShort()) {
-        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    }
-    if (lib.uniffi_rust_core_checksum_func_set_config() != 41135.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_rust_core_checksum_func_set_paused() != 1314.toShort()) {
@@ -1259,18 +1252,6 @@ public object FfiConverterOptionalTypeAccessibilityService: FfiConverterRustBuff
     UniffiLib.uniffi_rust_core_fn_func_run_js_script(
     
         FfiConverterString.lower(`scriptContent`),_status)
-}
-    
-    
-
-        /**
-         * 设置配置 (Vue v-model 绑定调用)
-         */ fun `setConfig`(`key`: kotlin.String, `value`: kotlin.String)
-        = 
-    uniffiRustCall() { _status ->
-    UniffiLib.uniffi_rust_core_fn_func_set_config(
-    
-        FfiConverterString.lower(`key`),FfiConverterString.lower(`value`),_status)
 }
     
     
