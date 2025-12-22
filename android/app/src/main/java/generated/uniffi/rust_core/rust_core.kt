@@ -683,6 +683,10 @@ internal object IntegrityCheckingUniffiLib {
     ): Short
     external fun uniffi_rust_core_checksum_func_set_config(
     ): Short
+    external fun uniffi_rust_core_checksum_func_set_paused(
+    ): Short
+    external fun uniffi_rust_core_checksum_func_stop_script(
+    ): Short
     external fun uniffi_rust_core_checksum_method_accessibilityservice_dispatch_click(
     ): Short
     external fun uniffi_rust_core_checksum_method_platformlogger_log(
@@ -711,6 +715,10 @@ internal object UniffiLib {
     external fun uniffi_rust_core_fn_func_run_js_script(`scriptContent`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): Unit
     external fun uniffi_rust_core_fn_func_set_config(`key`: RustBuffer.ByValue,`value`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): Unit
+    external fun uniffi_rust_core_fn_func_set_paused(`paused`: Byte,uniffi_out_err: UniffiRustCallStatus, 
+    ): Unit
+    external fun uniffi_rust_core_fn_func_stop_script(uniffi_out_err: UniffiRustCallStatus, 
     ): Unit
     external fun ffi_rust_core_rustbuffer_alloc(`size`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
@@ -838,6 +846,12 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_rust_core_checksum_func_set_config() != 41135.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_rust_core_checksum_func_set_paused() != 1314.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_rust_core_checksum_func_stop_script() != 39649.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_rust_core_checksum_method_accessibilityservice_dispatch_click() != 18860.toShort()) {
@@ -1257,6 +1271,24 @@ public object FfiConverterOptionalTypeAccessibilityService: FfiConverterRustBuff
     UniffiLib.uniffi_rust_core_fn_func_set_config(
     
         FfiConverterString.lower(`key`),FfiConverterString.lower(`value`),_status)
+}
+    
+    
+ fun `setPaused`(`paused`: kotlin.Boolean)
+        = 
+    uniffiRustCall() { _status ->
+    UniffiLib.uniffi_rust_core_fn_func_set_paused(
+    
+        FfiConverterBoolean.lower(`paused`),_status)
+}
+    
+    
+ fun `stopScript`()
+        = 
+    uniffiRustCall() { _status ->
+    UniffiLib.uniffi_rust_core_fn_func_stop_script(
+    
+        _status)
 }
     
     

@@ -1,6 +1,12 @@
 use crate::api;
 use log::info;
 use rquickjs::{AsyncContext, AsyncRuntime};
+use tokio::task::AbortHandle;
+
+// 🔥 全局任务句柄：用于存储当前正在跑的脚本任务
+// 这样我们才能在外部调用 stop_script 时找到它并杀掉
+pub static CURRENT_SCRIPT_TASK: std::sync::OnceLock<std::sync::Mutex<Option<AbortHandle>>> =
+    std::sync::OnceLock::new();
 
 pub async fn run_script_async(script_content: String) -> Result<(), String> {
     info!("🚀 Initializing JS Runtime (OO Mode)...");

@@ -1,5 +1,6 @@
 package org.eu.freex.app
 
+import android.provider.Settings
 import android.annotation.SuppressLint
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -7,16 +8,35 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.os.Bundle
 import android.util.Log
+import android.view.ViewGroup
 import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.content.edit
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import androidx.core.content.edit
 
 // 引入 UniFFI 生成的全局函数
 // 如果生成的代码就在 org.eu.freex.app 包下，这两行通常不需要手动写
@@ -43,25 +63,76 @@ class WebViewActivity : ComponentActivity() {
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        webView = WebView(this)
-        setContentView(webView)
 
-        setupWebView()
+        // 1. 初始化 WebView 实例
+        webView = WebView(this).apply {
+            layoutParams = ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+            )
+            settings.apply {
+                javaScriptEnabled = true
+                domStorageEnabled = true
+                allowFileAccess = true
+                allowUniversalAccessFromFileURLs = true
+            }
+            webChromeClient = WebChromeClient()
+            webViewClient = WebViewClient()
+            addJavascriptInterface(JSBridge(), "TouchHelper")
+        }
 
-        // 1. 优先检查是否有 Intent 传来的开发地址
+        // 2. 加载初始 URL
         val devUrl = intent.getStringExtra("path")
         if (devUrl != null) {
             webView.loadUrl(devUrl)
         } else {
-            // 2. 默认加载打包好的 assets 资源
             webView.loadUrl("file:///android_asset/dist/index.html")
         }
+
+        // 3. 使用 Compose 布局
+        setContent {
+            MaterialTheme {
+                MainScreen()
+            }
+        }
     }
+
+    @Composable
+    fun MainScreen() {
+        Box(modifier = Modifier.fillMaxSize()) {
+            // 底层：WebView
+            // AndroidView 允许在 Compose 中显示传统 View
+            AndroidView(
+                factory = { webView }, // 直接返回已经初始化好的 webView 实例
+                modifier = Modifier.fillMaxSize()
+            )
+
+            // 上层：设置按钮 (右上角)
+            IconButton(
+                onClick = {
+                    startActivity(Intent(this@WebViewActivity, SettingsActivity::class.java))
+                },
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(top = 48.dp, end = 16.dp) // 避开状态栏和圆角
+                    .background(Color.White.copy(alpha = 0.7f), CircleShape) // 半透明白色背景
+                    .size(40.dp)
+            ) {
+                // 使用内置图标，或者你可以用 Text("⚙️")
+                Icon(
+                    imageVector = Icons.Default.Settings,
+                    contentDescription = "Settings",
+                    tint = Color.Black
+                )
+            }
+        }
+    }
+
 
     override fun onResume() {
         super.onResume()
         val filter = IntentFilter("org.eu.freex.LOAD_UI")
-        registerReceiver(devReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+        registerReceiver(devReceiver, filter, RECEIVER_NOT_EXPORTED)
     }
 
     override fun onPause() {
@@ -69,80 +140,99 @@ class WebViewActivity : ComponentActivity() {
         unregisterReceiver(devReceiver)
     }
 
-    @SuppressLint("SetJavaScriptEnabled")
-    private fun setupWebView() {
-        webView.settings.apply {
-            javaScriptEnabled = true
-            domStorageEnabled = true
-            allowFileAccess = true
-            allowUniversalAccessFromFileURLs = true
-        }
-
-        webView.webChromeClient = WebChromeClient()
-        webView.webViewClient = WebViewClient()
-
-        // 注入 JS 对象 "window.TouchHelper"
-        webView.addJavascriptInterface(JSBridge(), "TouchHelper")
-    }
-
     // 🔥 核心修改：JS 交互接口适配 UniFFI
     inner class JSBridge {
+        /**
+         * 🔥 新增：检查运行环境
+         * 返回 true 表示环境就绪，可以运行；false 表示已触发跳转设置或权限不足
+         */
+        @JavascriptInterface
+        fun checkEnvironment(): Boolean {
+            val prefs = getSharedPreferences("app_config", MODE_PRIVATE)
+            val useRoot = prefs.getBoolean("use_root", false)
+            Log.d("TouchHelper", "Check Env (Native Config): RootMode=$useRoot")
+
+            if (useRoot) {
+                // Root 模式
+                initRust(true)
+                return true
+            } else {
+                // 无障碍模式
+                if (MacroAccessibilityService.instance == null) {
+                    Toast.makeText(this@WebViewActivity, "请开启无障碍服务", Toast.LENGTH_SHORT).show()
+                    startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                    return false
+                }
+                initRust(false)
+                return true
+            }
+        }
+
+        private fun initRust(isRoot: Boolean) {
+            try {
+                if (isRoot) {
+                    uniffi.rust_core.initService(true, AndroidLogger(), null)
+                } else {
+                    val adapter = AccessibilityImpl()
+                    uniffi.rust_core.initService(false, AndroidLogger(), adapter)
+                }
+            } catch (e: Exception) {
+                Log.e("TouchHelper", "Init Rust failed", e)
+            }
+        }
 
         /**
-         * 运行 JS 脚本 (替代原来的 runMacro)
+         * 运行 JS 脚本
          * 前端调用: window.TouchHelper.runScript("Device.click(100, 200);")
          */
         @JavascriptInterface
         fun runScript(script: String) {
-            Log.d("TouchHelper", "Running JS Script...")
-
-            // 虽然 runJsScript 在 Rust 内部是新开线程，但为了防止 JNI 调用本身卡顿 UI，
-            // 建议放在 IO 线程调用
+            Log.d("TouchHelper", "Running Script...")
             CoroutineScope(Dispatchers.IO).launch {
                 try {
-                    // 直接调用 UniFFI 生成的函数
                     uniffi.rust_core.runJsScript(script)
                 } catch (e: Exception) {
-                    Log.e("TouchHelper", "Script Error", e)
+                    Log.e("TouchHelper", "Run Error", e)
                 }
             }
         }
 
         /**
-         * 保存配置
-         * 前端调用: window.TouchHelper.setConfig("game_mode", "1")
+         * 🔥 新增：停止脚本
+         * 注意：需要在 Rust 端实现对应的 stopScript 导出函数
          */
         @JavascriptInterface
-        fun setConfig(key: String, value: String) {
-            Log.d("TouchHelper", "Set Config: $key = $value")
-
-            // ✅ 1. 同步保存到 Android SharedPreferences
-            // 只有保存了，下次 MainActivity 启动时才能读到正确的值
-            val prefs = getSharedPreferences("config", MODE_PRIVATE)
-            prefs.edit {
-                if (key == "use_root") {
-                    // 特殊处理 bool 类型
-                    putBoolean(key, value == "true")
-                } else {
-                    // 其他配置存字符串
-                    putString(key, value)
+        fun stopScript() {
+            Log.d("TouchHelper", "Stop Script Signal")
+            CoroutineScope(Dispatchers.IO).launch {
+                try {
+                    uniffi.rust_core.stopScript()
+                } catch (e: Exception) {
+                    Log.e("TouchHelper", "Stop Error", e)
                 }
-            } // 异步提交
+            }
+        }
 
-            // ✅ 2. 通知 Rust (内存更新)
+        /**
+         * 🔥 新增：暂停脚本
+         */
+        @JavascriptInterface
+        fun pauseScript(isPaused: Boolean) {
+            Log.d("TouchHelper", "Pause Script: $isPaused")
+            CoroutineScope(Dispatchers.IO).launch {
+                uniffi.rust_core.setPaused(isPaused)
+            }
+        }
+
+        @JavascriptInterface
+        fun setConfig(key: String, value: String) {
+            val prefs = getSharedPreferences("config", MODE_PRIVATE)
+            prefs.edit { putString(key, value) }
             CoroutineScope(Dispatchers.IO).launch {
                 uniffi.rust_core.setConfig(key, value)
             }
-
-            // 可选：如果是切换 Root 模式，通常需要提示用户重启 App 才能生效
-            if (key == "use_root") {
-                Toast.makeText(this@WebViewActivity, "配置已保存，请重启应用生效", Toast.LENGTH_LONG).show()
-            }
         }
 
-        /**
-         * 日志打印
-         */
         @JavascriptInterface
         fun log(msg: String) {
             Log.i("TouchHelper-Web", msg)

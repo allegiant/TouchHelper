@@ -7,6 +7,7 @@ app/build/
 server/build/
 android/app/build/
 android/server/build/
+android/.kotlin/
 
 # 本地配置 (绝对路径敏感)
 local.properties

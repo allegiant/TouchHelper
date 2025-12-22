@@ -1,10 +1,17 @@
-use std::{collections::HashMap, sync::Mutex, thread};
+use std::{
+    collections::HashMap,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Mutex,
+    },
+    thread,
+};
 
 use log::info;
 
 use crate::{
     input::{AccessibilityStrategy, InputController, RootStrategy},
-    js_engine,
+    js_engine::{self, CURRENT_SCRIPT_TASK},
     logger::init_android_logger,
     types::{AccessibilityService, PlatformLogger},
 };
@@ -28,6 +35,8 @@ uniffi::setup_scaffolding!();
 // ==========================================
 // 1. 全局状态存储
 // ==========================================
+
+pub static IS_PAUSED: AtomicBool = AtomicBool::new(false);
 
 lazy_static::lazy_static! {
     // 硬件控制器 (Root/无障碍)
@@ -88,19 +97,76 @@ pub fn set_config(key: String, value: String) {
 /// 运行 JS 脚本 (点击开始按钮调用)
 #[uniffi::export]
 pub fn run_js_script(script_content: String) {
-    // 开启新线程运行 Tokio + QuickJS，避免阻塞主线程
+    // 1. 先停止旧脚本
+    stop_script();
+
+    // 2. 启动新线程
     thread::spawn(move || {
-        // 创建 Tokio Runtime
         let rt = tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()
             .unwrap();
 
-        rt.block_on(async {
-            match js_engine::run_script_async(script_content).await {
-                Ok(_) => info!("✅ Script execution finished."),
-                Err(e) => info!("❌ Script execution failed: {}", e),
+        rt.block_on(async move {
+            // 3. 启动任务
+            let handle = tokio::spawn(async move {
+                // 🔥 每次运行前，强制重置为非暂停状态
+                IS_PAUSED.store(false, Ordering::Relaxed);
+
+                match js_engine::run_script_async(script_content).await {
+                    Ok(_) => info!("✅ Script finished successfully"),
+                    Err(e) => info!("❌ Script error: {}", e),
+                }
+            });
+
+            // 4. 获取 AbortHandle 并存入全局变量
+            // 🔥 关键修改：使用 handle.abort_handle()
+            let abort_handle = handle.abort_handle();
+
+            {
+                let task_mutex = CURRENT_SCRIPT_TASK.get_or_init(|| std::sync::Mutex::new(None));
+                if let Ok(mut guard) = task_mutex.lock() {
+                    *guard = Some(abort_handle); // AbortHandle 可以被 Clone (虽然这里是 Move 进去，但也支持 clone)
+                }
             }
+
+            // 5. 等待任务结束
+            // 无论是自然结束，还是被外部 abort()，这里都会返回
+            // 如果是被 abort 的，result 会是一个 Cancelled Error
+            let _ = handle.await;
+
+            // 6. 清理全局变量
+            {
+                let task_mutex = CURRENT_SCRIPT_TASK.get_or_init(|| std::sync::Mutex::new(None));
+                if let Ok(mut guard) = task_mutex.lock() {
+                    *guard = None;
+                }
+            }
+
+            info!("👋 Script Task Ended, Runtime shutting down.");
         });
     });
+}
+
+#[uniffi::export]
+pub fn stop_script() {
+    let task_mutex = CURRENT_SCRIPT_TASK.get_or_init(|| std::sync::Mutex::new(None));
+
+    if let Ok(mut guard) = task_mutex.lock() {
+        // 取出 AbortHandle
+        if let Some(abort_handle) = guard.take() {
+            info!("🛑 Stopping script task...");
+            abort_handle.abort(); // 🔥 使用 abort_handle 停止任务
+            info!("✅ Script task aborted signal sent.");
+        } else {
+            info!("⚠️ No running script to stop.");
+        }
+    }
+}
+
+#[uniffi::export]
+pub fn set_paused(paused: bool) {
+    info!("Script Paused State: {}", paused);
+    // Relaxed 顺序对于这种简单的标志位已经足够了
+    IS_PAUSED.store(paused, Ordering::Relaxed);
 }
