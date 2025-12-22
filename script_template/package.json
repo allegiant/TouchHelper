@@ -5,9 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vue-tsc && vite build",
+    "build": "npm run build:script vue-tsc && vite build",
     "preview": "vite preview",
-    "android-dev": "node tools/build.js && node tools/dev_runner.js"
+    "build:script": "node tools/build.js",
+    "android-dev": "node tools/dev.js"
   },
   "dependencies": {
     "element-plus": "^2.4.4",
