@@ -1,4 +1,4 @@
-rootProject.name = "rust-bridge-sdk"
+rootProject.name = "lib-sdk"
 enableFeaturePreview("TYPESAFE_PROJECT_ACCESSORS")
 
 pluginManagement {
