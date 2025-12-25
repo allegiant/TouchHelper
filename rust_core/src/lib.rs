@@ -13,3 +13,4 @@ pub mod api;
 pub mod input;
 pub mod js_engine;
 pub mod types;
+pub mod vision;

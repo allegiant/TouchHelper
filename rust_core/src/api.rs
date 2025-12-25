@@ -8,6 +8,7 @@ use rquickjs::{Class, Ctx, Object, Result};
 
 pub mod colors;
 pub mod device;
+pub mod image;
 pub mod thread;
 
 /// 全局函数：日志 (Log 是最常用的，保持全局)
