@@ -3,85 +3,168 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
     alias(libs.plugins.kotlinMultiplatform)
-    alias(libs.plugins.androidApplication)
-    alias(libs.plugins.composeMultiplatform)
-    alias(libs.plugins.composeCompiler)
-    alias(libs.plugins.composeHotReload)
+    alias(libs.plugins.androidLibrary) // 👈 关键修改：改为 Library
+    // alias(libs.plugins.composeMultiplatform) //如果你在这个层级不需要写UI，建议注释掉，减少编译时间
 }
 
 kotlin {
+    // 1. Android 目标
     androidTarget {
+        publishLibraryVariants("release", "debug")
+
+        // 新写法：直接在 target 层级配置，不用进 compilations
         compilerOptions {
             jvmTarget.set(JvmTarget.JVM_11)
         }
     }
-    
-    jvm()
-    
+
+    // 2. Windows/JVM 目标
+    jvm("desktop") {
+        // 新写法
+        compilerOptions {
+            jvmTarget.set(JvmTarget.JVM_11)
+        }
+    }
+
     sourceSets {
-        androidMain.dependencies {
-            implementation(compose.preview)
-            implementation(libs.androidx.activity.compose)
+        val commonMain by getting {
+            dependencies {
+                // 如果你需要在这个层写通用的 Kotlin 逻辑
+                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
+            }
         }
-        commonMain.dependencies {
-            implementation(compose.runtime)
-            implementation(compose.foundation)
-            implementation(compose.material3)
-            implementation(compose.ui)
-            implementation(compose.components.resources)
-            implementation(compose.components.uiToolingPreview)
-            implementation(libs.androidx.lifecycle.viewmodelCompose)
-            implementation(libs.androidx.lifecycle.runtimeCompose)
+
+        val androidMain by getting {
+            // 指向 UniFFI 生成的 Kotlin 代码 (Android端)
+            kotlin.srcDir("build/generated/uniffi/src")
+            dependencies {
+                implementation("net.java.dev.jna:jna:5.13.0@aar") // UniFFI 必需
+            }
         }
-        commonTest.dependencies {
-            implementation(libs.kotlin.test)
-        }
-        jvmMain.dependencies {
-            implementation(compose.desktop.currentOs)
-            implementation(libs.kotlinx.coroutinesSwing)
+
+        val desktopMain by getting {
+            // 指向 UniFFI 生成的 Kotlin 代码 (Desktop端)
+            kotlin.srcDir("build/generated/uniffi/src")
+            dependencies {
+                implementation("net.java.dev.jna:jna:5.13.0") // UniFFI 必需
+                implementation("net.java.dev.jna:jna-platform:5.13.0")
+            }
         }
     }
 }
 
 android {
     namespace = "org.eu.freex.bridge"
-    compileSdk = libs.versions.android.compileSdk.get().toInt()
+    compileSdk = 34
 
     defaultConfig {
-        applicationId = "org.eu.freex.bridge"
-        minSdk = libs.versions.android.minSdk.get().toInt()
-        targetSdk = libs.versions.android.targetSdk.get().toInt()
-        versionCode = 1
-        versionName = "1.0"
-    }
-    packaging {
-        resources {
-            excludes += "/META-INF/{AL2.0,LGPL2.1}"
+        minSdk = 26
+        // ❌ 删除 applicationId (Library 不需要)
+        // ❌ 删除 versionCode, versionName (通常由发布插件管理，或者是根项目管理)
+
+        // 确保包含你的 Rust 支持的架构
+        ndk {
+            abiFilters.add("arm64-v8a")
+            //abiFilters.add("x86")
+            abiFilters.add("x86_64") // 如果你需要
         }
     }
-    buildTypes {
-        getByName("release") {
-            isMinifyEnabled = false
-        }
-    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
     }
+
+    // 如果你在这一层有资源文件，保持这个配置；否则可以简化
+    sourceSets.getByName("main") {
+        manifest.srcFile("src/androidMain/AndroidManifest.xml")
+        res.srcDirs("src/androidMain/res")
+    }
 }
 
-dependencies {
-    debugImplementation(compose.uiTooling)
+// ==========================================================================
+// 🦀 Rust 集成构建逻辑 (这是中间层的灵魂)
+// ==========================================================================
+
+// 定义 rust_core 的相对路径 (根据你的 Monorepo 结构)
+// 假设结构: Root -> rust-bridge-sdk -> shared
+// 所以 rust_core 在: ../../rust_core
+val rustBasePath = file("../../rust_core")
+val libName = "touch_helper" // ⚠️ 必须与 Cargo.toml 中的 [lib] name 一致
+
+// 1. Android 构建任务 (调用 cargo-ndk)
+val buildRustAndroid = tasks.register<Exec>("buildRustAndroid") {
+    group = "rust"
+    description = "Build Rust code for Android using cargo-ndk"
+    workingDir = rustBasePath
+
+    // 输出路径：直接输出到模块的 jniLibs 目录，这样会被自动打包进 AAR
+    val jniLibsDir = file("src/androidMain/jniLibs")
+
+    // 命令行：同时构建 arm64 和 x86
+    commandLine(
+        "cargo", "ndk",
+        "-t", "arm64-v8a",
+        "-t", "x86_64",
+        "-o", jniLibsDir.absolutePath,
+        "build", "--release"
+    )
 }
 
-compose.desktop {
-    application {
-        mainClass = "org.eu.freex.bridge.MainKt"
+// 2. Desktop (Windows) 构建任务
+val buildRustDesktop = tasks.register<Exec>("buildRustDesktop") {
+    group = "rust"
+    description = "Build Rust code for Windows"
+    workingDir = rustBasePath
 
-        nativeDistributions {
-            targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb)
-            packageName = "org.eu.freex.bridge"
-            packageVersion = "1.0.0"
+    // Windows 构建 (假设在 Windows 环境下运行)
+    commandLine("cargo", "build", "--release")
+
+    doLast {
+        // ⚠️ 关键步骤：将编译好的 DLL 复制到 resources 目录
+        // 这样它会被打包进 JAR 文件，供 consumers (FreexTools) 提取使用
+        val targetDir = file("src/desktopMain/resources/win32-x86-64")
+        targetDir.mkdirs()
+
+        copy {
+            from("$rustBasePath/target/release/$libName.dll")
+            into(targetDir)
         }
     }
+}
+
+// 3. 生成 Kotlin 接口 (Uniffi Bindgen)
+val generateBindings = tasks.register<Exec>("generateBindings") {
+    group = "rust"
+    description = "Generate Kotlin bindings using uniffi-bindgen"
+    workingDir = rustBasePath
+
+    // 我们需要指向一个已编译的库文件来生成绑定。
+    // 这里指向 Windows 的 release dll 即可 (接口定义是跨平台的)
+    val libraryFile = "$rustBasePath/target/release/$libName.dll"
+    val outDir = file("${project.buildDir}/generated/uniffi/src")
+
+    // 只有当 DLL 存在时才运行生成，避免报错 (首次运行可能需要先 buildRustDesktop)
+    onlyIf { file(libraryFile).exists() }
+
+    commandLine(
+        "cargo", "run", "--bin", "uniffi-bindgen",
+        "generate", "--library", libraryFile,
+        "--language", "kotlin",
+        "--out-dir", outDir.absolutePath
+    )
+
+    // 让这个任务依赖于构建任务，确保库文件存在
+    dependsOn(buildRustDesktop)
+}
+
+// 4. 任务挂载：在 Gradle 编译 Kotlin 之前，确保 Rust 任务已完成
+tasks.named("preBuild") {
+    dependsOn(buildRustAndroid)
+    dependsOn(buildRustDesktop)
+}
+
+// 确保生成代码任务在编译 Kotlin 之前执行
+tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
+    dependsOn(generateBindings)
 }
