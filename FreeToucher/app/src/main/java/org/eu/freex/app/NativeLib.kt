@@ -5,7 +5,7 @@ import java.nio.ByteBuffer
 object NativeLib {
     init {
         // 加载 Rust 编译生成的库
-        System.loadLibrary("rust_core")
+        System.loadLibrary("touch__core")
     }
 
 

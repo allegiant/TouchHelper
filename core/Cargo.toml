@@ -1,11 +1,11 @@
 [package]
-name = "rust_core"
+name = "touch_core"
 version = "0.1.0"
 edition = "2021"
 
 [lib]
 crate-type = ["cdylib", "rlib", "staticlib"]
-name = "rust_core" # 确保库名是 rust_core，生成 librust_core.so
+name = "touch_core" # 确保库名是 core，生成  touch_core.so
 [[bin]]
 name = "gen_all"
 path = "src/bin/gen_all.rs"

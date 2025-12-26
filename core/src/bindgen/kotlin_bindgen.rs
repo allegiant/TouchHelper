@@ -4,12 +4,12 @@ pub fn generate_uniffi_bindings() {
     println!("🔄 [3/3] Generating UniFFI Kotlin bindings...");
 
     // Android 项目的 jniLibs 目录 (cargo ndk 会自动把 .so 放到这里)
-    let main_dir = "../android/app/src/main";
+    let main_dir = "../FreeToucher/app/src/main";
     let jni_libs_dir = format!("{}/jniLibs", main_dir);
 
     // 生成绑定时，uniffi 需要读取一个已经编译好的 .so 来提取元数据
     // 我们约定取 arm64-v8a 架构的作为“模板”
-    let lib_so_path = format!("{}/arm64-v8a/librust_core.so", jni_libs_dir);
+    let lib_so_path = format!("{}/arm64-v8a/touch_core.so", jni_libs_dir);
     let kotlin_out_dir = format!("{}/java/generated", main_dir);
 
     //自动调用 cargo ndk 编译

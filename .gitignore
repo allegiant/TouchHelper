@@ -32,7 +32,7 @@ android/server/libs/
 # ========================
 # Rust / Cargo
 # ========================
-/rust_core/target/
+/core/target/
 **/*.rs.bk
 
 # ========================

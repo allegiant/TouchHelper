@@ -75,11 +75,11 @@ android {
 // 🦀 Rust 集成构建逻辑 (这是中间层的灵魂)
 // ==========================================================================
 
-// 定义 rust_core 的相对路径 (根据你的 Monorepo 结构)
+// 定义 core 的相对路径 (根据你的 Monorepo 结构)
 // 假设结构: Root -> rust-bridge-sdk -> shared
-// 所以 rust_core 在: ../../rust_core
-val rustBasePath = file("../../rust_core")
-val libName = "touch_helper" // ⚠️ 必须与 Cargo.toml 中的 [lib] name 一致
+// 所以 core 在: ../../core
+val rustBasePath = file("../../core")
+val libName = "touch_core" // ⚠️ 必须与 Cargo.toml 中的 [lib] name 一致
 
 // 1. Android 构建任务 (调用 cargo-ndk)
 val buildRustAndroid = tasks.register<Exec>("buildRustAndroid") {
