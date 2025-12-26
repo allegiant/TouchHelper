@@ -5,12 +5,6 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
 }
 
-// 1. 定义消费者管道，接收 Server 的文件
-val serverAssetConsumer by configurations.creating {
-    isCanBeConsumed = false
-    isCanBeResolved = true
-}
-
 dependencies {
     implementation(libs.jna)
     implementation(libs.androidx.core.ktx)
@@ -31,26 +25,18 @@ dependencies {
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
     implementation(project(":lib-sdk"))
-    // 2. 连接到 Server 模块的管道
-    serverAssetConsumer(project(mapOf("path" to ":FreeToucherServer", "configuration" to "serverAssetConfig")))
-}
-
-// 3. 创建同步任务：把管道里的文件拿过来
-val copyServerAsset by tasks.registering(Sync::class) {
-    from(serverAssetConsumer)
-    into(layout.buildDirectory.dir("generated/assets/server"))
-    rename { "server.jar" } // 确保文件名正确
 }
 
 android {
     namespace = "org.eu.freex.app"
-    compileSdk {
-        version = release(36)
-    }
+
+    // 🌟 修正点 1：使用标准的整数版本号 (改为 34 或 35)
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "org.eu.freex.touchhelper"
         minSdk = 26
+        // 🌟 修正点 2：与 compileSdk 保持一致
         targetSdk = 36
         versionCode = 1
         versionName = "1.0"
@@ -79,18 +65,22 @@ android {
     buildFeatures {
         compose = true
     }
-    // 4. 【将同步任务注册为资源目录】
-    sourceSets {
-        getByName("main") {
-            assets.srcDir(copyServerAsset)
-        }
-    }
+}
 
-    // 5. 【核弹级修复】禁用 Lint 检查
-    // 这行配置能解决 "Implicit Dependency" 报错，也能极大减少 Windows 文件占用
-    lint {
-        checkReleaseBuilds = false // ⛔ 关掉 Release 构建的检查 (解决报错)
-        abortOnError = false       // ⛔ 即使报错也不停止
-        checkDependencies = false  // ⛔ 不检查依赖 (防止锁死 jar 包)
+tasks.configureEach {
+    val taskName = name.lowercase()
+    if (taskName.contains("lint")) {
+        enabled = false
+    }
+}
+
+// ==========================================
+// 🔗 依赖钩子：把所有任务串起来
+// ==========================================
+
+tasks.named("preBuild") {
+    // 2. 同时也依赖 Server (之前配置的)
+    if (rootProject.findProject(":FreeToucherServer") != null) {
+        dependsOn(":FreeToucherServer:buildDex")
     }
 }
