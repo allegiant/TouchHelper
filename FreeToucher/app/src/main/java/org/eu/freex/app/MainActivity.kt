@@ -4,9 +4,9 @@ import android.content.Intent
 import android.os.Bundle
 import android.util.Log
 import androidx.activity.ComponentActivity
-import uniffi.rust_core.PlatformLogger
 import java.io.File
 import java.util.concurrent.Executors
+import uniffi.touch_core.*
 
 class AndroidLogger : PlatformLogger {
     override fun log(msg: String) {

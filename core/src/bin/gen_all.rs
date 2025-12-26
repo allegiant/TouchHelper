@@ -1,6 +1,6 @@
 // 引用库里的模块
 
-use rust_core::{bindgen, constants};
+use touch_core::{bindgen, constants};
 
 fn main() {
     println!("🚀 Starting Unified Generation...");

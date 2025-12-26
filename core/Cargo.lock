@@ -1722,27 +1722,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "rust_core"
-version = "0.1.0"
-dependencies = [
- "android_logger",
- "image",
- "imageproc",
- "jni",
- "lazy_static",
- "log",
- "memmap2",
- "rquickjs",
- "serde",
- "serde_json",
- "thiserror 2.0.17",
- "tokio",
- "ts-rs",
- "uniffi",
- "uniffi_build",
-]
-
-[[package]]
 name = "rustc-hash"
 version = "2.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2148,6 +2127,27 @@ name = "toml_writer"
 version = "1.0.6+spec-1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ab16f14aed21ee8bfd8ec22513f7287cd4a91aa92e44edfe2c17ddd004e92607"
+
+[[package]]
+name = "touch_core"
+version = "0.1.0"
+dependencies = [
+ "android_logger",
+ "image",
+ "imageproc",
+ "jni",
+ "lazy_static",
+ "log",
+ "memmap2",
+ "rquickjs",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.17",
+ "tokio",
+ "ts-rs",
+ "uniffi",
+ "uniffi_build",
+]
 
 [[package]]
 name = "ts-rs"

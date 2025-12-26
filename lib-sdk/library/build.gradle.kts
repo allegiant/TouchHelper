@@ -25,23 +25,21 @@ kotlin {
             dependencies {
                 // 如果你需要在这个层写通用的 Kotlin 逻辑
                 implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
+                implementation(libs.jna)
             }
+            // 👉 【必须加这一行】告诉 Gradle：这里的代码也是我的源码，请编译它！
+            kotlin.srcDir("build/generated/uniffi/src")
         }
 
         androidMain {
-            // 指向 UniFFI 生成的 Kotlin 代码 (Android端)
-            kotlin.srcDir("build/generated/uniffi/src")
             dependencies {
-                implementation("net.java.dev.jna:jna:5.13.0@aar") // UniFFI 必需
+                implementation(libs.jna)
             }
         }
 
         val desktopMain by getting {
-            // 指向 UniFFI 生成的 Kotlin 代码 (Desktop端)
-            kotlin.srcDir("build/generated/uniffi/src")
             dependencies {
-                implementation("net.java.dev.jna:jna:5.13.0") // UniFFI 必需
-                implementation("net.java.dev.jna:jna-platform:5.13.0")
+                implementation(libs.jna)
             }
         }
     }

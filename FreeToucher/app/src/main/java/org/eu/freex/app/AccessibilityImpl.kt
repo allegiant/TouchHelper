@@ -1,9 +1,9 @@
 package org.eu.freex.app
 
 import android.util.Log
-import uniffi.rust_core.AccessibilityService
+import uniffi.touch_core.AccessibilityService
 
-class AccessibilityImpl: AccessibilityService{
+class AccessibilityImpl: AccessibilityService {
     override fun dispatchClick(x: Int, y: Int) {
         val service = MacroAccessibilityService.instance
         if (service != null) {

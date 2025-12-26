@@ -44,6 +44,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import uniffi.touch_core.runJsScript
 import java.io.BufferedReader
 import java.io.File
 import java.io.InputStreamReader
@@ -192,7 +193,7 @@ class WebViewActivity : ComponentActivity() {
                 }
 
                 // 3. 调用 Rust 执行
-                uniffi.rust_core.runJsScript(scriptContent)
+                uniffi.touch_core.runJsScript(scriptContent)
 
                 // 更新 UI 状态
                 isScriptRunning.value = true
@@ -211,10 +212,10 @@ class WebViewActivity : ComponentActivity() {
     private fun initRust(isRoot: Boolean) {
         try {
             if (isRoot) {
-                uniffi.rust_core.initService(true, AndroidLogger(), null)
+                uniffi.touch_core.initService(true, AndroidLogger(), null)
             } else {
                 val adapter = AccessibilityImpl()
-                uniffi.rust_core.initService(false, AndroidLogger(), adapter)
+                uniffi.touch_core.initService(false, AndroidLogger(), adapter)
             }
         } catch (e: Exception) {
             Log.e("TouchHelper", "Init Rust failed", e)
@@ -222,7 +223,7 @@ class WebViewActivity : ComponentActivity() {
     }
     private fun stopScript() {
         CoroutineScope(Dispatchers.IO).launch {
-            uniffi.rust_core.stopScript()
+            uniffi.touch_core.stopScript()
             isScriptRunning.value = false
             isScriptPaused.value = false
         }
@@ -230,7 +231,7 @@ class WebViewActivity : ComponentActivity() {
 
     private fun pauseScript(paused: Boolean) {
         CoroutineScope(Dispatchers.IO).launch {
-            uniffi.rust_core.setPaused(paused)
+            uniffi.touch_core.setPaused(paused)
             isScriptPaused.value = paused
         }
     }
