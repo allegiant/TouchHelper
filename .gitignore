@@ -2,11 +2,7 @@
 # Android / Gradle
 # ========================
 .gradle/
-build/
-app/build/
-server/build/
-android/app/build/
-android/server/build/
+**/build/
 android/.kotlin/
 
 # 本地配置 (绝对路径敏感)
@@ -23,11 +19,10 @@ captures/
 # AutoGM 特有生成产物
 # ========================
 # 忽略 Rust 编译生成的 .so 文件
-android/app/src/main/jniLibs/
+lib-sdk/library/src/androidMain/jniLibs/
+lib-sdk/library/src/desktopMain/resources/win32-x86-64/
 # 忽略 Server 编译生成的 .jar 文件
-android/app/src/main/assets/server.jar
-# 忽略 Server 编译生成的中间 dex 文件
-android/server/libs/
+FreeToucher/app/src/main/assets/server.jar
 
 # ========================
 # Rust / Cargo
