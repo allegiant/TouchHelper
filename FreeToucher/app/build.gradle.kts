@@ -36,7 +36,6 @@ android {
     defaultConfig {
         applicationId = "org.eu.freex.touchhelper"
         minSdk = 26
-        // 🌟 修正点 2：与 compileSdk 保持一致
         targetSdk = 36
         versionCode = 1
         versionName = "1.0"
@@ -68,19 +67,32 @@ android {
 }
 
 tasks.configureEach {
-    val taskName = name.lowercase()
-    if (taskName.contains("lint")) {
-        enabled = false
+    val taskName = name
+    // 拦截所有资源合并任务
+    if (taskName.startsWith("merge") && taskName.endsWith("Assets")) {
+        // 使用字符串路径 ":FreeToucherServer:buildDex"
+        // 这样 Gradle 会在执行阶段再去寻找这个任务，完美避开“找不到任务”的报错
+        dependsOn(":FreeToucherServer:buildDex")
     }
 }
 
-// ==========================================
-// 🔗 依赖钩子：把所有任务串起来
-// ==========================================
+val cleanServerJar by tasks.registering(Delete::class) {
+    group = "build"
+    description = "Cleans the generated server.jar from assets folder"
 
-tasks.named("preBuild") {
-    // 2. 同时也依赖 Server (之前配置的)
-    if (rootProject.findProject(":FreeToucherServer") != null) {
-        dependsOn(":FreeToucherServer:buildDex")
+    // 指定要删除的文件路径
+    delete(file("src/main/assets/server.jar"))
+}
+
+// 将这个任务挂载到标准的 clean 任务上
+// 这样当你运行 ./gradlew clean 时，它也会顺便把 server.jar 删掉
+tasks.named("clean") {
+    dependsOn(cleanServerJar)
+}
+
+tasks.configureEach {
+    val taskName = name.lowercase()
+    if (taskName.contains("lint")) {
+        enabled = false
     }
 }
