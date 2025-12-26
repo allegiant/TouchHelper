@@ -1,9 +1,8 @@
-import org.jetbrains.compose.desktop.application.dsl.TargetFormat
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
     alias(libs.plugins.kotlinMultiplatform)
-    alias(libs.plugins.androidLibrary) // 👈 关键修改：改为 Library
+    alias(libs.plugins.androidLibrary)
     // alias(libs.plugins.composeMultiplatform) //如果你在这个层级不需要写UI，建议注释掉，减少编译时间
 }
 
@@ -11,11 +10,6 @@ kotlin {
     // 1. Android 目标
     androidTarget {
         publishLibraryVariants("release", "debug")
-
-        // 新写法：直接在 target 层级配置，不用进 compilations
-        compilerOptions {
-            jvmTarget.set(JvmTarget.JVM_11)
-        }
     }
 
     // 2. Windows/JVM 目标
@@ -27,14 +21,14 @@ kotlin {
     }
 
     sourceSets {
-        val commonMain by getting {
+        commonMain {
             dependencies {
                 // 如果你需要在这个层写通用的 Kotlin 逻辑
                 implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
             }
         }
 
-        val androidMain by getting {
+        androidMain {
             // 指向 UniFFI 生成的 Kotlin 代码 (Android端)
             kotlin.srcDir("build/generated/uniffi/src")
             dependencies {
@@ -59,13 +53,9 @@ android {
 
     defaultConfig {
         minSdk = 26
-        // ❌ 删除 applicationId (Library 不需要)
-        // ❌ 删除 versionCode, versionName (通常由发布插件管理，或者是根项目管理)
-
         // 确保包含你的 Rust 支持的架构
         ndk {
             abiFilters.add("arm64-v8a")
-            //abiFilters.add("x86")
             abiFilters.add("x86_64") // 如果你需要
         }
     }
@@ -75,7 +65,6 @@ android {
         targetCompatibility = JavaVersion.VERSION_11
     }
 
-    // 如果你在这一层有资源文件，保持这个配置；否则可以简化
     sourceSets.getByName("main") {
         manifest.srcFile("src/androidMain/AndroidManifest.xml")
         res.srcDirs("src/androidMain/res")
@@ -120,15 +109,21 @@ val buildRustDesktop = tasks.register<Exec>("buildRustDesktop") {
     // Windows 构建 (假设在 Windows 环境下运行)
     commandLine("cargo", "build", "--release")
 
-    doLast {
-        // ⚠️ 关键步骤：将编译好的 DLL 复制到 resources 目录
-        // 这样它会被打包进 JAR 文件，供 consumers (FreexTools) 提取使用
-        val targetDir = file("src/desktopMain/resources/win32-x86-64")
-        targetDir.mkdirs()
+    // 修复 Config Cache: 在配置阶段解析路径 (File 对象可序列化)
+    val sourceDll = file("$rustBasePath/target/release/$libName.dll")
+    // 注意：这里改为了 jvmMain 以匹配上面的 sourceSet
+    // ⚠️ 关键步骤：将编译好的 DLL 复制到 resources 目录
+    // 这样它会被打包进 JAR 文件，供 consumers (FreexTools) 提取使用
+    val targetDir = file("src/desktopMain/resources/win32-x86-64")
 
-        copy {
-            from("$rustBasePath/target/release/$libName.dll")
-            into(targetDir)
+    doLast {
+        // 修复 Config Cache: 使用 Java IO 替代 project.copy
+        if (!targetDir.exists()) {
+            targetDir.mkdirs()
+        }
+        if (sourceDll.exists()) {
+            // 使用 Java 标准 API 复制文件
+            sourceDll.copyTo(File(targetDir, sourceDll.name), overwrite = true)
         }
     }
 }
@@ -141,11 +136,11 @@ val generateBindings = tasks.register<Exec>("generateBindings") {
 
     // 我们需要指向一个已编译的库文件来生成绑定。
     // 这里指向 Windows 的 release dll 即可 (接口定义是跨平台的)
-    val libraryFile = "$rustBasePath/target/release/$libName.dll"
-    val outDir = file("${project.buildDir}/generated/uniffi/src")
+    val libraryFile = file("$rustBasePath/target/release/$libName.dll")
+    val outDir = layout.buildDirectory.dir("generated/uniffi/src").get().asFile
 
     // 只有当 DLL 存在时才运行生成，避免报错 (首次运行可能需要先 buildRustDesktop)
-    onlyIf { file(libraryFile).exists() }
+    onlyIf { libraryFile.exists() }
 
     commandLine(
         "cargo", "run", "--bin", "uniffi-bindgen",
@@ -158,10 +153,13 @@ val generateBindings = tasks.register<Exec>("generateBindings") {
     dependsOn(buildRustDesktop)
 }
 
-// 4. 任务挂载：在 Gradle 编译 Kotlin 之前，确保 Rust 任务已完成
-tasks.named("preBuild") {
-    dependsOn(buildRustAndroid)
-    dependsOn(buildRustDesktop)
+// 4. 任务挂载
+afterEvaluate {
+    // 使用 afterEvaluate 确保 Android 任务已创建
+    tasks.named("preBuild") {
+        dependsOn(buildRustAndroid)
+        dependsOn(buildRustDesktop)
+    }
 }
 
 // 确保生成代码任务在编译 Kotlin 之前执行
