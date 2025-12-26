@@ -10,13 +10,13 @@ plugins {
 
 
 android {
-    namespace = appId
+    namespace = "org.eu.freex.app"
     compileSdk {
         version = release(36)
     }
 
     defaultConfig {
-        applicationId = appId
+        applicationId = "org.eu.freex.touchhelper"
         minSdk = 26
         targetSdk = 36
         versionCode = 1
@@ -51,6 +51,7 @@ android {
 }
 
 dependencies {
+    implementation(project(":lib-sdk"))
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)
@@ -71,52 +72,14 @@ dependencies {
     debugImplementation(libs.androidx.compose.ui.test.manifest)
 }
 
-// ==========================================================================
-// 🦀 Rust 自动化构建任务
-// ==========================================================================
-
-// 定义 Rust 项目根目录
-val rustDir = file("../../rust_core")
-val jniLibsDir = file("src/main/jniLibs")
-
-// 2. 编译 Rust 动态库 (.so)
-// 定义统一任务
-val buildRust = tasks.register<Exec>("buildRust") {
-    group = "rust"
-    description = "Generate all bindings and build Rust library"
-    workingDir = rustDir
-
-    // 直接调用 gen_all，它内部会处理编译
-    commandLine("cargo", "run", "--bin", "gen_all")
-}
 
 // ==========================================
 // 🔗 依赖钩子：把所有任务串起来
 // ==========================================
 
 tasks.named("preBuild") {
-    dependsOn(buildRust)
-
     // 2. 同时也依赖 Server (之前配置的)
     if (rootProject.findProject(":server") != null) {
         dependsOn(":server:buildDex")
-    }
-}
-
-// (可选) 增加一个清理任务：运行 clean 时删除生成的 .so 文件
-tasks.named("clean") {
-    doLast {
-        val jniLibsDir = project.file(jniLibsDir)
-        val generatedDir = project.file(uniFfiGeneratedPath)
-        println("$generatedDir")
-
-        if (jniLibsDir.exists()) {
-            delete(jniLibsDir)
-            println("🧹 Cleaned up jniLibs directory.")
-        }
-        if (generatedDir.exists()) {
-            delete(generatedDir)
-            println("🧹 Cleaned up rust generated directory.")
-        }
     }
 }
