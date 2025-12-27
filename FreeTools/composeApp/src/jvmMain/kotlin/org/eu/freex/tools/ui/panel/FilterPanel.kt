@@ -1,6 +1,9 @@
 // 文件路径: composeApp/src/jvmMain/kotlin/org/eu/freex/tools/ui/panel/FilterPanel.kt
 package org.eu.freex.tools.ui.panel
 
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.TooltipArea
+import androidx.compose.foundation.TooltipPlacement
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -8,6 +11,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -18,11 +22,13 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.eu.freex.tools.model.*
@@ -90,12 +96,46 @@ fun FilterPanel(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun <T : ImageFilter> FilterSection(title: String, color: Color, filters: List<T>, selected: ImageFilter, onSelect: (T) -> Unit) {
     SectionHeader(title, color)
     filters.chunked(2).forEach { rowItems ->
         Row(Modifier.fillMaxWidth()) {
-            rowItems.forEach { item -> FilterGridButton(item.label, selected == item, { onSelect(item) }, Modifier.weight(1f)) }
+            rowItems.forEach { item ->
+                // 【关键修复】Modifier.weight(1f) 必须加在 TooltipArea 上
+                TooltipArea(
+                    tooltip = {
+                        Surface(
+                            modifier = Modifier.shadow(4.dp),
+                            color = Color(0xFF333333),
+                            shape = RoundedCornerShape(4.dp)
+                        ) {
+                            Text(
+                                text = item.description,
+                                color = Color.White,
+                                modifier = Modifier.padding(8.dp),
+                                fontSize = 12.sp
+                            )
+                        }
+                    },
+                    modifier = Modifier.weight(1f), // 修复点：权重放在这里，让 TooltipArea 平分宽度
+                    delayMillis = 500,
+                    tooltipPlacement = TooltipPlacement.CursorPoint(
+                        alignment = Alignment.BottomEnd,
+                        offset = DpOffset(0.dp, 16.dp)
+                    )
+                ) {
+                    // 修复点：按钮填满父容器（即填满 TooltipArea 分配到的空间）
+                    FilterGridButton(
+                        text = item.label,
+                        isSelected = selected == item,
+                        onClick = { onSelect(item) },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            }
+            // 如果一行不足2个，使用 Spacer 占据剩余的权重
             if (rowItems.size < 2) Spacer(Modifier.weight(1f))
         }
     }
