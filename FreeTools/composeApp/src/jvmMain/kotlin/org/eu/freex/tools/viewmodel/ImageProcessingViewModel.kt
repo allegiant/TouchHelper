@@ -53,6 +53,7 @@ class ImageProcessingViewModel {
 
     // 【新增】切割结果列表 (存放拆分出来的字模)
     var segmentationResults = mutableStateListOf<WorkImage>()
+
     // 【新增】当前右侧面板的 Tab 索引 (0: 滤镜处理, 1: 切割识别)
     var rightPanelTabIndex by mutableStateOf(0)
 
@@ -66,22 +67,25 @@ class ImageProcessingViewModel {
 
     // ... (Getter 属性保持不变) ...
     val currentSourceImage: WorkImage? get() = if (selectedSourceIndex in sourceImages.indices) sourceImages[selectedSourceIndex] else null
-    val activeColorRules: List<ColorRule> get() = currentSourceImage?.localColorRules ?: globalColorRules
+    val activeColorRules: List<ColorRule>
+        get() = currentSourceImage?.localColorRules ?: globalColorRules
     val activeBias: String get() = currentSourceImage?.localBias ?: globalBias
     val activeBaseImage: WorkImage? get() = if (pipelineSteps.isNotEmpty()) pipelineSteps.last() else currentSourceImage
 
-    val displayChain: List<WorkImage> get() {
-        val list = mutableListOf<WorkImage>()
-        if (currentSourceImage != null) list.add(currentSourceImage!!.copy(label = "原图"))
-        list.addAll(pipelineSteps)
-        return list
-    }
+    val displayChain: List<WorkImage>
+        get() {
+            val list = mutableListOf<WorkImage>()
+            if (currentSourceImage != null) list.add(currentSourceImage!!.copy(label = "原图"))
+            list.addAll(pipelineSteps)
+            return list
+        }
 
-    val currentWorkImage: WorkImage? get() = if (displayChain.isNotEmpty() && selectedPipelineIndex in displayChain.indices) {
-        displayChain[selectedPipelineIndex]
-    } else {
-        activeBaseImage
-    }
+    val currentWorkImage: WorkImage?
+        get() = if (displayChain.isNotEmpty() && selectedPipelineIndex in displayChain.indices) {
+            displayChain[selectedPipelineIndex]
+        } else {
+            activeBaseImage
+        }
 
     var activeRects by mutableStateOf<List<Rect>>(emptyList())
         private set
@@ -147,22 +151,65 @@ class ImageProcessingViewModel {
             }
 
             // 1. 计算切割框 (Rects)
-            val imgToSegment = if (currentWorkImage?.isBinary == true) currentWorkImage!!.bufferedImage else rawImg
+            val imgToSegment =
+                if (currentWorkImage?.isBinary == true) currentWorkImage!!.bufferedImage else rawImg
             val rects = mutableListOf<Rect>()
 
             if (!currentSourceImage!!.localCropRects.isNullOrEmpty()) {
                 rects.addAll(currentSourceImage!!.localCropRects!!)
             } else {
                 if (isGridMode) {
-                    rects.addAll(ImageUtils.generateGridRects(gridParams.x, gridParams.y, gridParams.w, gridParams.h, gridParams.colGap, gridParams.rowGap, gridParams.colCount, gridParams.rowCount))
+                    rects.addAll(
+                        ImageUtils.generateGridRects(
+                            gridParams.x,
+                            gridParams.y,
+                            gridParams.w,
+                            gridParams.h,
+                            gridParams.colGap,
+                            gridParams.rowGap,
+                            gridParams.colCount,
+                            gridParams.rowCount
+                        )
+                    )
                 } else {
                     val rules = if (currentWorkImage?.isBinary == true) {
                         listOf(ColorRule(targetHex = "FFFFFF", biasHex = "000000"))
                     } else {
                         activeColorRules.filter { it.isEnabled }
                     }
+
                     if (rules.isNotEmpty()) {
-                        rects.addAll(ImageUtils.scanConnectedComponents(imgToSegment, rules))
+                        try {
+                            // A. 图片转字节
+                            val imageBytes = bufferedImageToBytes(imgToSegment)
+
+                            // B. 转换规则对象 (UI Model -> Rust Model)
+                            val rustRules = rules.map { rule ->
+                                uniffi.touch_core.ColorRule(
+                                    id = rule.id,
+                                    targetHex = rule.targetHex,
+                                    biasHex = rule.biasHex,
+                                    isEnabled = rule.isEnabled
+                                )
+                            }
+
+                            // C. 调用 Rust 接口
+                            val rustRects = uniffi.touch_core.scanComponents(imageBytes, rustRules)
+
+                            // D. 转换结果 (Rust Rect -> Compose Rect)
+                            val composeRects = rustRects.map { r ->
+                                Rect(
+                                    left = r.left.toFloat(),
+                                    top = r.top.toFloat(),
+                                    right = r.left.toFloat() + r.width.toFloat(),
+                                    bottom = r.top.toFloat() + r.height.toFloat()
+                                )
+                            }
+                            rects.addAll(composeRects)
+                        } catch (e: Exception) {
+                            e.printStackTrace() // 处理 Rust 抛出的 VisionError
+                            println("Rust Segmentation Failed: ${e.message}")
+                        }
                     }
                     rects.addAll(globalFixedRects)
                 }
@@ -192,19 +239,30 @@ class ImageProcessingViewModel {
         }
     }
 
-    // ... (updateExistingBinarizationStep, loadFile, etc. 保持不变) ...
-    // 为节省篇幅，省略未变动的辅助函数
     private suspend fun updateExistingBinarizationStep(stepIndex: Int) {
         val inputImage = displayChain[stepIndex].bufferedImage
         val min = thresholdRange.start.toInt()
         val max = thresholdRange.endInclusive.toInt()
         val useRgbAvg = isRgbAvgEnabled
-        val newParams = mapOf("type" to "BINARIZATION", "min" to min, "max" to max, "rgbAvg" to useRgbAvg)
+        val newParams =
+            mapOf("type" to "BINARIZATION", "min" to min, "max" to max, "rgbAvg" to useRgbAvg)
         withContext(Dispatchers.Default) {
-            val fullRect = Rect(0f, 0f, inputImage.width.toFloat(), inputImage.height.toFloat())
-            val newBitmap = if (useRgbAvg) ImageUtils.binarizeByRgbAvg(inputImage, min, max, fullRect) else inputImage
-            val updatedStep = pipelineSteps[stepIndex].copy(bitmap = newBitmap.toComposeImageBitmap(), bufferedImage = newBitmap, params = newParams)
-            withContext(Dispatchers.Main) { pipelineSteps[stepIndex] = updatedStep }
+            try {
+                val inputBytes = bufferedImageToBytes(inputImage)
+                val rustFilter = uniffi.touch_core.ImageFilter.Color(uniffi.touch_core.ColorFilterType.BINARIZATION)
+
+                // 【核心修改】传入 min 和 max
+                val outputBytes = uniffi.touch_core.applyFilter(inputBytes, rustFilter, min, max)
+                val newBitmap = bytesToBufferedImage(outputBytes)
+                val updatedStep = pipelineSteps[stepIndex].copy(
+                    bitmap = newBitmap.toComposeImageBitmap(),
+                    bufferedImage = newBitmap,
+                    params = newParams
+                )
+                withContext(Dispatchers.Main) { pipelineSteps[stepIndex] = updatedStep }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
         }
     }
 
@@ -216,42 +274,195 @@ class ImageProcessingViewModel {
                     sourceImages.add(WorkImage(img.toComposeImageBitmap(), img, file.name))
                     selectedSourceIndex = sourceImages.lastIndex
                 }
-            } catch (e: Exception) { e.printStackTrace() }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
         }
     }
-    fun startScreenCapture() { scope.launch(Dispatchers.IO) { kotlinx.coroutines.delay(300); val capture = ImageUtils.captureFullScreen(); withContext(Dispatchers.Main) { fullScreenCapture = capture; showScreenCropper = true } } }
-    fun confirmCrop(rect: Rect) { addProcessingStep("裁剪区域") { src -> ImageUtils.cropImage(src, rect) }; if (currentScope == RuleScope.GLOBAL) globalFixedRects.clear() }
-    fun confirmScreenCrop(cropped: BufferedImage) { showScreenCropper = false; sourceImages.add(WorkImage(cropped.toComposeImageBitmap(), cropped, "截图 ${sourceImages.size + 1}")); selectedSourceIndex = sourceImages.lastIndex }
-    fun addProcessingStep(label: String, isBinary: Boolean = false, params: Map<String, Any> = emptyMap(), processor: (BufferedImage) -> BufferedImage) {
+
+    fun startScreenCapture() {
+        scope.launch(Dispatchers.IO) {
+            kotlinx.coroutines.delay(300);
+            val capture = ImageUtils.captureFullScreen(); withContext(Dispatchers.Main) {
+            fullScreenCapture = capture; showScreenCropper = true
+        }
+        }
+    }
+
+    fun confirmCrop(rect: Rect) {
+        addProcessingStep("裁剪区域") { src ->
+            ImageUtils.cropImage(
+                src,
+                rect
+            )
+        }; if (currentScope == RuleScope.GLOBAL) globalFixedRects.clear()
+    }
+
+    fun confirmScreenCrop(cropped: BufferedImage) {
+        showScreenCropper = false; sourceImages.add(
+            WorkImage(
+                cropped.toComposeImageBitmap(),
+                cropped,
+                "截图 ${sourceImages.size + 1}"
+            )
+        ); selectedSourceIndex = sourceImages.lastIndex
+    }
+
+    fun addProcessingStep(
+        label: String,
+        isBinary: Boolean = false,
+        params: Map<String, Any> = emptyMap(),
+        processor: (BufferedImage) -> BufferedImage
+    ) {
         val base = activeBaseImage ?: return
         scope.launch(Dispatchers.Default) {
             val processed = processor(base.bufferedImage)
-            val newStep = WorkImage(processed.toComposeImageBitmap(), processed, "Step_${pipelineSteps.size}", label, isBinary = isBinary, params = params)
-            withContext(Dispatchers.Main) { pipelineSteps.add(newStep); selectedPipelineIndex = 1 + pipelineSteps.lastIndex }
+            val newStep = WorkImage(
+                processed.toComposeImageBitmap(),
+                processed,
+                "Step_${pipelineSteps.size}",
+                label,
+                isBinary = isBinary,
+                params = params
+            )
+            withContext(Dispatchers.Main) {
+                pipelineSteps.add(newStep); selectedPipelineIndex = 1 + pipelineSteps.lastIndex
+            }
         }
     }
+
     fun handleProcessAdd(filter: ImageFilter) {
-        val min = thresholdRange.start.toInt(); val max = thresholdRange.endInclusive.toInt(); val useRgbAvg = isRgbAvgEnabled
-        when (filter) {
-            ColorFilterType.BINARIZATION -> {
-                val params = mapOf("type" to "BINARIZATION", "min" to min, "max" to max, "rgbAvg" to useRgbAvg)
-                addProcessingStep("二值化", isBinary = true, params = params) { src ->
-                    val fullRect = Rect(0f, 0f, src.width.toFloat(), src.height.toFloat())
-                    if (useRgbAvg) ImageUtils.binarizeByRgbAvg(src, min, max, fullRect) else src
+        val min = thresholdRange.start.toInt()
+        val max = thresholdRange.endInclusive.toInt()
+
+        // 1. 将 UI 层的滤镜模型 (Kotlin) 映射为 Rust 层的枚举 (UniFFI 生成)
+        // 注意：根据您的包名配置，uniffi.touch_core 可能需要调整为实际的包名
+        val rustFilter: uniffi.touch_core.ImageFilter? = when (filter) {
+            // --- 彩色滤镜 ---
+            ColorFilterType.BINARIZATION -> uniffi.touch_core.ImageFilter.Color(uniffi.touch_core.ColorFilterType.BINARIZATION)
+            ColorFilterType.GRAYSCALE -> uniffi.touch_core.ImageFilter.Color(uniffi.touch_core.ColorFilterType.GRAYSCALE)
+            ColorFilterType.COLOR_PICK -> uniffi.touch_core.ImageFilter.Color(uniffi.touch_core.ColorFilterType.COLOR_PICK)
+            ColorFilterType.POSTERIZE -> uniffi.touch_core.ImageFilter.Color(uniffi.touch_core.ColorFilterType.POSTERIZE)
+
+            // --- 黑白/二值化后滤镜 ---
+            BlackWhiteFilterType.DENOISE -> uniffi.touch_core.ImageFilter.BlackWhite(uniffi.touch_core.BlackWhiteFilterType.DENOISE)
+            BlackWhiteFilterType.INVERT -> uniffi.touch_core.ImageFilter.BlackWhite(uniffi.touch_core.BlackWhiteFilterType.INVERT)
+            BlackWhiteFilterType.SKELETON -> uniffi.touch_core.ImageFilter.BlackWhite(uniffi.touch_core.BlackWhiteFilterType.SKELETON)
+            BlackWhiteFilterType.DESKEW -> uniffi.touch_core.ImageFilter.BlackWhite(uniffi.touch_core.BlackWhiteFilterType.DESKEW)
+            BlackWhiteFilterType.ROTATE_CORRECT -> uniffi.touch_core.ImageFilter.BlackWhite(uniffi.touch_core.BlackWhiteFilterType.ROTATE_CORRECT)
+            BlackWhiteFilterType.REMOVE_LINES -> uniffi.touch_core.ImageFilter.BlackWhite(uniffi.touch_core.BlackWhiteFilterType.REMOVE_LINES)
+            BlackWhiteFilterType.CONTOURS -> uniffi.touch_core.ImageFilter.BlackWhite(uniffi.touch_core.BlackWhiteFilterType.CONTOURS)
+            BlackWhiteFilterType.EXTRACT_BLOBS -> uniffi.touch_core.ImageFilter.BlackWhite(uniffi.touch_core.BlackWhiteFilterType.EXTRACT_BLOBS)
+            BlackWhiteFilterType.DILATE_ERODE -> uniffi.touch_core.ImageFilter.BlackWhite(uniffi.touch_core.BlackWhiteFilterType.DILATE_ERODE)
+            BlackWhiteFilterType.FENCE_ADJUST -> uniffi.touch_core.ImageFilter.BlackWhite(uniffi.touch_core.BlackWhiteFilterType.FENCE_ADJUST)
+            BlackWhiteFilterType.VALID_IMAGE -> uniffi.touch_core.ImageFilter.BlackWhite(uniffi.touch_core.BlackWhiteFilterType.VALID_IMAGE)
+            BlackWhiteFilterType.KEEP_SIZE -> uniffi.touch_core.ImageFilter.BlackWhite(uniffi.touch_core.BlackWhiteFilterType.KEEP_SIZE)
+
+            // --- 通用滤镜 ---
+            is CommonFilterType -> when(filter) {
+                CommonFilterType.SCALE_RATIO -> uniffi.touch_core.ImageFilter.Common(uniffi.touch_core.CommonFilterType.SCALE_RATIO)
+                CommonFilterType.SCALE_NORM -> uniffi.touch_core.ImageFilter.Common(uniffi.touch_core.CommonFilterType.SCALE_NORM)
+                CommonFilterType.FIXED_ROTATE -> uniffi.touch_core.ImageFilter.Common(uniffi.touch_core.CommonFilterType.FIXED_ROTATE)
+                CommonFilterType.EXTEND_CROP -> uniffi.touch_core.ImageFilter.Common(uniffi.touch_core.CommonFilterType.EXTEND_CROP)
+                CommonFilterType.FIXED_SMOOTH -> uniffi.touch_core.ImageFilter.Common(uniffi.touch_core.CommonFilterType.FIXED_SMOOTH)
+                CommonFilterType.MEDIAN_BLUR -> uniffi.touch_core.ImageFilter.Common(uniffi.touch_core.CommonFilterType.MEDIAN_BLUR)
+                else -> null
+            }
+
+            else -> null
+        }
+
+        if (rustFilter != null) {
+            val label = filter.label
+            val isBinary = filter == ColorFilterType.BINARIZATION
+
+            // 构造用于 UI 回显的 params
+            // 只有二值化需要记录 min/max/rgbAvg，以便后续点击步骤时回显到控制面板的滑块上
+            val uiParams = if (isBinary) {
+                mapOf("type" to "BINARIZATION", "min" to min, "max" to max, "rgbAvg" to isRgbAvgEnabled)
+            } else {
+                emptyMap()
+            }
+
+            // 复用 addProcessingStep，但在 processor 内部调用 Rust
+            addProcessingStep(label, isBinary = isBinary, params = uiParams) { src ->
+                try {
+                    // 1. 图片转换：BufferedImage -> ByteArray (PNG)
+                    val inputBytes = bufferedImageToBytes(src)
+
+                    // 2. 准备参数
+                    // 如果是二值化，传入 min (param1) 和 max (param2)
+                    // 其他滤镜如果不需要参数，传 null
+                    val p1 = if (isBinary) min else null
+                    val p2 = if (isBinary) max else null
+
+                    // 3. 调用 Rust 核心库接口
+                    // applyFilter(image_data, filter, param1, param2)
+                    val outputBytes = uniffi.touch_core.applyFilter(inputBytes, rustFilter, p1,p2)
+
+                    // 4. 图片转换：ByteArray -> BufferedImage
+                    bytesToBufferedImage(outputBytes)
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                    println("Rust process failed for $label: ${e.message}")
+                    // 如果 Rust 处理失败，返回原图防止崩溃，或者抛出异常提示用户
+                    src
                 }
             }
-            ColorFilterType.GRAYSCALE -> addProcessingStep(filter.label) { src -> ImageUtils.toGrayscale(src) }
-            ColorFilterType.COLOR_PICK, ColorFilterType.POSTERIZE -> addProcessingStep(filter.label) { src -> ImageUtils.applyPlaceholderEffect(src, filter.label) }
-            BlackWhiteFilterType.DENOISE -> addProcessingStep(filter.label) { src -> ImageUtils.dummyDenoise(src) }
-            BlackWhiteFilterType.INVERT -> addProcessingStep(filter.label) { src -> ImageUtils.invertColors(src) }
-            BlackWhiteFilterType.SKELETON -> addProcessingStep(filter.label) { src -> ImageUtils.dummySkeleton(src) }
-            BlackWhiteFilterType.REMOVE_LINES, BlackWhiteFilterType.CONTOURS, BlackWhiteFilterType.EXTRACT_BLOBS, BlackWhiteFilterType.DESKEW, BlackWhiteFilterType.ROTATE_CORRECT, BlackWhiteFilterType.DILATE_ERODE, BlackWhiteFilterType.FENCE_ADJUST, BlackWhiteFilterType.VALID_IMAGE, BlackWhiteFilterType.KEEP_SIZE -> addProcessingStep(filter.label) { src -> ImageUtils.applyPlaceholderEffect(src, filter.label) }
-            is CommonFilterType -> addProcessingStep(filter.label) { src -> ImageUtils.applyPlaceholderEffect(src, filter.label) }
-            else -> println("未知滤镜: ${filter.label}")
+        } else {
+            println("Native filter mapping not found for: ${filter.label}")
+            // 可以在这里保留旧的 Kotlin 实现作为 fallback，或者提示用户该功能未实现
         }
     }
-    fun updateRules(action: (MutableList<ColorRule>) -> Unit) { if (currentScope == RuleScope.GLOBAL) action(globalColorRules) else if (currentSourceImage != null) { val newRules = (currentSourceImage!!.localColorRules ?: globalColorRules).map { it.copy() }.toMutableList(); action(newRules); val newImage = currentSourceImage!!.copy(localColorRules = newRules); if (selectedSourceIndex in sourceImages.indices) sourceImages[selectedSourceIndex] = newImage } }
-    fun openMappingDialog(rect: Rect) { if (currentWorkImage != null) { val charImg = ImageUtils.cropImage(currentWorkImage!!.bufferedImage, rect); mappingBufferedImg = charImg; mappingBitmap = charImg.toComposeImageBitmap(); showMappingDialog = true } }
-    fun confirmMapping(char: String) { if (mappingBufferedImg != null) fontLibrary.add(FontItem(char, mappingBufferedImg!!)); showMappingDialog = false }
-    fun onColorPick(hex: String) { if (currentFilter == ColorFilterType.COLOR_PICK) { val targetList = if (currentScope == RuleScope.GLOBAL) globalColorRules else (currentSourceImage?.localColorRules ?: globalColorRules); if (targetList.size < 10 && targetList.none { it.targetHex == hex }) { updateRules { it.add(ColorRule(targetHex = hex, biasHex = activeBias)) } } } }
+
+    fun updateRules(action: (MutableList<ColorRule>) -> Unit) {
+        if (currentScope == RuleScope.GLOBAL) action(globalColorRules) else if (currentSourceImage != null) {
+            val newRules =
+                (currentSourceImage!!.localColorRules ?: globalColorRules).map { it.copy() }
+                    .toMutableList(); action(newRules);
+            val newImage =
+                currentSourceImage!!.copy(localColorRules = newRules); if (selectedSourceIndex in sourceImages.indices) sourceImages[selectedSourceIndex] =
+                newImage
+        }
+    }
+
+    fun openMappingDialog(rect: Rect) {
+        if (currentWorkImage != null) {
+            val charImg =
+                ImageUtils.cropImage(currentWorkImage!!.bufferedImage, rect); mappingBufferedImg =
+                charImg; mappingBitmap = charImg.toComposeImageBitmap(); showMappingDialog = true
+        }
+    }
+
+    fun confirmMapping(char: String) {
+        if (mappingBufferedImg != null) fontLibrary.add(
+            FontItem(
+                char,
+                mappingBufferedImg!!
+            )
+        ); showMappingDialog = false
+    }
+
+    fun onColorPick(hex: String) {
+        if (currentFilter == ColorFilterType.COLOR_PICK) {
+            val targetList =
+                if (currentScope == RuleScope.GLOBAL) globalColorRules else (currentSourceImage?.localColorRules
+                    ?: globalColorRules); if (targetList.size < 10 && targetList.none { it.targetHex == hex }) {
+                updateRules { it.add(ColorRule(targetHex = hex, biasHex = activeBias)) }
+            }
+        }
+    }
+
+
+    // 将 BufferedImage 转为 PNG 字节数组 (传给 Rust)
+    private fun bufferedImageToBytes(image: BufferedImage): ByteArray {
+        val stream = java.io.ByteArrayOutputStream()
+        ImageIO.write(image, "png", stream)
+        return stream.toByteArray()
+    }
+
+    // 将 字节数组 转回 BufferedImage (从 Rust 接收)
+    private fun bytesToBufferedImage(bytes: ByteArray): BufferedImage {
+        return ImageIO.read(java.io.ByteArrayInputStream(bytes))
+    }
 }

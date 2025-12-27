@@ -11,7 +11,7 @@ use log::info;
 use crate::{
     input::{AccessibilityStrategy, InputController, RootStrategy},
     js_engine::{self, CURRENT_SCRIPT_TASK},
-    logger::init_logger,
+    logger::{self, init_logger},
     types::{AccessibilityService, PlatformLogger},
 };
 
@@ -40,6 +40,18 @@ pub static IS_PAUSED: AtomicBool = AtomicBool::new(false);
 lazy_static::lazy_static! {
     // 硬件控制器 (Root/无障碍)
     pub static ref CONTROLLER: Mutex<Option<Box<dyn InputController>>> = Mutex::new(None);
+}
+
+/// 桌面端专用初始化 (Desktop / JVM)
+/// 不需要传 Service 或 InputStrategy，只初始化日志
+#[uniffi::export]
+pub fn init_desktop() {
+    // 1. 初始化日志 (会自动使用 simple_logger 输出到控制台)
+    logger::init_logger();
+
+    // 2. 打印确认信息
+    log::info!("Desktop environment initialized successfully.");
+    log::debug!("Debug logs are enabled.");
 }
 
 // ==========================================
