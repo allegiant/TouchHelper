@@ -208,11 +208,24 @@ class ImageViewModel : ViewModel() {
 
     private fun startCapture() {
         scope.launch(Dispatchers.IO) {
-            // 延迟一点以防截到窗口本身
+            // 延迟 300ms 以防截到当前应用窗口（给窗口最小化或隐藏的时间，如果需要的话）
             delay(300)
-            val capture = ImageUtils.captureFullScreen() // 假设您有这个工具方法
-            // 回到主线程更新 UI
-            // _uiState.update ...
+
+            try {
+                // 1. 执行全屏截图
+                val capture = ImageUtils.captureFullScreen()
+
+                // 2. 更新 UI 状态：保存截图并显示裁剪弹窗
+                _uiState.update {
+                    it.copy(
+                        fullScreenCapture = capture,    // 保存截到的图
+                        isScreenCropperVisible = true   // 打开裁剪弹窗
+                    )
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                // 可选：更新错误状态提示用户截图失败
+            }
         }
     }
 

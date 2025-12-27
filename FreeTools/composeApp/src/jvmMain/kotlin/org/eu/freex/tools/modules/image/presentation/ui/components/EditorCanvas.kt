@@ -1,31 +1,24 @@
 package org.eu.freex.tools.modules.image.presentation.ui.components
 
-
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
 import androidx.compose.material.Surface
 import androidx.compose.material.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.scale
+import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.onPointerEvent
@@ -36,102 +29,136 @@ import androidx.compose.ui.unit.sp
 import org.eu.freex.tools.model.WorkImage
 import org.eu.freex.tools.utils.ColorUtils
 
-
-/**
- * 2. 中间画布 (EditorCanvas)
- * 这个组件负责显示图片、绘制切割框、处理缩放拖拽和鼠标悬停取色
- */
-
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
 fun EditorCanvas(
     modifier: Modifier = Modifier,
-    workImage: WorkImage?,          // 1. 当前要显示的图
-    binaryPreview: WorkImage? = null, // 2. 【关键修正】这里必须有 binaryPreview 参数，且类型为 WorkImage?
-    activeRects: List<Rect> = emptyList(), // 3. 切割框列表
+    workImage: WorkImage?,
+    binaryPreview: WorkImage? = null,
+    activeRects: List<Rect> = emptyList(),
     scale: Float,
     offset: Offset,
-    hoverPos: IntOffset?,
-    hoverColor: Color,
+    hoverPos: IntOffset?,      // ViewModel 传来的参数（这里暂时忽略，改用本地状态）
+    hoverColor: Color,         // ViewModel 传来的参数（这里暂时忽略）
     onTransformChange: (Float, Offset) -> Unit,
     onHover: (IntOffset?, Color) -> Unit,
     onRectClick: (Rect) -> Unit,
     onColorPick: (String) -> Unit
 ) {
-    // 处理滚轮缩放
-    val scrollModifier = Modifier.onPointerEvent(PointerEventType.Scroll) {
-        val change = it.changes.first()
-        val scrollDelta = change.scrollDelta.y
-        val zoomFactor = if (scrollDelta > 0) 0.9f else 1.1f
-        val newScale = (scale * zoomFactor).coerceIn(0.1f, 20f)
-        onTransformChange(newScale, offset)
-    }
+    // 1. 捕获最新状态
+    val currentScale by rememberUpdatedState(scale)
+    val currentOffset by rememberUpdatedState(offset)
+    val currentWorkImage by rememberUpdatedState(workImage)
+    val currentRects by rememberUpdatedState(activeRects)
 
-    // 处理拖拽平移
-    val dragModifier = Modifier.pointerInput(Unit) {
-        detectDragGestures { change, dragAmount ->
-            change.consume()
-            onTransformChange(scale, offset + dragAmount)
+    val currentOnTransformChange by rememberUpdatedState(onTransformChange)
+    val currentOnRectClick by rememberUpdatedState(onRectClick)
+
+    // 【优化】使用本地状态处理悬停显示，实现 0 延迟跟手，不再依赖 ViewModel 回流
+    var localHoverPos by remember { mutableStateOf<IntOffset?>(null) }
+    var localHoverColor by remember { mutableStateOf(Color.Transparent) }
+
+    // 2. 滚轮缩放逻辑
+    val scrollModifier = Modifier.pointerInput(Unit) {
+        awaitPointerEventScope {
+            while (true) {
+                val event = awaitPointerEvent()
+                if (event.type == PointerEventType.Scroll) {
+                    val change = event.changes.first()
+                    val scrollDelta = change.scrollDelta.y
+                    val zoomFactor = if (scrollDelta > 0) 0.9f else 1.1f
+                    val newScale = (currentScale * zoomFactor).coerceIn(0.1f, 50f)
+                    currentOnTransformChange(newScale, currentOffset)
+                    change.consume()
+                }
+            }
         }
     }
 
-    // 处理点击 (点击红框)
+    // 3. 拖拽逻辑 (保持之前的锚点累积法)
+    val dragModifier = Modifier.pointerInput(Unit) {
+        var startOffset = Offset.Zero
+        var accumulatedDrag = Offset.Zero
+
+        detectDragGestures(
+            onDragStart = {
+                startOffset = currentOffset
+                accumulatedDrag = Offset.Zero
+            },
+            onDragEnd = { accumulatedDrag = Offset.Zero }
+        ) { change, dragAmount ->
+            change.consume()
+            accumulatedDrag += dragAmount
+            currentOnTransformChange(currentScale, startOffset + accumulatedDrag)
+        }
+    }
+
+    // 4. 【修复悬停取色】使用 onPointerEvent (Desktop 专用) + 本地状态
+    // onPointerEvent 比 pointerInput 更独立，不容易被拖拽手势拦截
+    val hoverModifier = Modifier
+        .onPointerEvent(PointerEventType.Move) { event ->
+            val pos = event.changes.first().position
+            val imgX = ((pos.x - currentOffset.x) / currentScale).toInt()
+            val imgY = ((pos.y - currentOffset.y) / currentScale).toInt()
+
+            val bufImg = currentWorkImage?.bufferedImage
+            if (bufImg != null && imgX >= 0 && imgX < bufImg.width && imgY >= 0 && imgY < bufImg.height) {
+                val rgb = bufImg.getRGB(imgX, imgY)
+                val color = Color(rgb)
+
+                // 立即更新本地 UI
+                localHoverPos = IntOffset(imgX, imgY)
+                localHoverColor = color
+            } else {
+                localHoverPos = null
+            }
+        }
+        .onPointerEvent(PointerEventType.Exit) {
+            localHoverPos = null
+        }
+
+    // 5. 点击逻辑
     val tapModifier = Modifier.pointerInput(Unit) {
         detectTapGestures { tapOffset ->
-            val imgX = (tapOffset.x - offset.x) / scale
-            val imgY = (tapOffset.y - offset.y) / scale
+            val imgX = (tapOffset.x - currentOffset.x) / currentScale
+            val imgY = (tapOffset.y - currentOffset.y) / currentScale
 
-            val clickedRect = activeRects.find { rect ->
+            val clickedRect = currentRects.find { rect ->
                 imgX >= rect.left && imgX <= rect.right &&
                         imgY >= rect.top && imgY <= rect.bottom
             }
             if (clickedRect != null) {
-                onRectClick(clickedRect)
+                currentOnRectClick(clickedRect)
             }
-        }
-    }
-
-    // 处理鼠标移动 (悬停取色)
-    val hoverModifier = Modifier.onPointerEvent(PointerEventType.Move) {
-        val pos = it.changes.first().position
-        val imgX = ((pos.x - offset.x) / scale).toInt()
-        val imgY = ((pos.y - offset.y) / scale).toInt()
-
-        val bufImg = workImage?.bufferedImage
-        if (bufImg != null && imgX in 0 until bufImg.width && imgY in 0 until bufImg.height) {
-            val rgb = bufImg.getRGB(imgX, imgY)
-            val color = Color(rgb)
-            onHover(IntOffset(imgX, imgY), color)
-        } else {
-            onHover(null, Color.Transparent)
         }
     }
 
     BoxWithConstraints(
         modifier = modifier
             .background(Color(0xFF1E1E1E))
+            .fillMaxSize()
+            .clipToBounds() // 【关键修复 1】解决图片移出边界覆盖其他组件的问题
             .then(scrollModifier)
+            .then(hoverModifier) // 【关键修复 2】使用 onPointerEvent 处理悬停
             .then(dragModifier)
             .then(tapModifier)
-            .then(hoverModifier)
     ) {
         Canvas(modifier = Modifier.fillMaxSize()) {
             withTransform({
                 translate(offset.x, offset.y)
                 scale(scale, pivot = Offset.Zero)
             }) {
-                // 1. 绘制底图
+                // 绘制底图
                 workImage?.let { img ->
                     drawImage(img.bitmap)
                 }
 
-                // 2. 绘制二值化预览 (如果有)
-                // 修正：确保这里使用的是 binaryPreview?.bitmap
+                // 绘制二值化预览
                 binaryPreview?.let { bin ->
                     drawImage(bin.bitmap, alpha = 0.8f)
                 }
 
-                // 3. 绘制切割框 (红框)
+                // 绘制切割框
                 activeRects.forEach { rect ->
                     drawRect(
                         color = Color.Red,
@@ -143,18 +170,17 @@ fun EditorCanvas(
             }
         }
 
-        // --- 悬停信息浮层 ---
-        if (hoverPos != null) {
+        // --- 悬停信息浮层 (使用本地状态) ---
+        if (localHoverPos != null) {
             PixelMagnifier(
                 modifier = Modifier.align(Alignment.TopEnd),
-                color = hoverColor,
-                pos = hoverPos
+                color = localHoverColor,
+                pos = localHoverPos!!
             )
         }
     }
 }
 
-// 简单的悬停信息组件
 @Composable
 private fun PixelMagnifier(
     modifier: Modifier,
@@ -164,22 +190,23 @@ private fun PixelMagnifier(
     Surface(
         modifier = modifier.padding(8.dp),
         color = Color.Black.copy(alpha = 0.7f),
-        shape = androidx.compose.foundation.shape.RoundedCornerShape(4.dp)
+        shape = androidx.compose.foundation.shape.RoundedCornerShape(4.dp),
+        elevation = 4.dp
     ) {
         Column(Modifier.padding(8.dp)) {
             Text(
                 "X: ${pos.x}, Y: ${pos.y}",
                 color = Color.White,
-                fontSize = 10.sp
+                fontSize = 12.sp
             )
+            Spacer(Modifier.height(4.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(12.dp).background(color).border(1.dp, Color.White))
-                Spacer(Modifier.width(4.dp))
-                // 需要确保 ColorUtils.colorToHex 方法存在，或者直接用 String.format
+                Box(Modifier.size(16.dp).background(color).border(1.dp, Color.White))
+                Spacer(Modifier.width(8.dp))
                 Text(
                     "#${ColorUtils.colorToHex(color)}",
                     color = Color.White,
-                    fontSize = 10.sp
+                    fontSize = 12.sp
                 )
             }
         }
