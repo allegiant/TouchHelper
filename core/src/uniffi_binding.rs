@@ -11,7 +11,7 @@ use log::info;
 use crate::{
     input::{AccessibilityStrategy, InputController, RootStrategy},
     js_engine::{self, CURRENT_SCRIPT_TASK},
-    logger::init_android_logger,
+    logger::init_logger,
     types::{AccessibilityService, PlatformLogger},
 };
 
@@ -53,7 +53,7 @@ pub fn init_service(
     logger: Box<dyn PlatformLogger>,
     service: Option<Box<dyn AccessibilityService>>,
 ) {
-    init_android_logger();
+    init_logger();
 
     let ctrl: Box<dyn InputController> = if use_root {
         info!("Initializing Root Strategy");

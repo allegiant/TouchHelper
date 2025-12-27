@@ -11,17 +11,26 @@ use crate::vision::{analysis, filters};
 pub fn apply_filter(
     image_data: Vec<u8>,
     filter: ImageFilter,
-    // 一些滤镜可能需要额外的参数，如阈值、范围等
-    // 可以定义一个可选的配置结构体，或者简单的参数
     param1: Option<i32>,
+    param2: Option<i32>,
 ) -> Result<Vec<u8>, VisionError> {
+    log::info!(
+        "Applying filter: {:?} with params: {:?}, {:?}",
+        filter,
+        param1,
+        param2
+    );
     // 1. 加载图片
     let img =
         image::load_from_memory(&image_data).map_err(|e| VisionError::LoadError(e.to_string()))?;
 
     let processed_img = match filter {
         ImageFilter::Color(cf) => match cf {
-            ColorFilterType::Binarization => filters::binarize(&img, param1.unwrap_or(128) as u8),
+            ColorFilterType::Binarization => {
+                let min = param1.unwrap_or(0) as u8;
+                let max = param2.unwrap_or(255) as u8;
+                filters::binarize_rgb_avg(&img, min, max)
+            }
             ColorFilterType::Grayscale => filters::grayscale(&img),
             // ... 其他彩色滤镜
             _ => img, // 暂未实现

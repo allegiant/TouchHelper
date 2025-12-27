@@ -29,5 +29,7 @@ rquickjs = { version = "0.10.0", features = ["full-async","bindgen", "macro", "p
 tokio = { version = "1.48.0", features = ["full"] }
 imageproc = "0.25.0"
 thiserror = "2.0.17"
+[target.'cfg(not(target_os = "android"))'.dependencies]
+simple_logger = "5.1.0"
 [build-dependencies]
 uniffi_build = "0.30.0"
