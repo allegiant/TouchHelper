@@ -1,9 +1,25 @@
 package org.eu.freex.tools.utils
 
+import androidx.compose.ui.graphics.Color
 import org.eu.freex.tools.model.ColorRule
 import kotlin.math.abs
 
 object ColorUtils {
+
+    /**
+     * 将 Compose Color 转换为 Hex 字符串 (不带 # 前缀)
+     * 例如: Color.Red -> "FF0000"
+     */
+    fun colorToHex(color: Color): String {
+        val r = (color.red * 255).toInt()
+        val g = (color.green * 255).toInt()
+        val b = (color.blue * 255).toInt()
+        // 使用 String.format 确保是两位十六进制
+        return String.format("%02X%02X%02X", r, g, b)
+    }
+
+    // --- 原有的匹配逻辑 ---
+
     // 单色匹配核心逻辑
     fun isMatch(color: Int, targetStr: String, biasStr: String): Boolean {
         val target = try { targetStr.toInt(16) } catch (e: Exception) { 0 }
