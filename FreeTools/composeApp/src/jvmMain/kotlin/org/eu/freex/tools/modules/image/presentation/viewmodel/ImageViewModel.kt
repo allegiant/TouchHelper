@@ -59,8 +59,7 @@ class ImageViewModel : ViewModel() {
             is ImageUiEvent.SelectPipelineStep -> _uiState.update { it.copy(selectedPipelineIndex = event.index) }
             // 删除流水线步骤暂时没有 Handler 实现，如果需要可以加在 FilterHandler
             is ImageUiEvent.DeletePipelineStep -> {
-                /* 暂未实现，可扩展 */
-                showToast("删除步骤功能暂未实现")
+                filterHandler.deletePipelineStep(event.index)
             }
 
             // --- 切割与规则 ---

@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material.CircularProgressIndicator
 import androidx.compose.material.SnackbarHost
 import androidx.compose.material.SnackbarHostState
+import androidx.compose.material.Surface
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -26,11 +27,8 @@ fun ImageWorkbench(
     viewModel: ImageViewModel = remember { ImageViewModel() }
 ) {
     val state by viewModel.uiState.collectAsState()
-
-    // 1. Snackbar 状态
     val snackbarHostState = remember { SnackbarHostState() }
 
-    // 2. 监听 ViewModel 的副作用 (Toast/Error 消息)
     LaunchedEffect(viewModel) {
         viewModel.uiEffect.collect { message ->
             snackbarHostState.showSnackbar(message)
@@ -120,16 +118,27 @@ fun ImageWorkbench(
             )
         }
 
+        // 【关键修复】Loading 指示器 (移除了背景色)
         if (state.isLoading) {
             Box(
-                modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.3f)),
+                modifier = Modifier.fillMaxSize(), // 不再设置 background color
                 contentAlignment = Alignment.Center
             ) {
-                CircularProgressIndicator(color = Color.White)
+                // 为了保证在深色/浅色背景下都可见，可以加一个小圆盘背景，或者直接显示
+                // 这里选择加一个小的半透明圆盘，比全屏遮罩体验好得多
+                Surface(
+                    shape = androidx.compose.foundation.shape.CircleShape,
+                    color = Color.Black.copy(alpha = 0.5f),
+                    elevation = 4.dp
+                ) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.padding(8.dp),
+                        color = Color.White
+                    )
+                }
             }
         }
 
-        // 3. 全局 SnackbarHost (显示在最上层底部)
         SnackbarHost(
             hostState = snackbarHostState,
             modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 16.dp)
