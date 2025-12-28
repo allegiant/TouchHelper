@@ -45,6 +45,7 @@ pub enum ColorFilterType {
     ColorPick,
     Posterize,
     Grayscale,
+    Invert,
 }
 
 // 对应 Kotlin 的 BlackWhiteFilterType
