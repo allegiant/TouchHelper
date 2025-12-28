@@ -6,6 +6,10 @@ import kotlinx.coroutines.flow.update
 import org.eu.freex.tools.model.*
 import org.eu.freex.tools.modules.image.domain.repository.ImageRepository
 import org.eu.freex.tools.modules.image.presentation.contract.ImageUiState
+import uniffi.touch_core.BlackWhiteFilterType
+import uniffi.touch_core.ColorFilterType
+import uniffi.touch_core.CommonFilterType
+import uniffi.touch_core.ImageFilter
 
 /**
  * 滤镜处理器：负责滤镜计算、防抖、流水线更新（增、删、改）
@@ -21,15 +25,24 @@ class FilterHandler(
 
     /**
      * 【添加模式】ApplyCurrentFilter
-     * 基于当前画布显示的图像，应用当前滤镜，追加到流水线末尾
+     * 基于当前选中的步骤（或原图），应用当前滤镜，追加到流水线末尾
      */
     fun applyFilterAsNewStep() {
         val state = stateFlow.value
-        val source = state.activeDisplayImage ?: return
+
+        // 【修复 1】不能直接使用 activeDisplayImage (它是 Bitmap)，需要获取 WorkImage 数据模型
+        // 根据 selectedPipelineIndex 确定输入源：0 是原图，>0 是流水线中的步骤
+        val source: WorkImage = if (state.selectedPipelineIndex == 0) {
+            state.currentSourceImage
+        } else {
+            // UI 索引 1 对应 List 索引 0
+            state.pipelineSteps.getOrNull(state.selectedPipelineIndex - 1)
+        } ?: return
+
         val filter = state.currentFilter
         val params = buildFilterParams(state)
 
-        scope.launch {
+        scope.launch(Dispatchers.Default) { // 建议在 Default 线程执行计算
             stateFlow.update { it.copy(isLoading = true) }
             try {
                 val resultImage = repository.applyFilter(source, filter, params)
@@ -38,7 +51,7 @@ class FilterHandler(
                     newSteps.add(resultImage)
                     current.copy(
                         pipelineSteps = newSteps,
-                        selectedPipelineIndex = newSteps.size, // 选中新生成的这步
+                        selectedPipelineIndex = newSteps.size, // 选中新生成的这步(UI索引 = List大小，因为List从1开始算UI)
                         isLoading = false
                     )
                 }
@@ -76,7 +89,7 @@ class FilterHandler(
     fun triggerStepUpdate() {
         val state = stateFlow.value
         // 1. 只有二值化才需要实时预览
-        if (state.currentFilter != ColorFilterType.BINARIZATION) return
+        if (state.currentFilter != ImageFilter.Color(ColorFilterType.BINARIZATION)) return
         // 2. 原图不可修改
         if (state.selectedPipelineIndex == 0) return
 
@@ -110,7 +123,7 @@ class FilterHandler(
 
         if (stepIndexToRemove !in currentSteps.indices) return
 
-        scope.launch {
+        scope.launch(Dispatchers.Default) {
             stateFlow.update { it.copy(isLoading = true) }
 
             try {
@@ -122,11 +135,9 @@ class FilterHandler(
                 val tailSteps = currentSteps.drop(stepIndexToRemove + 1)
 
                 // 3. 确定重算的起始输入源
-                // 【关键修复】使用 Elvis 操作符确保类型为 WorkImage (非空)，避免 var 的 Smart Cast 问题
                 var currentInput: WorkImage = keptSteps.lastOrNull()
                     ?: state.currentSourceImage
                     ?: run {
-                        // 极端情况：没有任何图片，直接返回
                         stateFlow.update { it.copy(isLoading = false) }
                         return@launch
                     }
@@ -145,7 +156,7 @@ class FilterHandler(
 
                     // 加入新列表，并作为下一步的输入
                     keptSteps.add(result)
-                    currentInput = result // 此时类型匹配 (WorkImage)
+                    currentInput = result
                 }
 
                 // 5. 更新状态
@@ -171,6 +182,8 @@ class FilterHandler(
 
     /**
      * 重新计算并更新指定下标的步骤
+     * 注意：此方法目前仅更新当前步骤，未触发后续步骤的级联更新(Cascade Update)。
+     * 如果修改了中间步骤，后续步骤可能会显示旧数据。如需完美体验需类似 deletePipelineStep 那样重算后续。
      */
     private suspend fun updateSpecificStep(stepIndex: Int) {
         val state = stateFlow.value
@@ -185,35 +198,35 @@ class FilterHandler(
             val updatedImage = repository.applyFilter(inputImage, filter, params)
             stateFlow.update { current ->
                 val newSteps = current.pipelineSteps.toMutableList()
-                if (stepIndex in newSteps.indices) newSteps[stepIndex] = updatedImage
+                if (stepIndex in newSteps.indices) {
+                    newSteps[stepIndex] = updatedImage
+                }
                 current.copy(pipelineSteps = newSteps)
             }
         } catch (e: Exception) {
-            // 忽略任务取消异常
             if (e is CancellationException) throw e
             e.printStackTrace()
         }
     }
 
-    /**
-     * 构建滤镜参数 Map
-     */
     private fun buildFilterParams(state: ImageUiState): Map<String, Any> {
         val params = mutableMapOf<String, Any>()
-        if (state.currentFilter == ColorFilterType.BINARIZATION) {
-            params["min"] = state.thresholdRange.start.toInt()
-            params["max"] = state.thresholdRange.endInclusive.toInt()
-            params["rgbAvg"] = state.isRgbAvgEnabled
+
+        if (state.currentFilter == ImageFilter.Color(ColorFilterType.BINARIZATION)) {
+            params[FilterConstants.PARAM_MIN] = state.thresholdRange.start.toInt()
+            params[FilterConstants.PARAM_MAX] = state.thresholdRange.endInclusive.toInt()
+            params[FilterConstants.PARAM_RGB_AVG] = state.isRgbAvgEnabled
         }
         return params
     }
 
     /**
      * 根据 Label 反查 ImageFilter 枚举 (用于流水线重算)
+     * 【修复 2】确保所有 FilterType 都实现了 ImageFilter 接口
      */
     private fun findFilterByLabel(label: String): ImageFilter? {
-        return ColorFilterType.entries.find { it.label == label }
-            ?: BlackWhiteFilterType.entries.find { it.label == label }
-            ?: CommonFilterType.entries.find { it.label == label }
+        return ColorFilterType.entries.find { it.label == label }?.let { ImageFilter.Color(it) }
+            ?: BlackWhiteFilterType.entries.find { it.label == label }?.let { ImageFilter.BlackWhite(it) }
+            ?: CommonFilterType.entries.find { it.label == label }?.let { ImageFilter.Common(it) }
     }
 }

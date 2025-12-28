@@ -9,9 +9,11 @@ import androidx.compose.material.Surface
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toComposeImageBitmap
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.toOffset
 import org.eu.freex.tools.dialogs.CharMappingDialog
 import org.eu.freex.tools.dialogs.ScreenCropperDialog
 import org.eu.freex.tools.modules.image.presentation.contract.ImageUiEvent
@@ -64,7 +66,8 @@ fun ImageWorkbench(
                             viewModel.handleEvent(ImageUiEvent.UpdateCanvasTransform(s, o))
                         },
                         onHover = { pos, color ->
-                            viewModel.handleEvent(ImageUiEvent.HoverCanvas(pos, color))
+                            val fixedPos = pos?.toOffset() ?: Offset.Zero
+                            viewModel.handleEvent(ImageUiEvent.HoverCanvas(fixedPos, color))
                         },
                         onColorPick = { hex ->
                             viewModel.handleEvent(ImageUiEvent.ColorPick(hex))
@@ -95,7 +98,7 @@ fun ImageWorkbench(
                 onRgbAvgChange = { viewModel.handleEvent(ImageUiEvent.ToggleRgbAvg(it)) },
                 onAddStep = { viewModel.handleEvent(ImageUiEvent.ApplyCurrentFilter) },
                 onModifyStep = { viewModel.handleEvent(ImageUiEvent.ModifyCurrentStep) },
-                onRuleUpdate = { id, bias -> viewModel.handleEvent(ImageUiEvent.UpdateColorRule(id, bias)) },
+                onRuleUpdate = { id, rule -> viewModel.handleEvent(ImageUiEvent.UpdateColorRule(id, rule)) },
                 onRuleToggle = { id, enabled -> viewModel.handleEvent(ImageUiEvent.ToggleColorRule(id, enabled)) },
                 onRuleRemove = { id -> viewModel.handleEvent(ImageUiEvent.RemoveColorRule(id)) }
             )

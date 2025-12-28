@@ -4,11 +4,11 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import org.eu.freex.tools.model.ColorRule
 import org.eu.freex.tools.model.RuleScope
 import org.eu.freex.tools.model.WorkImage
 import org.eu.freex.tools.modules.image.domain.repository.ImageRepository
 import org.eu.freex.tools.modules.image.presentation.contract.ImageUiState
+import uniffi.touch_core.ColorRule
 
 /**
  * 切割处理器：负责切割计算、规则管理

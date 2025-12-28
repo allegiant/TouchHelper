@@ -1,22 +1,29 @@
 package org.eu.freex.tools.modules.image.presentation.ui.components
 
-import androidx.compose.foundation.*
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.eu.freex.tools.model.*
+import uniffi.touch_core.BlackWhiteFilterType
+import uniffi.touch_core.ColorFilterType
+import uniffi.touch_core.ColorRule
+import uniffi.touch_core.CommonFilterType
+import uniffi.touch_core.ImageFilter
 
 @Composable
 fun InspectorPanel(
@@ -26,34 +33,164 @@ fun InspectorPanel(
     thresholdRange: ClosedFloatingPointRange<Float>,
     isRgbAvgEnabled: Boolean,
     colorRules: List<ColorRule>,
+
     onTabChange: (Int) -> Unit,
     onFilterChange: (ImageFilter) -> Unit,
     onThresholdChange: (ClosedFloatingPointRange<Float>) -> Unit,
     onRgbAvgChange: (Boolean) -> Unit,
     onAddStep: () -> Unit,
     onModifyStep: () -> Unit,
-    onRuleUpdate: (Long, String) -> Unit,
+
+    // 规则相关
+    onRuleUpdate: (Long, ColorRule) -> Unit,
     onRuleToggle: (Long, Boolean) -> Unit,
     onRuleRemove: (Long) -> Unit
 ) {
-    Column(modifier = modifier.background(Color(0xFFF3F3F3))) {
-        Row(modifier = Modifier.height(32.dp).fillMaxWidth().background(Color(0xFFE0E0E0))) {
-            TabButton("滤镜处理", selectedTab == 0, { onTabChange(0) }, Modifier.weight(1f))
-            TabButton("切割识别", selectedTab == 1, { onTabChange(1) }, Modifier.weight(1f))
+    Column(modifier = modifier.background(Color(0xFF252526)).padding(8.dp)) {
+
+        // 1. 顶部 Tab
+        TabRow(
+            selectedTabIndex = selectedTab,
+            backgroundColor = Color.Transparent,
+            contentColor = Color.White,
+            modifier = Modifier.height(40.dp)
+        ) {
+            listOf("彩色", "黑白", "通用", "规则").forEachIndexed { index, title ->
+                Tab(
+                    selected = selectedTab == index,
+                    onClick = { onTabChange(index) },
+                    text = { Text(title, fontSize = 12.sp) }
+                )
+            }
         }
 
-        Divider(color = Color.LightGray)
+        Spacer(modifier = Modifier.height(8.dp))
 
-        Box(modifier = Modifier.weight(1f).padding(8.dp)) {
+        // 2. 内容区域
+        Box(modifier = Modifier.weight(1f)) {
             when (selectedTab) {
-                0 -> FilterSettingsContent(
-                    currentFilter, onFilterChange,
-                    thresholdRange, onThresholdChange, isRgbAvgEnabled, onRgbAvgChange,
-                    onAddStep, onModifyStep
-                )
-                1 -> {
-                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text("该功能暂时下线维护中", color = Color.Gray, fontSize = 12.sp)
+                0 -> ColorFilterList(currentFilter, onFilterChange)
+                1 -> BlackWhiteFilterList(currentFilter, onFilterChange)
+                2 -> CommonFilterList(currentFilter, onFilterChange)
+                3 -> RuleList(colorRules, onRuleUpdate, onRuleToggle, onRuleRemove)
+            }
+        }
+
+        Divider(color = Color.Gray, thickness = 0.5.dp)
+
+        // 3. 底部参数控制区 (仅当不是规则 Tab 时显示)
+        if (selectedTab != 3) {
+            FilterSettingsPanel(
+                currentFilter = currentFilter,
+                thresholdRange = thresholdRange,
+                isRgbAvgEnabled = isRgbAvgEnabled,
+                onThresholdChange = onThresholdChange,
+                onRgbAvgChange = onRgbAvgChange,
+                onAddStep = onAddStep,
+                onModifyStep = onModifyStep
+            )
+        }
+    }
+}
+
+// --- 子组件：滤镜列表 ---
+
+@Composable
+fun ColorFilterList(
+    currentFilter: ImageFilter,
+    onSelect: (ImageFilter) -> Unit
+) {
+    LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        item { SectionTitle("针对彩色进行处理") }
+        items(ColorFilterType.entries) { item ->
+            // 【关键修改】判断选中状态需要解包 v1
+            val isSelected = (currentFilter is ImageFilter.Color && currentFilter.v1 == item)
+            FilterItemCard(
+                label = item.label,
+                desc = item.description,
+                isSelected = isSelected,
+                // 【关键修改】点击时包装为 ImageFilter.Color
+                onClick = { onSelect(ImageFilter.Color(item)) }
+            )
+        }
+    }
+}
+
+@Composable
+fun BlackWhiteFilterList(
+    currentFilter: ImageFilter,
+    onSelect: (ImageFilter) -> Unit
+) {
+    LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        item { SectionTitle("针对黑白进行处理") }
+        items(BlackWhiteFilterType.entries) { item ->
+            val isSelected = (currentFilter is ImageFilter.BlackWhite && currentFilter.v1 == item)
+            FilterItemCard(
+                label = item.label,
+                desc = item.description,
+                isSelected = isSelected,
+                // 【关键修改】点击时包装为 ImageFilter.BlackWhite
+                onClick = { onSelect(ImageFilter.BlackWhite(item)) }
+            )
+        }
+    }
+}
+
+@Composable
+fun CommonFilterList(
+    currentFilter: ImageFilter,
+    onSelect: (ImageFilter) -> Unit
+) {
+    LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        item { SectionTitle("通用预处理") }
+        items(CommonFilterType.entries) { item ->
+            val isSelected = (currentFilter is ImageFilter.Common && currentFilter.v1 == item)
+            FilterItemCard(
+                label = item.label,
+                desc = item.description,
+                isSelected = isSelected,
+                // 【关键修改】点击时包装为 ImageFilter.Common
+                onClick = { onSelect(ImageFilter.Common(item)) }
+            )
+        }
+    }
+}
+
+@Composable
+fun RuleList(
+    rules: List<ColorRule>,
+    onUpdate: (Long, ColorRule) -> Unit,
+    onToggle: (Long, Boolean) -> Unit,
+    onRemove: (Long) -> Unit
+) {
+    LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        item {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                SectionTitle("颜色规则列表")
+                Spacer(Modifier.weight(1f))
+                // 添加规则的按钮逻辑需要 viewModel 支持，暂时留空或通过上层传递
+            }
+        }
+        items(rules) { rule ->
+            Card(
+                backgroundColor = Color(0xFF333333),
+                elevation = 2.dp
+            ) {
+                Row(
+                    modifier = Modifier.padding(8.dp).fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Checkbox(
+                        checked = rule.isEnabled,
+                        onCheckedChange = { onToggle(rule.id, it) },
+                        colors = CheckboxDefaults.colors(checkedColor = Color(0xFFFF8A80))
+                    )
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("目标: ${rule.targetHex}", color = Color.White, fontSize = 12.sp)
+                        Text("偏离: ${rule.biasHex}", color = Color.Gray, fontSize = 12.sp)
+                    }
+                    IconButton(onClick = { onRemove(rule.id) }) {
+                        Icon(Icons.Default.Delete, null, tint = Color.Gray, modifier = Modifier.size(16.dp))
                     }
                 }
             }
@@ -63,82 +200,91 @@ fun InspectorPanel(
 
 @OptIn(ExperimentalMaterialApi::class)
 @Composable
-private fun FilterSettingsContent(
+fun FilterSettingsPanel(
     currentFilter: ImageFilter,
-    onFilterChange: (ImageFilter) -> Unit,
     thresholdRange: ClosedFloatingPointRange<Float>,
+    isRgbAvgEnabled: Boolean,
     onThresholdChange: (ClosedFloatingPointRange<Float>) -> Unit,
-    isRgbAvg: Boolean,
     onRgbAvgChange: (Boolean) -> Unit,
-    onAdd: () -> Unit,
-    onModify: () -> Unit
+    onAddStep: () -> Unit,
+    onModifyStep: () -> Unit
 ) {
-    Column(modifier = Modifier.fillMaxSize()) {
-        Column(modifier = Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 8.dp)) {
-            FilterGroupSection(ColorFilterType.TITLE, ColorFilterType.COLOR, ColorFilterType.entries, currentFilter, onFilterChange)
-            Spacer(Modifier.height(12.dp))
-            FilterGroupSection(BlackWhiteFilterType.TITLE, BlackWhiteFilterType.COLOR, BlackWhiteFilterType.entries, currentFilter, onFilterChange)
-            Spacer(Modifier.height(12.dp))
-            FilterGroupSection(CommonFilterType.TITLE, CommonFilterType.COLOR, CommonFilterType.entries, currentFilter, onFilterChange)
+    Column(modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
+        Text("参数设置", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+        Spacer(Modifier.height(8.dp))
 
-            if (currentFilter == ColorFilterType.BINARIZATION) {
-                Spacer(Modifier.height(16.dp))
-                Card(elevation = 2.dp, backgroundColor = Color(0xFFE3F2FD), shape = RoundedCornerShape(8.dp), modifier = Modifier.fillMaxWidth()) {
-                    Column(Modifier.padding(12.dp)) {
-                        Text("二值化参数配置", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1565C0))
-                        Spacer(Modifier.height(8.dp))
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("阈值:", fontSize = 12.sp)
-                            Spacer(Modifier.width(8.dp))
-                            Text("${thresholdRange.start.toInt()} - ${thresholdRange.endInclusive.toInt()}", fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                        }
-                        RangeSlider(value = thresholdRange, onValueChange = onThresholdChange, valueRange = 0f..255f, colors = SliderDefaults.colors(thumbColor = Color(0xFF1565C0), activeTrackColor = Color(0xFF1565C0)))
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Checkbox(checked = isRgbAvg, onCheckedChange = onRgbAvgChange, colors = CheckboxDefaults.colors(checkedColor = Color(0xFF1565C0)))
-                            Text("使用 RGB 平均值", fontSize = 12.sp)
-                        }
-                    }
-                }
+        // 二值化参数
+        if (currentFilter is ImageFilter.Color && currentFilter.v1 == ColorFilterType.BINARIZATION) {
+            Text("阈值范围: ${thresholdRange.start.toInt()} - ${thresholdRange.endInclusive.toInt()}", color = Color.Gray, fontSize = 12.sp)
+            RangeSlider(
+                value = thresholdRange,
+                onValueChange = onThresholdChange,
+                valueRange = 0f..255f,
+                colors = SliderDefaults.colors(thumbColor = Color(0xFFFF8A80), activeTrackColor = Color(0xFFFF8A80))
+            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Checkbox(
+                    checked = isRgbAvgEnabled,
+                    onCheckedChange = onRgbAvgChange,
+                    colors = CheckboxDefaults.colors(checkedColor = Color(0xFFFF8A80))
+                )
+                Text("使用 RGB 平均值", color = Color.White, fontSize = 12.sp)
             }
+        } else {
+            Text("无可用参数", color = Color.Gray, fontSize = 12.sp, modifier = Modifier.padding(vertical = 16.dp))
         }
 
-        Surface(elevation = 8.dp, modifier = Modifier.fillMaxWidth().background(Color.White)) {
-            Column(Modifier.padding(8.dp)) {
-                if (currentFilter != ViewFilter) {
-                    Text("当前: ${currentFilter.label}", fontSize = 11.sp, color = Color.Gray, modifier = Modifier.padding(bottom = 8.dp))
-                }
-                Row(Modifier.fillMaxWidth()) {
-                    Button(onClick = onAdd, modifier = Modifier.weight(1f).height(48.dp), shape = RoundedCornerShape(4.dp), colors = ButtonDefaults.buttonColors(backgroundColor = Color(0xFF007ACC), contentColor = Color.White), enabled = currentFilter != ViewFilter) {
-                        Text("添加步骤", fontWeight = FontWeight.Bold)
-                    }
-                    Spacer(Modifier.width(8.dp))
-                    Button(onClick = onModify, modifier = Modifier.weight(1f).height(48.dp), shape = RoundedCornerShape(4.dp), colors = ButtonDefaults.buttonColors(backgroundColor = Color(0xFFFFA000), contentColor = Color.White), enabled = currentFilter != ViewFilter) {
-                        Text("修改步骤", fontWeight = FontWeight.Bold)
-                    }
-                }
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(
+                onClick = onModifyStep,
+                modifier = Modifier.weight(1f),
+                colors = ButtonDefaults.buttonColors(backgroundColor = Color(0xFF424242))
+            ) {
+                Icon(Icons.Default.Edit, null, modifier = Modifier.size(16.dp), tint = Color.White)
+                Spacer(Modifier.width(4.dp))
+                Text("修改当前", color = Color.White, fontSize = 12.sp)
             }
-        }
-    }
-}
-
-// 辅助组件 (简化版，确保存在)
-@Composable fun FilterGroupSection(title: String, titleColor: Color, filters: List<ImageFilter>, currentFilter: ImageFilter, onSelect: (ImageFilter) -> Unit) {
-    Column {
-        SectionHeader(title, titleColor)
-        Spacer(Modifier.height(6.dp))
-        val columns = 2
-        val chunkedFilters = filters.chunked(columns)
-        chunkedFilters.forEach { rowFilters ->
-            Row(Modifier.fillMaxWidth().padding(bottom = 4.dp)) {
-                rowFilters.forEachIndexed { index, filter ->
-                    Box(Modifier.weight(1f)) { FilterGridButton(text = filter.label, isSelected = (currentFilter == filter), onClick = { onSelect(filter) }, modifier = Modifier.fillMaxWidth()) }
-                    if (index < rowFilters.size - 1) Spacer(Modifier.width(4.dp))
-                }
-                if (rowFilters.size < columns) { repeat(columns - rowFilters.size) { Spacer(Modifier.width(4.dp)); Spacer(Modifier.weight(1f)) } }
+            Button(
+                onClick = onAddStep,
+                modifier = Modifier.weight(1f),
+                colors = ButtonDefaults.buttonColors(backgroundColor = Color(0xFFFF8A80))
+            ) {
+                Icon(Icons.Default.Add, null, modifier = Modifier.size(16.dp), tint = Color.White)
+                Spacer(Modifier.width(4.dp))
+                Text("添加步骤", color = Color.White, fontSize = 12.sp)
             }
         }
     }
 }
-@Composable fun SectionHeader(title: String, color: Color) { Row(verticalAlignment = Alignment.CenterVertically) { Box(modifier = Modifier.size(width = 4.dp, height = 16.dp).background(color, RoundedCornerShape(2.dp))); Spacer(Modifier.width(6.dp)); Text(title, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.Black) } }
-@Composable fun TabButton(text: String, isSelected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) { Box(modifier = modifier.fillMaxHeight().background(if (isSelected) Color(0xFFF3F3F3) else Color(0xFFE0E0E0)).clickable(onClick = onClick), contentAlignment = Alignment.Center) { Column(Modifier.fillMaxSize()) { Box(Modifier.weight(1f), contentAlignment = Alignment.Center) { Text(text, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal, fontSize = 12.sp, color = if(isSelected) Color(0xFF007ACC) else Color.Black) }; if (isSelected) Box(Modifier.height(2.dp).fillMaxWidth().background(Color(0xFF007ACC))) } } }
-@Composable fun FilterGridButton(text: String, isSelected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) { Button(onClick = onClick, modifier = modifier.height(32.dp), contentPadding = PaddingValues(0.dp), shape = RoundedCornerShape(4.dp), colors = ButtonDefaults.buttonColors(backgroundColor = if (isSelected) Color(0xFFE3F2FD) else Color.White, contentColor = if (isSelected) Color(0xFF1565C0) else Color.DarkGray), border = if (isSelected) BorderStroke(1.dp, Color(0xFF1565C0)) else BorderStroke(1.dp, Color(0xFFE0E0E0)), elevation = ButtonDefaults.elevation(0.dp, 0.dp)) { Text(text, fontSize = 12.sp) } }
+
+// --- 通用组件 ---
+
+@Composable
+fun SectionTitle(text: String) {
+    Text(
+        text,
+        color = Color(0xFFFF8A80),
+        fontSize = 12.sp,
+        fontWeight = FontWeight.Bold,
+        modifier = Modifier.padding(vertical = 4.dp)
+    )
+}
+
+@Composable
+fun FilterItemCard(
+    label: String,
+    desc: String,
+    isSelected: Boolean,
+    onClick: () -> Unit
+) {
+    Card(
+        backgroundColor = if (isSelected) Color(0xFF3E3E42) else Color(0xFF2D2D30),
+        border = if (isSelected) androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFFF8A80)) else null,
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick)
+    ) {
+        Column(modifier = Modifier.padding(8.dp)) {
+            Text(label, color = if (isSelected) Color(0xFFFF8A80) else Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+            Text(desc, color = Color.Gray, fontSize = 11.sp, maxLines = 2)
+        }
+    }
+}

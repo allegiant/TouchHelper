@@ -1,64 +1,116 @@
-// 文件路径: allegiant/touchhelper/TouchHelper-master/FreeTools/composeApp/src/jvmMain/kotlin/org/eu/freex/tools/model/Filters.kt
 package org.eu.freex.tools.model
 
 import androidx.compose.ui.graphics.Color
+import uniffi.touch_core.BlackWhiteFilterType
+import uniffi.touch_core.ColorFilterType
+import uniffi.touch_core.CommonFilterType
+import uniffi.touch_core.ImageFilter
 
-interface ImageFilter {
-    val label: String
-    val description: String // 【新增】说明字段
-}
+/**
+ * 【重构版】Filters.kt
+ * 不再定义类（使用 Uniffi 生成的 Rust 类型），
+ * 而是通过扩展属性为生成的枚举/密封类添加 UI 所需的元数据（Label, Description）。
+ */
 
-// 【修改】默认的浏览模式
-object ViewFilter : ImageFilter {
-    override val label: String = "浏览模式"
-    override val description: String = "仅查看图像，不做任何处理"
-}
+// --- 1. 为生成的 ImageFilter (Sealed Class) 添加扩展 ---
 
-// 【修改】为每个枚举添加说明参数
-enum class ColorFilterType(override val label: String, override val description: String) : ImageFilter {
-    BINARIZATION("二值化", "根据阈值将图像转换为纯黑白图像"),
-    COLOR_PICK("颜色选取", "提取图像中指定颜色的区域"),
-    POSTERIZE("色调分离", "减少色彩数量，产生分层效果"),
-    GRAYSCALE("灰度", "去除色彩信息，保留亮度信息");
-
-    companion object {
-        const val TITLE = "针对彩色进行处理:"
-        val COLOR = Color(0xFFFF8A80)
+val ImageFilter.label: String
+    get() = when (this) {
+        is ImageFilter.Color -> this.v1.label
+        is ImageFilter.BlackWhite -> this.v1.label
+        is ImageFilter.Common -> this.v1.label
+        is ImageFilter.View -> "浏览模式"
     }
-}
 
-// 【修改】为每个枚举添加说明参数
-enum class BlackWhiteFilterType(override val label: String, override val description: String) : ImageFilter {
-    DENOISE("清除杂点", "去除图像中的噪点和孤立像素"),
-    REMOVE_LINES("去掉直线", "识别并移除干扰直线"),
-    CONTOURS("获取轮廓", "提取图像内容的边缘轮廓"),
-    EXTRACT_BLOBS("提取色块", "检测并提取连通的像素区域"),
-    DESKEW("倾斜矫正", "自动校正图像的倾斜角度"),
-    ROTATE_CORRECT("旋转纠正", "根据内容方向进行旋转修正"),
-    INVERT("颠倒颜色", "黑白反转（底片效果）"),
-    DILATE_ERODE("膨胀腐蚀", "加粗或变细线条，用于去噪或连接断点"),
-    SKELETON("细化抽骨", "提取线条的中心骨架"),
-    FENCE_ADJUST("栅栏调整", "去除类似栅栏的周期性干扰"),
-    VALID_IMAGE("有效图像", "自动裁剪掉周围的空白区域"),
-    KEEP_SIZE("保留大小", "强制图像保持当前尺寸");
-
-    companion object {
-        const val TITLE = "针对黑白进行处理:"
-        val COLOR = Color(0xFFFFD54F)
+val ImageFilter.description: String
+    get() = when (this) {
+        is ImageFilter.Color -> this.v1.description
+        is ImageFilter.BlackWhite -> this.v1.description
+        is ImageFilter.Common -> this.v1.description
+        is ImageFilter.View -> "仅查看图像，不做任何处理"
     }
-}
 
-// 【修改】为每个枚举添加说明参数
-enum class CommonFilterType(override val label: String, override val description: String) : ImageFilter {
-    SCALE_RATIO("等比缩放", "按固定比例放大或缩小图像"),
-    SCALE_NORM("缩放归一化", "缩放到标准尺寸（通常用于模型输入）"),
-    FIXED_ROTATE("固定旋转", "按90度、180度等固定角度旋转"),
-    EXTEND_CROP("延伸裁剪", "向外扩展或向内裁剪图像边界"),
-    FIXED_SMOOTH("固定柔化", "平滑图像边缘，减少锯齿"),
-    MEDIAN_BLUR("中值滤波", "一种非线性平滑技术，有效去除椒盐噪声");
+// --- 2. 为生成的 ColorFilterType (Enum) 添加扩展 ---
 
-    companion object {
-        const val TITLE = "通用处理:"
-        val COLOR = Color(0xFF81C784)
+val ColorFilterType.label: String
+    get() = when (this) {
+        ColorFilterType.BINARIZATION -> "二值化"
+        ColorFilterType.COLOR_PICK -> "颜色选取"
+        ColorFilterType.POSTERIZE -> "色调分离"
+        ColorFilterType.GRAYSCALE -> "灰度"
+        ColorFilterType.INVERT -> "反色"
     }
+
+val ColorFilterType.description: String
+    get() = when (this) {
+        ColorFilterType.BINARIZATION -> "根据阈值将图像转换为纯黑白图像"
+        ColorFilterType.COLOR_PICK -> "提取图像中指定颜色的区域"
+        ColorFilterType.POSTERIZE -> "减少色彩数量，产生分层效果"
+        ColorFilterType.GRAYSCALE -> "去除色彩信息，保留亮度信息"
+        ColorFilterType.INVERT -> "彩色反转"
+    }
+
+// --- 3. 为生成的 BlackWhiteFilterType (Enum) 添加扩展 ---
+
+val BlackWhiteFilterType.label: String
+    get() = when (this) {
+        BlackWhiteFilterType.DENOISE -> "清除杂点"
+        BlackWhiteFilterType.REMOVE_LINES -> "去掉直线"
+        BlackWhiteFilterType.CONTOURS -> "获取轮廓"
+        BlackWhiteFilterType.EXTRACT_BLOBS -> "提取色块"
+        BlackWhiteFilterType.DESKEW -> "倾斜矫正"
+        BlackWhiteFilterType.ROTATE_CORRECT -> "旋转纠正"
+        BlackWhiteFilterType.INVERT -> "颠倒颜色"
+        BlackWhiteFilterType.DILATE_ERODE -> "膨胀腐蚀"
+        BlackWhiteFilterType.SKELETON -> "细化抽骨"
+        BlackWhiteFilterType.FENCE_ADJUST -> "栅栏调整"
+        BlackWhiteFilterType.VALID_IMAGE -> "有效图裁切"
+        BlackWhiteFilterType.KEEP_SIZE -> "原尺寸输出"
+    }
+
+val BlackWhiteFilterType.description: String
+    get() = when (this) {
+        BlackWhiteFilterType.DENOISE -> "去除图像中的噪点和孤立像素"
+        BlackWhiteFilterType.REMOVE_LINES -> "识别并移除干扰直线"
+        BlackWhiteFilterType.CONTOURS -> "提取图像内容的边缘轮廓"
+        BlackWhiteFilterType.EXTRACT_BLOBS -> "检测并提取连通的像素区域"
+        BlackWhiteFilterType.DESKEW -> "自动校正图像的倾斜角度"
+        BlackWhiteFilterType.ROTATE_CORRECT -> "根据内容方向进行旋转修正"
+        BlackWhiteFilterType.INVERT -> "黑白反转（底片效果）"
+        BlackWhiteFilterType.DILATE_ERODE -> "加粗或变细线条，用于去噪或连接断点"
+        BlackWhiteFilterType.SKELETON -> "提取线条的中心骨架"
+        BlackWhiteFilterType.FENCE_ADJUST -> "去除类似栅栏的周期性干扰"
+        BlackWhiteFilterType.VALID_IMAGE -> "自动裁切掉周围的空白区域"
+        BlackWhiteFilterType.KEEP_SIZE -> "保持原始尺寸，不进行裁切"
+    }
+
+// --- 4. 为生成的 CommonFilterType (Enum) 添加扩展 ---
+
+val CommonFilterType.label: String
+    get() = when (this) {
+        CommonFilterType.SCALE_RATIO -> "按比例缩放"
+        CommonFilterType.SCALE_NORM -> "归一化缩放"
+        CommonFilterType.FIXED_ROTATE -> "固定旋转"
+        CommonFilterType.EXTEND_CROP -> "扩展裁切"
+        CommonFilterType.FIXED_SMOOTH -> "固定平滑"
+        CommonFilterType.MEDIAN_BLUR -> "中值滤波"
+    }
+
+val CommonFilterType.description: String
+    get() = when (this) {
+        CommonFilterType.SCALE_RATIO -> "按指定比例调整图像大小"
+        CommonFilterType.SCALE_NORM -> "缩放到标准尺寸"
+        CommonFilterType.FIXED_ROTATE -> "旋转固定角度（如90度）"
+        CommonFilterType.EXTEND_CROP -> "向外扩展裁切区域"
+        CommonFilterType.FIXED_SMOOTH -> "使用固定参数进行平滑处理"
+        CommonFilterType.MEDIAN_BLUR -> "非线性滤波，有效去除椒盐噪声"
+    }
+
+// --- 5. 常量定义 ---
+object FilterConstantsUI {
+    const val TITLE_COLOR = "针对彩色进行处理:"
+    const val TITLE_BW = "针对黑白进行处理:"
+    const val TITLE_COMMON = "通用预处理:"
+
+    val THEME_COLOR = Color(0xFFFF8A80)
 }

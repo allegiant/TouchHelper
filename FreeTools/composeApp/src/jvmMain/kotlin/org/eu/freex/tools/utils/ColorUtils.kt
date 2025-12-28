@@ -1,7 +1,7 @@
 package org.eu.freex.tools.utils
 
 import androidx.compose.ui.graphics.Color
-import org.eu.freex.tools.model.ColorRule
+import uniffi.touch_core.ColorRule
 import kotlin.math.abs
 
 object ColorUtils {

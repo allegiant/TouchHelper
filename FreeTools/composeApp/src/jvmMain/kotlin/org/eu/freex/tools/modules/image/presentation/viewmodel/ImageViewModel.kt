@@ -64,7 +64,7 @@ class ImageViewModel : ViewModel() {
 
             // --- 切割与规则 ---
             is ImageUiEvent.PerformSegmentation -> segmentationHandler.performSegmentation()
-            is ImageUiEvent.UpdateColorRule -> segmentationHandler.updateColorRule(event.id) { it.copy(biasHex = event.bias) }
+            is ImageUiEvent.UpdateColorRule -> segmentationHandler.updateColorRule(event.id) { event.rule }
             is ImageUiEvent.ToggleColorRule -> segmentationHandler.updateColorRule(event.id) { it.copy(isEnabled = event.enabled) }
             is ImageUiEvent.RemoveColorRule -> segmentationHandler.removeColorRule(event.id)
             is ImageUiEvent.UpdateGridParams -> _uiState.update { it.copy(gridParams = event.params) }

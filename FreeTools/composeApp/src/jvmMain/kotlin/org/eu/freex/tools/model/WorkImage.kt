@@ -1,23 +1,21 @@
-// composeApp/src/jvmMain/kotlin/org/eu/freex/tools/model/WorkImage.kt
 package org.eu.freex.tools.model
 
-import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.graphics.ImageBitmap
+import uniffi.touch_core.ColorRule
 import java.awt.image.BufferedImage
 
+/**
+ * 工作图像数据模型
+ * 【优化】移除了 ImageBitmap 字段，避免内存双重占用。
+ * ImageBitmap 应仅在 UI 层通过 remember { bufferedImage.toComposeImageBitmap() } 生成。
+ */
 data class WorkImage(
-    val bitmap: ImageBitmap,
     val bufferedImage: BufferedImage,
     val name: String,
-
-    // UI显示的标签，如 "原图", "清除杂点", "二值化"
-    val label: String = name,
-    // 是否是二值化结果 (UI显示绿色，逻辑上作为最终输出)
-    val isBinary: Boolean = false,
-    val params: Map<String, Any> = emptyMap(),
-
-    // 继承的参数
-    val localColorRules: List<ColorRule>? = null,
-    val localBias: String? = null,
-    val localCropRects: List<Rect>? = null
-)
+    val label: String = "", // 用于流水线显示的步骤名
+    val params: Map<String, Any>? = null, // 记录产生此图的参数
+    val localColorRules: List<ColorRule>? = null // 局部颜色规则
+) {
+    // 辅助属性：判断是否是二值化图片 (通过参数或 Label 判断)
+    val isBinary: Boolean
+        get() = label == "二值化" || label.contains("Binary")
+}

@@ -1,28 +1,31 @@
 package org.eu.freex.tools.modules.image.data.repository
 
-import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.graphics.toComposeImageBitmap
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import org.eu.freex.tools.model.ColorFilterType
-import org.eu.freex.tools.model.ColorRule
+import org.eu.freex.tools.model.FilterConstants
 import org.eu.freex.tools.model.GridParams
-import org.eu.freex.tools.model.ImageFilter
 import org.eu.freex.tools.model.WorkImage
+import org.eu.freex.tools.model.label
 import org.eu.freex.tools.modules.image.data.source.RustDataSource
 import org.eu.freex.tools.modules.image.domain.repository.ImageRepository
 import org.eu.freex.tools.utils.ImageUtils
+import uniffi.touch_core.ColorRule
+import uniffi.touch_core.ImageFilter
 import java.io.File
 import javax.imageio.ImageIO
 
 class ImageRepositoryImpl(
-    private val rustDataSource: RustDataSource
+    private val dataSource: RustDataSource
 ) : ImageRepository {
 
     override suspend fun loadFile(file: File): WorkImage? = withContext(Dispatchers.IO) {
         try {
-            val img = ImageIO.read(file) ?: return@withContext null
-            WorkImage(img.toComposeImageBitmap(), img, file.name)
+            val bufferedImage = ImageIO.read(file) ?: return@withContext null
+            WorkImage(
+                bufferedImage = bufferedImage,
+                name = file.name
+                // bitmap 字段已移除，由 UI 层按需生成
+            )
         } catch (e: Exception) {
             e.printStackTrace()
             null
@@ -34,19 +37,35 @@ class ImageRepositoryImpl(
         filter: ImageFilter,
         params: Map<String, Any>
     ): WorkImage = withContext(Dispatchers.Default) {
+        // 1. 获取原始像素 (极速)
+        val pixels = ImageUtils.toRgbaPixels(source.bufferedImage)
+        val width = source.bufferedImage.width
+        val height = source.bufferedImage.height
 
-        // 提取参数 (二值化需要 min/max)
-        val p1 = (params["min"] as? Int)
-        val p2 = (params["max"] as? Int)
+        // 2. 解析参数
+        val p1 = (params[FilterConstants.PARAM_MIN] as? Int)
+        val p2 = (params[FilterConstants.PARAM_MAX] as? Int)
+        // param3: boolean -> int (1=true, 0=false)
+        val p3 = if (params[FilterConstants.PARAM_RGB_AVG] == true) 1 else 0
 
-        val processedImg = rustDataSource.applyFilter(source.bufferedImage, filter, p1, p2)
+        // 3. 调用 Rust (通过 DataSource)
+        val resultPixels = dataSource.applyFilter(
+            pixels = pixels,
+            width = width,
+            height = height,
+            filter = filter,
+            param1 = p1,
+            param2 = p2,
+            param3 = p3
+        )
+
+        // 4. 还原图片
+        val newImage = ImageUtils.fromRgbaPixels(width, height, resultPixels)
 
         WorkImage(
-            bitmap = processedImg.toComposeImageBitmap(),
-            bufferedImage = processedImg,
-            name = source.name,
-            label = filter.label, // 界面显示的步骤名
-            isBinary = (filter == ColorFilterType.BINARIZATION),
+            bufferedImage = newImage,
+            name = "${source.name}_${filter.label}",
+            label = filter.label,
             params = params
         )
     }
@@ -56,32 +75,44 @@ class ImageRepositoryImpl(
         isGridMode: Boolean,
         gridParams: GridParams,
         activeRules: List<ColorRule>
-    ): Pair<List<Rect>, List<WorkImage>> =
+    ): Pair<List<androidx.compose.ui.geometry.Rect>, List<WorkImage>> =
         withContext(Dispatchers.Default) {
+            // 1. 获取原始像素
+            val pixels = ImageUtils.toRgbaPixels(source.bufferedImage)
+            val width = source.bufferedImage.width
+            val height = source.bufferedImage.height
 
-            // 1. 计算切割框
-            val rects = if (isGridMode) {
-                ImageUtils.generateGridRects(
-                    gridParams.x, gridParams.y, gridParams.w, gridParams.h,
-                    gridParams.colGap, gridParams.rowGap, gridParams.colCount, gridParams.rowCount
+            // 2. 调用 Rust 扫描
+            val rects = dataSource.scanComponents(
+                pixels = pixels,
+                width = width,
+                height = height,
+                rules = activeRules,
+                isGridMode = isGridMode,
+                gridRows = if (isGridMode) gridParams.rowCount else null,
+                gridCols = if (isGridMode) gridParams.colCount else null
+            )
+
+            // 3. 转换结果类型 (Rust Rect -> Compose Rect)
+            val composeRects = rects.map {
+                androidx.compose.ui.geometry.Rect(
+                    left = it.left.toFloat(),
+                    top = it.top.toFloat(),
+                    right = it.left.toFloat() + it.width.toFloat(),
+                    bottom = it.top.toFloat() + it.height.toFloat(),
                 )
-            } else {
-                rustDataSource.scanComponents(
-                    source.bufferedImage,
-                    activeRules.filter { it.isEnabled })
             }
 
-            // 2. 裁剪生成小图
-            val subImages = rects.mapIndexed { index, rect ->
-                val cropped = ImageUtils.cropImage(source.bufferedImage, rect)
+            // 4. 切割子图 (可选，如果 UI 不需要立即显示子图，可以懒加载)
+            // 这里为了完整性，我们简单切割一下
+            val subImages = composeRects.mapIndexed { index, rect ->
+                val subImg = ImageUtils.cropImage(source.bufferedImage, rect)
                 WorkImage(
-                    bitmap = cropped.toComposeImageBitmap(),
-                    bufferedImage = cropped,
-                    name = "${index}",
-                    label = "${index}"
+                    bufferedImage = subImg,
+                    name = "${source.name}_seg_$index"
                 )
             }
 
-            rects to subImages
+            Pair(composeRects, subImages)
         }
 }

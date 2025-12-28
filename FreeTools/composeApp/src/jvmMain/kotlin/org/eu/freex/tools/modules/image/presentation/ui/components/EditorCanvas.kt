@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.material.Surface
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
@@ -23,6 +24,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.withTransform
+import androidx.compose.ui.graphics.toComposeImageBitmap
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.onPointerEvent
 import androidx.compose.ui.input.pointer.pointerInput
@@ -74,6 +76,14 @@ fun EditorCanvas(
         }
     }
 
+    val mainBitmap = remember(workImage) {
+        workImage?.bufferedImage?.toComposeImageBitmap()
+    }
+
+    val previewBitmap = remember(binaryPreview) {
+        binaryPreview?.bufferedImage?.toComposeImageBitmap()
+    }
+
     BoxWithConstraints(
         modifier = modifier
             .background(Color(0xFF1E1E1E))
@@ -87,10 +97,10 @@ fun EditorCanvas(
                 scale(scale, pivot = Offset.Zero)
             }) {
                 // 1. 底图
-                workImage?.let { img -> drawImage(img.bitmap) }
+                mainBitmap?.let { img -> drawImage(img) }
 
                 // 2. 预览层
-                binaryPreview?.let { bin -> drawImage(bin.bitmap, alpha = 0.8f) }
+                previewBitmap?.let { bin -> drawImage(bin, alpha = 0.8f) }
             }
         }
 

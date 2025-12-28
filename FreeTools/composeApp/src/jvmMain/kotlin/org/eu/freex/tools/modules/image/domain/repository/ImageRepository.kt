@@ -2,6 +2,8 @@ package org.eu.freex.tools.modules.image.domain.repository
 
 import androidx.compose.ui.geometry.Rect
 import org.eu.freex.tools.model.*
+import uniffi.touch_core.ColorRule
+import uniffi.touch_core.ImageFilter
 import java.io.File
 
 interface ImageRepository {

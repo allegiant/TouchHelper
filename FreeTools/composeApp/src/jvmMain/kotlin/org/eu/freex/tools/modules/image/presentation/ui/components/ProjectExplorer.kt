@@ -10,11 +10,13 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toComposeImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -123,6 +125,9 @@ private fun ResourceItem(
     onClick: () -> Unit,
     onDelete: () -> Unit
 ) {
+    val imageBitmap = remember(item.bufferedImage) {
+        item.bufferedImage.toComposeImageBitmap()
+    }
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -137,7 +142,7 @@ private fun ResourceItem(
     ) {
         // 图片缩略图
         Image(
-            bitmap = item.bitmap,
+            bitmap = imageBitmap,
             contentDescription = null,
             modifier = Modifier
                 .size(28.dp)

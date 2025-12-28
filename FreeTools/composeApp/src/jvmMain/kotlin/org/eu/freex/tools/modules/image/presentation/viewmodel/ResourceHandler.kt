@@ -10,7 +10,12 @@ import org.eu.freex.tools.model.*
 import org.eu.freex.tools.modules.image.domain.repository.ImageRepository
 import org.eu.freex.tools.modules.image.presentation.contract.ImageUiEvent
 import org.eu.freex.tools.modules.image.presentation.contract.ImageUiState
+import org.eu.freex.tools.modules.image.presentation.ui.components.CommonFilterList
 import org.eu.freex.tools.utils.ImageUtils
+import uniffi.touch_core.BlackWhiteFilterType
+import uniffi.touch_core.ColorFilterType
+import uniffi.touch_core.CommonFilterType
+import uniffi.touch_core.ImageFilter
 
 /**
  * 资源处理器：负责文件加载、资源管理、截图
@@ -143,7 +148,6 @@ class ResourceHandler(
 
     fun saveScreenCapture(image: java.awt.image.BufferedImage) {
         val newWorkImage = WorkImage(
-            bitmap = image.toComposeImageBitmap(),
             bufferedImage = image,
             name = "ScreenCapture_${System.currentTimeMillis()}"
         )
@@ -198,8 +202,8 @@ class ResourceHandler(
     }
 
     private fun findFilterByLabel(label: String): ImageFilter? {
-        return ColorFilterType.entries.find { it.label == label }
-            ?: BlackWhiteFilterType.entries.find { it.label == label }
-            ?: CommonFilterType.entries.find { it.label == label }
+        return ColorFilterType.entries.find { it.label == label }?.let { ImageFilter.Color(it) }
+            ?: BlackWhiteFilterType.entries.find { it.label == label }?.let { ImageFilter.BlackWhite(it) }
+            ?: CommonFilterType.entries.find { it.label == label }?.let { ImageFilter.Common(it) }
     }
 }
