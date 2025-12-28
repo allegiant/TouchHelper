@@ -98,9 +98,9 @@ fun ImageWorkbench(
                 onRgbAvgChange = { viewModel.handleEvent(ImageUiEvent.ToggleRgbAvg(it)) },
                 onAddStep = { viewModel.handleEvent(ImageUiEvent.ApplyCurrentFilter) },
                 onModifyStep = { viewModel.handleEvent(ImageUiEvent.ModifyCurrentStep) },
-                onRuleUpdate = { id, rule -> viewModel.handleEvent(ImageUiEvent.UpdateColorRule(id, rule)) },
-                onRuleToggle = { id, enabled -> viewModel.handleEvent(ImageUiEvent.ToggleColorRule(id, enabled)) },
-                onRuleRemove = { id -> viewModel.handleEvent(ImageUiEvent.RemoveColorRule(id)) }
+                onRuleUpdate = { id, rule -> viewModel.handleEvent(ImageUiEvent.UpdateColorRule(id.toLong(), rule)) },
+                onRuleToggle = { id, enabled -> viewModel.handleEvent(ImageUiEvent.ToggleColorRule(id.toLong(), enabled)) },
+                onRuleRemove = { id -> viewModel.handleEvent(ImageUiEvent.RemoveColorRule(id.toLong())) }
             )
         }
 

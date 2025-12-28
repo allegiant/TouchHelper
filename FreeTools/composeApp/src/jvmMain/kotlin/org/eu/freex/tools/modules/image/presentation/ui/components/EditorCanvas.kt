@@ -16,12 +16,17 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.material.Surface
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip // 新增：用于裁剪
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape // 新增：裁剪形状
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.toComposeImageBitmap
@@ -47,19 +52,35 @@ fun EditorCanvas(
     onHover: (IntOffset?, Color) -> Unit,
     onColorPick: (String) -> Unit
 ) {
+    val currentScale by rememberUpdatedState(scale)
+    val currentOffset by rememberUpdatedState(offset)
+    val currentOnTransformChange by rememberUpdatedState(onTransformChange)
+
     val scrollModifier = Modifier.onPointerEvent(PointerEventType.Scroll) {
         val change = it.changes.first()
         val scrollDelta = change.scrollDelta.y
         val zoomFactor = if (scrollDelta > 0) 0.9f else 1.1f
-        val newScale = (scale * zoomFactor).coerceIn(0.1f, 20f)
-        onTransformChange(newScale, offset)
+        val newScale = (currentScale * zoomFactor).coerceIn(0.1f, 20f)
+        currentOnTransformChange(newScale, currentOffset)
     }
 
-    val dragModifier = Modifier.pointerInput(Unit) {
-        detectDragGestures { change, dragAmount ->
-            change.consume()
-            onTransformChange(scale, offset + dragAmount)
-        }
+    // 拖拽逻辑 (保持之前的修复)
+    val smoothDragModifier = Modifier.pointerInput(Unit) {
+        var startDragOffset = Offset.Zero
+        var dragOffsetAccumulator = Offset.Zero
+
+        detectDragGestures(
+            onDragStart = {
+                startDragOffset = currentOffset
+                dragOffsetAccumulator = Offset.Zero
+            },
+            onDrag = { change, dragAmount ->
+                change.consume()
+                dragOffsetAccumulator += dragAmount
+                val targetOffset = startDragOffset + dragOffsetAccumulator
+                currentOnTransformChange(currentScale, targetOffset)
+            }
+        )
     }
 
     val hoverModifier = Modifier.onPointerEvent(PointerEventType.Move) {
@@ -87,19 +108,30 @@ fun EditorCanvas(
     BoxWithConstraints(
         modifier = modifier
             .background(Color(0xFF1E1E1E))
+            .clip(RectangleShape) // 【关键修复】将内容裁剪至组件边界内
             .then(scrollModifier)
-            .then(dragModifier)
+            .then(smoothDragModifier)
             .then(hoverModifier)
     ) {
+        LaunchedEffect(workImage) {
+            if (workImage != null) {
+                val img = workImage.bufferedImage
+                val canvasW = constraints.maxWidth
+                val canvasH = constraints.maxHeight
+                val imgDisplayW = img.width * scale
+                val imgDisplayH = img.height * scale
+                val centerX = (canvasW - imgDisplayW) / 2f
+                val centerY = (canvasH - imgDisplayH) / 2f
+                onTransformChange(scale, Offset(centerX, centerY))
+            }
+        }
+
         Canvas(modifier = Modifier.fillMaxSize()) {
             withTransform({
                 translate(offset.x, offset.y)
                 scale(scale, pivot = Offset.Zero)
             }) {
-                // 1. 底图
                 mainBitmap?.let { img -> drawImage(img) }
-
-                // 2. 预览层
                 previewBitmap?.let { bin -> drawImage(bin, alpha = 0.8f) }
             }
         }
@@ -124,10 +156,8 @@ private fun PixelMagnifier(modifier: Modifier, color: Color, pos: IntOffset) {
         Column(Modifier.padding(8.dp)) {
             Text("X: ${pos.x}, Y: ${pos.y}", color = Color.White, fontSize = 10.sp)
             Row(verticalAlignment = Alignment.CenterVertically) {
-                // 显示颜色方块和 Hex 值
                 Box(Modifier.size(12.dp).background(color).border(1.dp, Color.White))
                 Spacer(Modifier.width(4.dp))
-                // 安全获取 Hex 字符串
                 val hex = "#%02X%02X%02X".format(color.red.times(255).toInt(), color.green.times(255).toInt(), color.blue.times(255).toInt())
                 Text(hex, color = Color.White, fontSize = 10.sp)
             }

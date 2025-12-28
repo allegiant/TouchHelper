@@ -1,21 +1,41 @@
 package org.eu.freex.tools.utils
 
+import java.awt.FileDialog
+import java.awt.Frame
 import java.awt.Rectangle
 import java.awt.Robot
 import java.awt.Toolkit
 import java.awt.image.BufferedImage
 import java.io.File
+import java.io.FilenameFilter
 import javax.imageio.ImageIO
-import javax.swing.JFileChooser
-import javax.swing.filechooser.FileNameExtensionFilter
 
 object ImageUtils {
 
+
     fun pickFile(): File? {
-        val fileChooser = JFileChooser()
-        fileChooser.fileFilter = FileNameExtensionFilter("Images", "jpg", "png", "bmp", "jpeg")
-        val result = fileChooser.showOpenDialog(null)
-        return if (result == JFileChooser.APPROVE_OPTION) fileChooser.selectedFile else null
+        // 使用 java.awt.FileDialog 代替 JFileChooser
+        // FileDialog 会调用系统的原生文件选择窗口 (Native OS Dialog)
+        val dialog = FileDialog(null as Frame?, "导入图片", FileDialog.LOAD)
+
+        // 设置过滤 (虽然 FileDialog 的过滤在不同系统表现不一，但这是获取原生外观的最简方法)
+        dialog.filenameFilter = FilenameFilter { _, name ->
+            val n = name.lowercase()
+            n.endsWith(".png") || n.endsWith(".jpg") ||
+                    n.endsWith(".jpeg") || n.endsWith(".bmp") || n.endsWith(".webp")
+        }
+
+        // 显示窗口（这行代码会阻塞，直到用户关闭窗口）
+        dialog.isVisible = true
+
+        val dir = dialog.directory
+        val file = dialog.file
+
+        return if (dir != null && file != null) {
+            File(dir, file)
+        } else {
+            null
+        }
     }
 
     fun captureFullScreen(): BufferedImage {

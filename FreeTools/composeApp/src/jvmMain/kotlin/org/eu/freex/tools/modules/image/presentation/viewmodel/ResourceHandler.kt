@@ -10,7 +10,6 @@ import org.eu.freex.tools.model.*
 import org.eu.freex.tools.modules.image.domain.repository.ImageRepository
 import org.eu.freex.tools.modules.image.presentation.contract.ImageUiEvent
 import org.eu.freex.tools.modules.image.presentation.contract.ImageUiState
-import org.eu.freex.tools.modules.image.presentation.ui.components.CommonFilterList
 import org.eu.freex.tools.utils.ImageUtils
 import uniffi.touch_core.BlackWhiteFilterType
 import uniffi.touch_core.ColorFilterType
