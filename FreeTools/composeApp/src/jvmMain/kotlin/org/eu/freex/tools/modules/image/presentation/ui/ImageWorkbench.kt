@@ -18,11 +18,10 @@ import org.eu.freex.tools.dialogs.CharMappingDialog
 import org.eu.freex.tools.dialogs.ScreenCropperDialog
 import org.eu.freex.tools.modules.image.presentation.contract.ImageUiEvent
 import org.eu.freex.tools.modules.image.presentation.ui.components.EditorCanvas
-import org.eu.freex.tools.modules.image.presentation.ui.components.InspectorPanel
+import org.eu.freex.tools.modules.image.presentation.ui.components.inspector.InspectorPanel
 import org.eu.freex.tools.modules.image.presentation.ui.components.ProcessingPipeline
 import org.eu.freex.tools.modules.image.presentation.ui.components.ProjectExplorer
 import org.eu.freex.tools.modules.image.presentation.viewmodel.ImageViewModel
-import org.eu.freex.tools.utils.ImageUtils
 
 @Composable
 fun ImageWorkbench(
