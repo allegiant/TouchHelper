@@ -1,6 +1,5 @@
 package org.eu.freex.tools.model
 
-import uniffi.touch_core.ColorRule
 import java.awt.image.BufferedImage
 
 /**
@@ -13,7 +12,6 @@ data class WorkImage(
     val name: String,
     val label: String = "", // 用于流水线显示的步骤名
     val params: Map<String, Any>? = null, // 记录产生此图的参数
-    val localColorRules: List<ColorRule>? = null // 局部颜色规则
 ) {
     // 辅助属性：判断是否是二值化图片 (通过参数或 Label 判断)
     val isBinary: Boolean

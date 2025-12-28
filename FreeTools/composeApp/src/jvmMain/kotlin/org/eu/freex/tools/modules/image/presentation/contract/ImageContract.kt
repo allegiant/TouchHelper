@@ -5,7 +5,6 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.IntOffset
 import org.eu.freex.tools.model.*
-import uniffi.touch_core.ColorRule
 import uniffi.touch_core.ImageFilter
 import java.awt.image.BufferedImage
 import java.io.File
@@ -25,8 +24,6 @@ data class ImageUiState(
     val currentFilter: ImageFilter = ImageFilter.View,
     val thresholdRange: ClosedFloatingPointRange<Float> = 0f..72f,
     val isRgbAvgEnabled: Boolean = true,
-    val globalColorRules: List<ColorRule> = emptyList(),
-    val currentScope: RuleScope = RuleScope.GLOBAL,
 
     // 【关键修改】isGridMode 默认为 false (智能模式)，或 true (网格模式)
     val isGridMode: Boolean = true,
@@ -55,9 +52,6 @@ data class ImageUiState(
         list.addAll(pipelineSteps)
         return list
     }
-
-    val activeColorRules: List<ColorRule> get() =
-        if (currentScope == RuleScope.GLOBAL) globalColorRules else (currentSourceImage?.localColorRules ?: globalColorRules)
 }
 
 sealed class ImageUiEvent {
@@ -80,11 +74,6 @@ sealed class ImageUiEvent {
     // --- 规则与切割 ---
     object PerformSegmentation : ImageUiEvent()
 
-    // 【关键修改】接收完整的 ColorRule 对象
-    data class UpdateColorRule(val id: Long, val rule: ColorRule) : ImageUiEvent()
-
-    data class ToggleColorRule(val id: Long, val enabled: Boolean) : ImageUiEvent()
-    data class RemoveColorRule(val id: Long) : ImageUiEvent()
     data class UpdateGridParams(val params: GridParams) : ImageUiEvent()
     data class ToggleGridMode(val isGrid: Boolean) : ImageUiEvent()
 

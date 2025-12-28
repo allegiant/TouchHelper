@@ -1,11 +1,8 @@
 package org.eu.freex.tools.modules.image.presentation.ui.components
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -17,6 +14,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -25,13 +23,13 @@ import org.eu.freex.tools.model.FilterConstantsUI
 import org.eu.freex.tools.model.label
 import uniffi.touch_core.BlackWhiteFilterType
 import uniffi.touch_core.ColorFilterType
-import uniffi.touch_core.ColorRule
 import uniffi.touch_core.CommonFilterType
 import uniffi.touch_core.ImageFilter
+import java.lang.Integer.max
 
 /**
  * 右侧属性面板 (Inspector)
- * 包含：滤镜参数设置、二值化阈值、字符切割规则管理
+ * 包含：滤镜参数设置
  */
 @Composable
 fun InspectorPanel(
@@ -40,16 +38,14 @@ fun InspectorPanel(
     currentFilter: ImageFilter,
     thresholdRange: ClosedFloatingPointRange<Float>,
     isRgbAvgEnabled: Boolean,
-    colorRules: List<ColorRule>,
+    // 已移除 colorRules
     onTabChange: (Int) -> Unit,
     onFilterChange: (ImageFilter) -> Unit,
     onThresholdChange: (ClosedFloatingPointRange<Float>) -> Unit,
     onRgbAvgChange: (Boolean) -> Unit,
     onAddStep: () -> Unit,
-    onModifyStep: () -> Unit,
-    onRuleUpdate: (String, ColorRule) -> Unit,
-    onRuleToggle: (String, Boolean) -> Unit,
-    onRuleRemove: (String) -> Unit
+    onModifyStep: () -> Unit
+    // 已移除 onRuleUpdate, onRuleToggle, onRuleRemove
 ) {
     Column(
         modifier = modifier
@@ -98,11 +94,12 @@ fun InspectorPanel(
                     onAddStep = onAddStep,
                     onModifyStep = onModifyStep
                 )
-                1 -> SegmentationSettings(
-                    rules = colorRules,
-                    onUpdate = onRuleUpdate,
-                    onToggle = onRuleToggle
-                )
+                1 -> {
+                    // 已移除规则设置
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Text("规则设置已移除", color = Color.Gray, fontSize = 12.sp)
+                    }
+                }
             }
         }
     }
@@ -134,7 +131,7 @@ private fun FilterSettings(
                 .weight(1f)
                 .verticalScroll(rememberScrollState())
                 .padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(20.dp) // 组间距
+            verticalArrangement = Arrangement.spacedBy(20.dp)
         ) {
             // 1. 彩色处理组
             FilterGroup(
@@ -271,8 +268,6 @@ private fun FilterGroup(
             modifier = Modifier.padding(bottom = 8.dp)
         )
 
-        // 关键修改：使用 chunked(3) 将列表按 3 个一组分割
-        // 然后使用 Row + weight 布局，实现严格的网格对齐
         val rows = remember(filters) { filters.chunked(3) }
 
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -281,18 +276,16 @@ private fun FilterGroup(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    // 遍历 3 个位置，保证即便最后一行不满 3 个也能对齐
                     for (i in 0 until 3) {
                         if (i < rowFilters.size) {
                             val filter = rowFilters[i]
                             FilterChip(
                                 text = filter.label,
                                 isSelected = isSameFilter(currentFilter, filter),
-                                modifier = Modifier.weight(1f), // 核心：均分宽度
+                                modifier = Modifier.weight(1f),
                                 onClick = { onSelect(filter) }
                             )
                         } else {
-                            // 占位符，保持对齐
                             Spacer(modifier = Modifier.weight(1f))
                         }
                     }
@@ -314,7 +307,7 @@ private fun FilterChip(
         shape = RoundedCornerShape(3.dp),
         border = if (isSelected) androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF007ACC)) else null,
         modifier = modifier
-            .height(28.dp) // 稍微增加高度以容纳文字
+            .height(28.dp)
             .clickable(onClick = onClick)
     ) {
         Box(
@@ -327,7 +320,7 @@ private fun FilterChip(
                 fontSize = 12.sp,
                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis // 防止文字过长撑坏布局
+                overflow = TextOverflow.Ellipsis
             )
         }
     }
@@ -335,84 +328,6 @@ private fun FilterChip(
 
 private fun isSameFilter(a: ImageFilter, b: ImageFilter): Boolean {
     return a == b
-}
-
-@Composable
-private fun SegmentationSettings(
-    rules: List<ColorRule>,
-    onUpdate: (String, ColorRule) -> Unit,
-    onToggle: (String, Boolean) -> Unit
-) {
-    Column(modifier = Modifier.padding(12.dp)) {
-        SectionHeader(title = "颜色提取规则")
-        if (rules.isEmpty()) {
-            Box(
-                modifier = Modifier.fillMaxWidth().padding(top = 20.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    "暂无规则，请在左侧画布上取色",
-                    color = Color.Gray,
-                    fontSize = 12.sp
-                )
-            }
-        } else {
-            LazyColumn(
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-                contentPadding = PaddingValues(top = 8.dp)
-            ) {
-                items(rules) { rule ->
-                    ColorRuleItem(rule, onToggle)
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun ColorRuleItem(
-    rule: ColorRule,
-    onToggle: (String, Boolean) -> Unit
-) {
-    val color = try {
-        val c = java.awt.Color.decode(rule.targetHex)
-        Color(c.red, c.green, c.blue)
-    } catch (e: Exception) {
-        Color.Gray
-    }
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(Color(0xFF333333), RoundedCornerShape(4.dp))
-            .border(1.dp, Color(0xFF444444), RoundedCornerShape(4.dp))
-            .padding(8.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        // 颜色预览
-        Box(
-            modifier = Modifier
-                .size(24.dp)
-                .background(color, RoundedCornerShape(4.dp))
-                .border(1.dp, Color.White.copy(alpha = 0.2f), RoundedCornerShape(4.dp))
-        )
-
-        Spacer(Modifier.width(12.dp))
-
-        Column(modifier = Modifier.weight(1f)) {
-            Text(rule.targetHex, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-            Text("偏色: ${rule.biasHex}", color = Color.Gray, fontSize = 11.sp)
-        }
-
-        Switch(
-            checked = rule.isEnabled,
-            onCheckedChange = { onToggle(rule.id.toString(), it) },
-            colors = SwitchDefaults.colors(
-                checkedThumbColor = Color(0xFF007ACC),
-                checkedTrackColor = Color(0xFF007ACC).copy(alpha = 0.5f)
-            )
-        )
-    }
 }
 
 @Composable

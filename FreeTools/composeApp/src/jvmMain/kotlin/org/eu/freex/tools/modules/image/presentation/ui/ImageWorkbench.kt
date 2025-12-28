@@ -90,7 +90,6 @@ fun ImageWorkbench(
                 currentFilter = state.currentFilter,
                 thresholdRange = state.thresholdRange,
                 isRgbAvgEnabled = state.isRgbAvgEnabled,
-                colorRules = state.activeColorRules,
 
                 onTabChange = { viewModel.handleEvent(ImageUiEvent.ChangePanelTab(it)) },
                 onFilterChange = { viewModel.handleEvent(ImageUiEvent.SelectFilter(it)) },
@@ -98,9 +97,6 @@ fun ImageWorkbench(
                 onRgbAvgChange = { viewModel.handleEvent(ImageUiEvent.ToggleRgbAvg(it)) },
                 onAddStep = { viewModel.handleEvent(ImageUiEvent.ApplyCurrentFilter) },
                 onModifyStep = { viewModel.handleEvent(ImageUiEvent.ModifyCurrentStep) },
-                onRuleUpdate = { id, rule -> viewModel.handleEvent(ImageUiEvent.UpdateColorRule(id.toLong(), rule)) },
-                onRuleToggle = { id, enabled -> viewModel.handleEvent(ImageUiEvent.ToggleColorRule(id.toLong(), enabled)) },
-                onRuleRemove = { id -> viewModel.handleEvent(ImageUiEvent.RemoveColorRule(id.toLong())) }
             )
         }
 
