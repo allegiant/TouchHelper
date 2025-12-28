@@ -3,7 +3,7 @@
 # ========================
 .gradle/
 **/build/
-android/.kotlin/
+.kotlin/
 
 # 本地配置 (绝对路径敏感)
 local.properties
