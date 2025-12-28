@@ -1,9 +1,12 @@
 package org.eu.freex.tools.modules.image.presentation.viewmodel
 
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.toComposeImageBitmap
 import androidx.lifecycle.ViewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -23,7 +26,9 @@ import org.eu.freex.tools.utils.ImageUtils
 class ImageViewModel : ViewModel() {
     private val scope = CoroutineScope(Dispatchers.Main)
 
-    // 手动依赖注入 (实际项目可用 Koin)
+    // 用于控制计算任务的 Job
+    private var processJob: Job? = null
+
     private val repository: ImageRepository = ImageRepositoryImpl(RustDataSource())
 
     private val _uiState = MutableStateFlow(ImageUiState())
@@ -34,65 +39,139 @@ class ImageViewModel : ViewModel() {
             is ImageUiEvent.LoadFile -> loadFile(event)
             is ImageUiEvent.SelectSourceImage -> selectSource(event.index)
             is ImageUiEvent.RemoveSourceImage -> removeSource(event.index)
-            is ImageUiEvent.ApplyCurrentFilter -> applyFilter()
-            is ImageUiEvent.PerformSegmentation -> performSegmentation()
+            is ImageUiEvent.StartScreenCapture -> startCapture()
+            is ImageUiEvent.ConfirmScreenCrop -> saveScreenCapture(event.image)
+            is ImageUiEvent.SelectPipelineStep -> _uiState.update { it.copy(selectedPipelineIndex = event.index) }
 
-            // 简单的状态更新直接处理
-            is ImageUiEvent.UpdateCanvasTransform -> _uiState.update {
-                it.copy(
-                    mainScale = event.scale,
-                    mainOffset = event.offset
-                )
-            }
+            // 按钮事件
+            is ImageUiEvent.ApplyCurrentFilter -> applyFilterAsNewStep()
+            is ImageUiEvent.ModifyCurrentStep -> modifyCurrentStep() // 按钮点击不需要防抖
 
+            is ImageUiEvent.UpdateCanvasTransform -> _uiState.update { it.copy(mainScale = event.scale, mainOffset = event.offset) }
             is ImageUiEvent.ChangePanelTab -> _uiState.update { it.copy(rightPanelTabIndex = event.index) }
-            // 1. 修改阈值更新事件：不仅更新数值，还要触发预览
+            is ImageUiEvent.HoverCanvas -> {}
+            is ImageUiEvent.ColorPick -> {}
+            is ImageUiEvent.SelectFilter -> _uiState.update { it.copy(currentFilter = event.filter) }
+
             is ImageUiEvent.UpdateThreshold -> {
                 _uiState.update { it.copy(thresholdRange = event.range) }
-                triggerPreview()
+                triggerStepUpdate() // 滑块拖动：需要微量防抖
             }
-
-            // 2. 修改 RGB 平均值切换事件：同样触发预览
             is ImageUiEvent.ToggleRgbAvg -> {
                 _uiState.update { it.copy(isRgbAvgEnabled = event.enabled) }
-                triggerPreview()
+                triggerStepUpdate()
             }
 
-            // 3. 切换滤镜时，如果是二值化，也触发一次预览；如果是其他，清除预览
-            is ImageUiEvent.SelectFilter -> {
-                _uiState.update {
-                    it.copy(currentFilter = event.filter, binaryPreview = null)
-                }
-                if (event.filter == ColorFilterType.BINARIZATION) {
-                    triggerPreview()
-                }
-            }
             is ImageUiEvent.UpdateGridParams -> _uiState.update { it.copy(gridParams = event.params) }
             is ImageUiEvent.ToggleGridMode -> _uiState.update { it.copy(isGridMode = event.isGrid) }
-
-            // 弹窗
-            is ImageUiEvent.StartScreenCapture -> startCapture()
-            is ImageUiEvent.ConfirmScreenCrop -> {
-                // 添加截图到资源列表
-                // ... 省略具体实现，类似于 loadFile
-                _uiState.update { it.copy(isScreenCropperVisible = false) }
-            }
-
-            is ImageUiEvent.DismissDialogs -> _uiState.update {
-                it.copy(isScreenCropperVisible = false, isMappingDialogVisible = false)
-            }
-            // --- 规则管理 ---
+            is ImageUiEvent.PerformSegmentation -> performSegmentation()
+            is ImageUiEvent.DismissDialogs -> _uiState.update { it.copy(isScreenCropperVisible = false, isMappingDialogVisible = false) }
             is ImageUiEvent.UpdateColorRule -> updateColorRule(event.id) { it.copy(biasHex = event.bias) }
             is ImageUiEvent.ToggleColorRule -> updateColorRule(event.id) { it.copy(isEnabled = event.enabled) }
             is ImageUiEvent.RemoveColorRule -> removeColorRule(event.id)
-
-            // --- 字库映射 ---
             is ImageUiEvent.OpenMappingDialog -> openMappingDialog(event.rect)
             is ImageUiEvent.ConfirmMapping -> confirmMapping(event.char)
             else -> {}
         }
     }
 
+    // --- 核心逻辑 ---
+
+    /**
+     * 【添加模式】ApplyCurrentFilter
+     * 生成新步骤并追加到最后
+     */
+    private fun applyFilterAsNewStep() {
+        val state = _uiState.value
+        val source = state.activeDisplayImage ?: return
+        val filter = state.currentFilter
+        val params = buildFilterParams(state)
+
+        scope.launch {
+            _uiState.update { it.copy(isLoading = true) }
+            try {
+                val resultImage = repository.applyFilter(source, filter, params)
+                _uiState.update { current ->
+                    val newSteps = current.pipelineSteps.toMutableList()
+                    newSteps.add(resultImage)
+                    current.copy(pipelineSteps = newSteps, selectedPipelineIndex = newSteps.size, isLoading = false)
+                }
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+                e.printStackTrace()
+                _uiState.update { it.copy(isLoading = false) }
+            }
+        }
+    }
+
+    /**
+     * 【修改模式】ModifyCurrentStep (按钮触发)
+     * 直接执行，无需防抖
+     */
+    private fun modifyCurrentStep() {
+        val state = _uiState.value
+        if (state.selectedPipelineIndex == 0) return
+        val currentStepIndex = state.selectedPipelineIndex - 1
+
+        processJob?.cancel()
+        processJob = scope.launch(Dispatchers.Default) {
+            updateSpecificStep(currentStepIndex)
+        }
+    }
+
+    /**
+     * 【实时预览】triggerStepUpdate (滑块触发)
+     * 关键修复：加入 15ms 防抖，防止线程积压导致的卡顿
+     */
+    private fun triggerStepUpdate() {
+        val state = _uiState.value
+        if (state.currentFilter != ColorFilterType.BINARIZATION) return
+        if (state.selectedPipelineIndex == 0) return
+        val currentStepIndex = state.selectedPipelineIndex - 1
+        val currentStep = state.pipelineSteps.getOrNull(currentStepIndex) ?: return
+        if (!currentStep.isBinary && currentStep.label != state.currentFilter.label) return
+
+        processJob?.cancel()
+        processJob = scope.launch(Dispatchers.Default) {
+            // 【关键】15ms 约等于 60帧/秒。这能合并极高频的事件，
+            // 避免 Rust 线程池被瞬间填满，从而消除"卡顿感"，同时保持视觉上的"跟手"。
+            delay(15)
+            updateSpecificStep(currentStepIndex)
+        }
+    }
+
+    private suspend fun updateSpecificStep(stepIndex: Int) {
+        val state = _uiState.value
+        val params = buildFilterParams(state)
+        val filter = state.currentFilter
+        val inputImage = if (stepIndex == 0) state.currentSourceImage else state.pipelineSteps.getOrNull(stepIndex - 1)
+        if (inputImage == null) return
+
+        try {
+            val updatedImage = repository.applyFilter(inputImage, filter, params)
+            _uiState.update { current ->
+                val newSteps = current.pipelineSteps.toMutableList()
+                if (stepIndex in newSteps.indices) newSteps[stepIndex] = updatedImage
+                current.copy(pipelineSteps = newSteps)
+            }
+        } catch (e: Exception) {
+            // 【关键】忽略 CancellationException，不再打印红色的报错日志
+            if (e is CancellationException) throw e
+            e.printStackTrace()
+        }
+    }
+
+    private fun buildFilterParams(state: ImageUiState): Map<String, Any> {
+        val params = mutableMapOf<String, Any>()
+        if (state.currentFilter == ColorFilterType.BINARIZATION) {
+            params["min"] = state.thresholdRange.start.toInt()
+            params["max"] = state.thresholdRange.endInclusive.toInt()
+            params["rgbAvg"] = state.isRgbAvgEnabled
+        }
+        return params
+    }
+
+    // --- 辅助方法 (保持不变) ---
     private fun loadFile(event: ImageUiEvent.LoadFile) {
         scope.launch {
             _uiState.update { it.copy(isLoading = true) }
@@ -100,247 +179,56 @@ class ImageViewModel : ViewModel() {
             _uiState.update {
                 if (image != null) {
                     val newList = it.sourceImages + image
-                    it.copy(
-                        sourceImages = newList,
-                        selectedSourceIndex = newList.lastIndex,
-                        pipelineSteps = emptyList(), // 重置流水线
-                        isLoading = false
-                    )
-                } else {
-                    it.copy(isLoading = false)
-                }
+                    it.copy(sourceImages = newList, selectedSourceIndex = newList.lastIndex, pipelineSteps = emptyList(), isLoading = false)
+                } else { it.copy(isLoading = false) }
             }
         }
     }
-
-    private fun applyFilter() {
-        val state = _uiState.value
-        val source = state.activeDisplayImage ?: return
-        val filter = state.currentFilter
-
-        // 构造参数
-        val params = mutableMapOf<String, Any>()
-        if (filter == ColorFilterType.BINARIZATION) {
-            params["min"] = state.thresholdRange.start.toInt()
-            params["max"] = state.thresholdRange.endInclusive.toInt()
-            params["rgbAvg"] = state.isRgbAvgEnabled
-        }
-
-        scope.launch {
-            _uiState.update { it.copy(isLoading = true) }
-            // 调用 Domain 层
-            val result = repository.applyFilter(source, filter, params)
-
-            _uiState.update {
-                val newSteps = it.pipelineSteps + result
-                it.copy(
-                    pipelineSteps = newSteps,
-                    selectedPipelineIndex = newSteps.size, // 选中最新的一步
-                    isLoading = false
-                )
-            }
-        }
-    }
-
-    private fun performSegmentation() {
-        val state = _uiState.value
-        val source = state.activeDisplayImage ?: return
-
-        scope.launch {
-            _uiState.update { it.copy(isLoading = true) }
-            val (rects, subImages) = repository.segmentImage(
-                source, state.isGridMode, state.gridParams, state.activeColorRules
-            )
-            _uiState.update {
-                it.copy(
-                    activeRects = rects,
-                    segmentationResults = subImages,
-                    isLoading = false
-                )
-            }
-        }
-    }
-
     private fun selectSource(index: Int) {
-        _uiState.update {
-            it.copy(
-                selectedSourceIndex = index,
-                pipelineSteps = emptyList(),
-                activeRects = emptyList(),
-                segmentationResults = emptyList()
-            )
-        }
+        _uiState.update { it.copy(selectedSourceIndex = index, pipelineSteps = emptyList(), activeRects = emptyList(), segmentationResults = emptyList(), binaryPreview = null) }
     }
-
     private fun removeSource(index: Int) {
         val currentState = _uiState.value
         val currentList = currentState.sourceImages.toMutableList()
-
         if (index in currentList.indices) {
             currentList.removeAt(index)
-
             _uiState.update { state ->
-                // 计算新的选中索引
                 var newIndex = state.selectedSourceIndex
-                if (newIndex == index) {
-                    // 如果删除了当前选中的，选中前一个，或者空
-                    newIndex = if (currentList.isNotEmpty()) {
-                        (index - 1).coerceAtLeast(0)
-                    } else {
-                        -1
-                    }
-                } else if (newIndex > index) {
-                    // 如果删除了前面的，当前索引减1
-                    newIndex--
-                }
-
-                state.copy(
-                    sourceImages = currentList,
-                    selectedSourceIndex = newIndex,
-                    // 如果删除了当前正在查看的图片，重置流水线
-                    pipelineSteps = if (state.selectedSourceIndex == index) emptyList() else state.pipelineSteps,
-                    activeRects = if (state.selectedSourceIndex == index) emptyList() else state.activeRects,
-                    segmentationResults = if (state.selectedSourceIndex == index) emptyList() else state.segmentationResults
-                )
+                if (newIndex == index) newIndex = if (currentList.isNotEmpty()) (index - 1).coerceAtLeast(0) else -1
+                else if (newIndex > index) newIndex--
+                val reset = (state.selectedSourceIndex == index)
+                state.copy(sourceImages = currentList, selectedSourceIndex = newIndex, pipelineSteps = if (reset) emptyList() else state.pipelineSteps, activeRects = if (reset) emptyList() else state.activeRects, segmentationResults = if (reset) emptyList() else state.segmentationResults)
             }
         }
     }
-
     private fun startCapture() {
         scope.launch(Dispatchers.IO) {
-            // 延迟 300ms 以防截到当前应用窗口（给窗口最小化或隐藏的时间，如果需要的话）
-            delay(300)
-
+            try { Thread.sleep(300) } catch(e:Exception){}
             try {
-                // 1. 执行全屏截图
                 val capture = ImageUtils.captureFullScreen()
-
-                // 2. 更新 UI 状态：保存截图并显示裁剪弹窗
-                _uiState.update {
-                    it.copy(
-                        fullScreenCapture = capture,    // 保存截到的图
-                        isScreenCropperVisible = true   // 打开裁剪弹窗
-                    )
-                }
-            } catch (e: Exception) {
-                e.printStackTrace()
-                // 可选：更新错误状态提示用户截图失败
-            }
+                _uiState.update { it.copy(fullScreenCapture = capture, isScreenCropperVisible = true) }
+            } catch (e: Exception) { e.printStackTrace() }
         }
     }
-
-    /**
-     * 更新颜色规则 (通用方法)
-     * 根据当前 Scope (全局/局部) 查找并更新规则
-     */
+    private fun saveScreenCapture(image: java.awt.image.BufferedImage) {
+        val newWorkImage = WorkImage(bitmap = image.toComposeImageBitmap(), bufferedImage = image, name = "ScreenCapture_${System.currentTimeMillis()}")
+        _uiState.update { val newList = it.sourceImages + newWorkImage; it.copy(sourceImages = newList, selectedSourceIndex = newList.lastIndex, isScreenCropperVisible = false) }
+    }
+    private fun performSegmentation() {
+        val state = _uiState.value; val source = state.activeDisplayImage ?: return
+        scope.launch { _uiState.update { it.copy(isLoading = true) }; val (rects, subImages) = repository.segmentImage(source, state.isGridMode, state.gridParams, state.activeColorRules); _uiState.update { it.copy(activeRects = rects, segmentationResults = subImages, isLoading = false) } }
+    }
     private fun updateColorRule(ruleId: Long, transform: (ColorRule) -> ColorRule) {
         val state = _uiState.value
-
-        if (state.currentScope == RuleScope.GLOBAL) {
-            // 更新全局规则
-            val newRules = state.globalColorRules.map {
-                if (it.id == ruleId) transform(it) else it
-            }
-            _uiState.update { it.copy(globalColorRules = newRules) }
-        } else {
-            // 更新当前图片的局部规则
-            val currentIdx = state.selectedSourceIndex
-            val currentImg = state.currentSourceImage ?: return
-
-            // 复制旧规则列表 (如果为空则从全局复制一份作为起点，或者视业务需求而定)
-            val oldRules = currentImg.localColorRules ?: state.globalColorRules
-            val newRules = oldRules.map {
-                if (it.id == ruleId) transform(it) else it
-            }
-
-            // 更新图片对象
-            val newImg = currentImg.copy(localColorRules = newRules)
-            updateSourceImage(currentIdx, newImg)
-        }
+        if (state.currentScope == RuleScope.GLOBAL) _uiState.update { it.copy(globalColorRules = state.globalColorRules.map { r -> if (r.id == ruleId) transform(r) else r }) }
+        else { val idx = state.selectedSourceIndex; val img = state.currentSourceImage ?: return; val newRules = (img.localColorRules ?: state.globalColorRules).map { r -> if (r.id == ruleId) transform(r) else r }; updateSourceImage(idx, img.copy(localColorRules = newRules)) }
     }
-
     private fun removeColorRule(ruleId: Long) {
         val state = _uiState.value
-
-        if (state.currentScope == RuleScope.GLOBAL) {
-            val newRules = state.globalColorRules.filterNot { it.id == ruleId }
-            _uiState.update { it.copy(globalColorRules = newRules) }
-        } else {
-            val currentIdx = state.selectedSourceIndex
-            val currentImg = state.currentSourceImage ?: return
-            val oldRules = currentImg.localColorRules ?: state.globalColorRules
-            val newRules = oldRules.filterNot { it.id == ruleId }
-
-            val newImg = currentImg.copy(localColorRules = newRules)
-            updateSourceImage(currentIdx, newImg)
-        }
+        if (state.currentScope == RuleScope.GLOBAL) _uiState.update { it.copy(globalColorRules = state.globalColorRules.filterNot { r -> r.id == ruleId }) }
+        else { val idx = state.selectedSourceIndex; val img = state.currentSourceImage ?: return; val newRules = (img.localColorRules ?: state.globalColorRules).filterNot { r -> r.id == ruleId }; updateSourceImage(idx, img.copy(localColorRules = newRules)) }
     }
-
-    private fun openMappingDialog(rect: Rect) {
-        // 从当前显示的图中裁剪出字符图片
-        val source = _uiState.value.activeDisplayImage?.bufferedImage ?: return
-        val cropped = ImageUtils.cropImage(source, rect)
-
-        _uiState.update {
-            it.copy(
-                isMappingDialogVisible = true,
-                mappingBitmap = cropped
-            )
-        }
-    }
-
-    private fun confirmMapping(char: String) {
-        val bitmap = _uiState.value.mappingBitmap
-        if (bitmap != null) {
-            // TODO: 这里调用 Repository 保存字库 (例如 FontRepository.add(char, bitmap))
-            println("Mapping confirmed: $char")
-        }
-
-        // 关闭弹窗
-        _uiState.update {
-            it.copy(
-                isMappingDialogVisible = false,
-                mappingBitmap = null
-            )
-        }
-    }
-
-    /**
-     * 辅助方法：更新 sourceImages 列表中的特定项
-     */
-    private fun updateSourceImage(index: Int, newImage: WorkImage) {
-        _uiState.update { state ->
-            val newList = state.sourceImages.toMutableList()
-            if (index in newList.indices) {
-                newList[index] = newImage
-            }
-            state.copy(sourceImages = newList)
-        }
-    }
-
-    // --- 新增：触发预览逻辑 ---
-    private fun triggerPreview() {
-        val state = _uiState.value
-        // 只有当前是二值化滤镜，且有图可处理时才生成预览
-        if (state.currentFilter != ColorFilterType.BINARIZATION) return
-        val source = state.activeDisplayImage ?: return
-
-        // 防抖动处理在实际开发中很有必要，这里先展示核心逻辑
-        scope.launch(Dispatchers.Default) {
-            val params = mapOf(
-                "min" to state.thresholdRange.start.toInt(),
-                "max" to state.thresholdRange.endInclusive.toInt(),
-                "rgbAvg" to state.isRgbAvgEnabled
-            )
-
-            // 调用 Repository 生成预览图，但不加入流水线 (Pipeline)
-            // 注意：applyFilter 可能会比较耗时，频繁调用建议加 Debounce
-            val previewImage = repository.applyFilter(source, state.currentFilter, params)
-
-            // 更新 UI 状态中的 binaryPreview
-            _uiState.update {
-                it.copy(binaryPreview = previewImage)
-            }
-        }
-    }
+    private fun updateSourceImage(index: Int, newImage: WorkImage) { _uiState.update { s -> val l = s.sourceImages.toMutableList(); if(index in l.indices) l[index] = newImage; s.copy(sourceImages = l) } }
+    private fun openMappingDialog(rect: Rect) { val s = _uiState.value.activeDisplayImage?.bufferedImage ?: return; _uiState.update { it.copy(isMappingDialogVisible = true, mappingBitmap = ImageUtils.cropImage(s, rect)) } }
+    private fun confirmMapping(char: String) { _uiState.update { it.copy(isMappingDialogVisible = false, mappingBitmap = null) } }
 }

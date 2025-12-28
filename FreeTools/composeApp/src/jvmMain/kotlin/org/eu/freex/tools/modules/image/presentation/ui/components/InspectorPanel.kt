@@ -1,7 +1,5 @@
 package org.eu.freex.tools.modules.image.presentation.ui.components
 
-
-
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -20,44 +18,25 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.eu.freex.tools.model.*
 
-/**
- * 4. 右侧属性面板 (InspectorPanel)
- * 包含 Tab 切换，负责展示滤镜参数、切割网格设置和颜色规则。
- */
-
 @Composable
 fun InspectorPanel(
     modifier: Modifier = Modifier,
-    selectedTab: Int, // 0: 滤镜, 1: 切割
-
-    // 滤镜数据
+    selectedTab: Int,
     currentFilter: ImageFilter,
     thresholdRange: ClosedFloatingPointRange<Float>,
     isRgbAvgEnabled: Boolean,
-    colorRules: List<ColorRule>, // 规则列表
-
-    // 切割数据
-    isGridMode: Boolean,
-    gridParams: GridParams,
-
-    // 事件回调
+    colorRules: List<ColorRule>,
     onTabChange: (Int) -> Unit,
     onFilterChange: (ImageFilter) -> Unit,
     onThresholdChange: (ClosedFloatingPointRange<Float>) -> Unit,
     onRgbAvgChange: (Boolean) -> Unit,
-    onApplyFilter: () -> Unit,
-
-    onGridModeToggle: (Boolean) -> Unit,
-    onGridParamsChange: (GridParams) -> Unit,
-    onPerformSegmentation: () -> Unit,
-
-    // 规则回调 (简化演示)
+    onAddStep: () -> Unit,
+    onModifyStep: () -> Unit,
     onRuleUpdate: (Long, String) -> Unit,
     onRuleToggle: (Long, Boolean) -> Unit,
     onRuleRemove: (Long) -> Unit
 ) {
     Column(modifier = modifier.background(Color(0xFFF3F3F3))) {
-        // --- 顶部 Tab ---
         Row(modifier = Modifier.height(32.dp).fillMaxWidth().background(Color(0xFFE0E0E0))) {
             TabButton("滤镜处理", selectedTab == 0, { onTabChange(0) }, Modifier.weight(1f))
             TabButton("切割识别", selectedTab == 1, { onTabChange(1) }, Modifier.weight(1f))
@@ -65,25 +44,23 @@ fun InspectorPanel(
 
         Divider(color = Color.LightGray)
 
-        // --- 内容区 ---
         Box(modifier = Modifier.weight(1f).padding(8.dp)) {
             when (selectedTab) {
                 0 -> FilterSettingsContent(
                     currentFilter, onFilterChange,
                     thresholdRange, onThresholdChange, isRgbAvgEnabled, onRgbAvgChange,
-                    onApplyFilter
+                    onAddStep, onModifyStep
                 )
-                1 -> SegmentationSettingsContent(
-                    isGridMode, onGridModeToggle,
-                    gridParams, onGridParamsChange,
-                    onPerformSegmentation
-                )
+                1 -> {
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Text("该功能暂时下线维护中", color = Color.Gray, fontSize = 12.sp)
+                    }
+                }
             }
         }
     }
 }
 
-// --- 滤镜设置内容 ---
 @OptIn(ExperimentalMaterialApi::class)
 @Composable
 private fun FilterSettingsContent(
@@ -93,153 +70,75 @@ private fun FilterSettingsContent(
     onThresholdChange: (ClosedFloatingPointRange<Float>) -> Unit,
     isRgbAvg: Boolean,
     onRgbAvgChange: (Boolean) -> Unit,
-    onApply: () -> Unit
+    onAdd: () -> Unit,
+    onModify: () -> Unit
 ) {
-    Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-        Text("选择滤镜:", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.Gray)
-        Spacer(Modifier.height(4.dp))
+    Column(modifier = Modifier.fillMaxSize()) {
+        Column(modifier = Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 8.dp)) {
+            FilterGroupSection(ColorFilterType.TITLE, ColorFilterType.COLOR, ColorFilterType.entries, currentFilter, onFilterChange)
+            Spacer(Modifier.height(12.dp))
+            FilterGroupSection(BlackWhiteFilterType.TITLE, BlackWhiteFilterType.COLOR, BlackWhiteFilterType.entries, currentFilter, onFilterChange)
+            Spacer(Modifier.height(12.dp))
+            FilterGroupSection(CommonFilterType.TITLE, CommonFilterType.COLOR, CommonFilterType.entries, currentFilter, onFilterChange)
 
-        // 滤镜选择网格
-        val filters = ColorFilterType.entries + BlackWhiteFilterType.entries + CommonFilterType.entries
-        LazyVerticalGrid(
-            columns = GridCells.Fixed(2),
-            modifier = Modifier.height(300.dp), // 固定高度，内部滚动
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
-            items(filters) { filter ->
-                FilterButton(filter.label, currentFilter == filter) { onFilterChange(filter) }
+            if (currentFilter == ColorFilterType.BINARIZATION) {
+                Spacer(Modifier.height(16.dp))
+                Card(elevation = 2.dp, backgroundColor = Color(0xFFE3F2FD), shape = RoundedCornerShape(8.dp), modifier = Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(12.dp)) {
+                        Text("二值化参数配置", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1565C0))
+                        Spacer(Modifier.height(8.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("阈值:", fontSize = 12.sp)
+                            Spacer(Modifier.width(8.dp))
+                            Text("${thresholdRange.start.toInt()} - ${thresholdRange.endInclusive.toInt()}", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                        }
+                        RangeSlider(value = thresholdRange, onValueChange = onThresholdChange, valueRange = 0f..255f, colors = SliderDefaults.colors(thumbColor = Color(0xFF1565C0), activeTrackColor = Color(0xFF1565C0)))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Checkbox(checked = isRgbAvg, onCheckedChange = onRgbAvgChange, colors = CheckboxDefaults.colors(checkedColor = Color(0xFF1565C0)))
+                            Text("使用 RGB 平均值", fontSize = 12.sp)
+                        }
+                    }
+                }
             }
         }
 
-        Spacer(Modifier.height(16.dp))
-        Divider()
-        Spacer(Modifier.height(8.dp))
-
-        // 二值化参数面板
-        if (currentFilter == ColorFilterType.BINARIZATION) {
-            Text("二值化参数:", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-            Spacer(Modifier.height(4.dp))
-
-            Text("阈值范围: ${thresholdRange.start.toInt()} - ${thresholdRange.endInclusive.toInt()}", fontSize = 11.sp)
-            RangeSlider(
-                value = thresholdRange,
-                onValueChange = onThresholdChange,
-                valueRange = 0f..255f, // 假设0-255，根据业务调整
-                steps = 255
-            )
-
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Checkbox(checked = isRgbAvg, onCheckedChange = onRgbAvgChange)
-                Text("使用 RGB 平均值", fontSize = 12.sp)
+        Surface(elevation = 8.dp, modifier = Modifier.fillMaxWidth().background(Color.White)) {
+            Column(Modifier.padding(8.dp)) {
+                if (currentFilter != ViewFilter) {
+                    Text("当前: ${currentFilter.label}", fontSize = 11.sp, color = Color.Gray, modifier = Modifier.padding(bottom = 8.dp))
+                }
+                Row(Modifier.fillMaxWidth()) {
+                    Button(onClick = onAdd, modifier = Modifier.weight(1f).height(48.dp), shape = RoundedCornerShape(4.dp), colors = ButtonDefaults.buttonColors(backgroundColor = Color(0xFF007ACC), contentColor = Color.White), enabled = currentFilter != ViewFilter) {
+                        Text("添加步骤", fontWeight = FontWeight.Bold)
+                    }
+                    Spacer(Modifier.width(8.dp))
+                    Button(onClick = onModify, modifier = Modifier.weight(1f).height(48.dp), shape = RoundedCornerShape(4.dp), colors = ButtonDefaults.buttonColors(backgroundColor = Color(0xFFFFA000), contentColor = Color.White), enabled = currentFilter != ViewFilter) {
+                        Text("修改步骤", fontWeight = FontWeight.Bold)
+                    }
+                }
             }
         }
+    }
+}
 
-        Spacer(Modifier.weight(1f))
-
-        Button(
-            onClick = onApply,
-            modifier = Modifier.fillMaxWidth().height(40.dp),
-            colors = ButtonDefaults.buttonColors(backgroundColor = Color(0xFF007ACC), contentColor = Color.White)
-        ) {
-            Text("应用滤镜")
+// 辅助组件 (简化版，确保存在)
+@Composable fun FilterGroupSection(title: String, titleColor: Color, filters: List<ImageFilter>, currentFilter: ImageFilter, onSelect: (ImageFilter) -> Unit) {
+    Column {
+        SectionHeader(title, titleColor)
+        Spacer(Modifier.height(6.dp))
+        val columns = 2
+        val chunkedFilters = filters.chunked(columns)
+        chunkedFilters.forEach { rowFilters ->
+            Row(Modifier.fillMaxWidth().padding(bottom = 4.dp)) {
+                rowFilters.forEachIndexed { index, filter ->
+                    Box(Modifier.weight(1f)) { FilterGridButton(text = filter.label, isSelected = (currentFilter == filter), onClick = { onSelect(filter) }, modifier = Modifier.fillMaxWidth()) }
+                    if (index < rowFilters.size - 1) Spacer(Modifier.width(4.dp))
+                }
+                if (rowFilters.size < columns) { repeat(columns - rowFilters.size) { Spacer(Modifier.width(4.dp)); Spacer(Modifier.weight(1f)) } }
+            }
         }
     }
 }
-
-// --- 切割设置内容 ---
-@Composable
-private fun SegmentationSettingsContent(
-    isGridMode: Boolean,
-    onGridModeToggle: (Boolean) -> Unit,
-    gridParams: GridParams,
-    onParamsChange: (GridParams) -> Unit,
-    onExecute: () -> Unit
-) {
-    Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-        Text("切割模式:", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-        Row {
-            FilterButton("固定网格", isGridMode) { onGridModeToggle(true) }
-            Spacer(Modifier.width(4.dp))
-            FilterButton("连通区域", !isGridMode) { onGridModeToggle(false) }
-        }
-
-        Spacer(Modifier.height(16.dp))
-
-        if (isGridMode) {
-            Text("网格参数 (XY / WH / Gaps / Counts):", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-            // 简单的参数输入框列表
-            NumberInput("X (起始)", gridParams.x) { onParamsChange(gridParams.copy(x = it)) }
-            NumberInput("Y (起始)", gridParams.y) { onParamsChange(gridParams.copy(y = it)) }
-            NumberInput("Width", gridParams.w) { onParamsChange(gridParams.copy(w = it)) }
-            NumberInput("Height", gridParams.h) { onParamsChange(gridParams.copy(h = it)) }
-            NumberInput("Col Count", gridParams.colCount) { onParamsChange(gridParams.copy(colCount = it)) }
-            NumberInput("Row Count", gridParams.rowCount) { onParamsChange(gridParams.copy(rowCount = it)) }
-        } else {
-            Text("智能识别连通区域 (基于颜色规则)", fontSize = 12.sp, color = Color.Gray)
-        }
-
-        Spacer(Modifier.weight(1f))
-
-        Button(
-            onClick = onExecute,
-            modifier = Modifier.fillMaxWidth(),
-            colors = ButtonDefaults.buttonColors(backgroundColor = Color(0xFF4CAF50), contentColor = Color.White)
-        ) {
-            Text("开始切割")
-        }
-    }
-}
-
-// --- 通用小组件 ---
-
-@Composable
-fun TabButton(text: String, isSelected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    Box(
-        modifier = modifier
-            .fillMaxHeight()
-            .background(if (isSelected) Color(0xFFF3F3F3) else Color(0xFFE0E0E0))
-            .clickable(onClick = onClick),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(text, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal, fontSize = 12.sp)
-    }
-}
-
-@Composable
-fun FilterButton(text: String, isSelected: Boolean, onClick: () -> Unit) {
-    Box(
-        modifier = Modifier
-            .height(28.dp)
-            .background(if (isSelected) Color(0xFF90CAF9) else Color.White, RoundedCornerShape(4.dp))
-            .border(1.dp, Color.LightGray, RoundedCornerShape(4.dp))
-            .clickable(onClick = onClick)
-            .padding(horizontal = 8.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(text, fontSize = 11.sp, color = if (isSelected) Color.Black else Color.DarkGray)
-    }
-}
-
-@Composable
-fun NumberInput(label: String, value: Int, onChange: (Int) -> Unit) {
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(label, modifier = Modifier.width(80.dp), fontSize = 11.sp)
-        BasicTextField(
-            value = value.toString(),
-            onValueChange = { str ->
-                if (str.isEmpty()) onChange(0)
-                else str.toIntOrNull()?.let { onChange(it) }
-            },
-            textStyle = TextStyle(fontSize = 12.sp),
-            modifier = Modifier
-                .weight(1f)
-                .background(Color.White)
-                .border(1.dp, Color.Gray)
-                .padding(4.dp)
-        )
-    }
-}
+@Composable fun SectionHeader(title: String, color: Color) { Row(verticalAlignment = Alignment.CenterVertically) { Box(modifier = Modifier.size(width = 4.dp, height = 16.dp).background(color, RoundedCornerShape(2.dp))); Spacer(Modifier.width(6.dp)); Text(title, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.Black) } }
+@Composable fun TabButton(text: String, isSelected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) { Box(modifier = modifier.fillMaxHeight().background(if (isSelected) Color(0xFFF3F3F3) else Color(0xFFE0E0E0)).clickable(onClick = onClick), contentAlignment = Alignment.Center) { Column(Modifier.fillMaxSize()) { Box(Modifier.weight(1f), contentAlignment = Alignment.Center) { Text(text, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal, fontSize = 12.sp, color = if(isSelected) Color(0xFF007ACC) else Color.Black) }; if (isSelected) Box(Modifier.height(2.dp).fillMaxWidth().background(Color(0xFF007ACC))) } } }
+@Composable fun FilterGridButton(text: String, isSelected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) { Button(onClick = onClick, modifier = modifier.height(32.dp), contentPadding = PaddingValues(0.dp), shape = RoundedCornerShape(4.dp), colors = ButtonDefaults.buttonColors(backgroundColor = if (isSelected) Color(0xFFE3F2FD) else Color.White, contentColor = if (isSelected) Color(0xFF1565C0) else Color.DarkGray), border = if (isSelected) BorderStroke(1.dp, Color(0xFF1565C0)) else BorderStroke(1.dp, Color(0xFFE0E0E0)), elevation = ButtonDefaults.elevation(0.dp, 0.dp)) { Text(text, fontSize = 12.sp) } }
