@@ -1,6 +1,5 @@
 package org.eu.freex.tools
 
-// 移除 import androidx.compose.material.*
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -15,6 +14,8 @@ import org.eu.freex.tools.model.AppModule
 import org.eu.freex.tools.modules.image.presentation.viewmodel.ImageViewModel // 假设路径正确
 import org.eu.freex.tools.modules.image.presentation.ui.ImageWorkbench
 import org.eu.freex.tools.modules.image.presentation.contract.ImageUiEvent
+import org.eu.freex.tools.theme.AppTheme
+import org.eu.freex.tools.theme.ThemeMode
 import java.awt.Component
 import java.awt.Container
 import java.awt.datatransfer.DataFlavor
