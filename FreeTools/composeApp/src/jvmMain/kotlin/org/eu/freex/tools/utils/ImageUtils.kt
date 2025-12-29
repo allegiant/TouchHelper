@@ -114,4 +114,10 @@ object ImageUtils {
         ImageIO.write(image, format, outputStream)
         return outputStream.toByteArray()
     }
+
+
+    fun load(file: File): BufferedImage {
+        return ImageIO.read(file)
+    }
+
 }

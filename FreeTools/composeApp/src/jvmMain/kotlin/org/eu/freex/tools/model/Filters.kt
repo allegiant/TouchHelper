@@ -1,6 +1,5 @@
 package org.eu.freex.tools.model
 
-import androidx.compose.ui.graphics.Color
 import uniffi.touch_core.BlackWhiteFilterType
 import uniffi.touch_core.ColorFilterType
 import uniffi.touch_core.CommonFilterType

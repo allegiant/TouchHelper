@@ -1,12 +1,12 @@
 package org.eu.freex.tools.modules.image.presentation.viewmodel
 
-import androidx.compose.ui.graphics.toComposeImageBitmap
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import org.eu.freex.tools.model.*
+import org.eu.freex.tools.model.WorkImage
+import org.eu.freex.tools.model.label
 import org.eu.freex.tools.modules.image.domain.repository.ImageRepository
 import org.eu.freex.tools.modules.image.presentation.contract.ImageUiEvent
 import org.eu.freex.tools.modules.image.presentation.contract.ImageUiState
@@ -25,6 +25,48 @@ class ResourceHandler(
     private val stateFlow: MutableStateFlow<ImageUiState>,
     private val onError: (String) -> Unit
 ) {
+
+
+    fun addSourceImage(workImage: WorkImage) {
+        scope.launch {
+            stateFlow.update { it.copy(isLoading = true) }
+            try {
+                if (workImage != null) {
+                    stateFlow.update { state ->
+                        state.copy(sourceImages = state.sourceImages + workImage)
+                    }
+
+                    val currentState = stateFlow.value
+                    val newIndex = currentState.sourceImages.lastIndex
+                    val oldSteps = currentState.pipelineSteps
+
+                    val newSteps = if (oldSteps.isNotEmpty()) {
+                        reapplyPipeline(workImage, oldSteps)
+                    } else {
+                        emptyList()
+                    }
+
+                    stateFlow.update {
+                        it.copy(
+                            selectedSourceIndex = newIndex,
+                            pipelineSteps = newSteps,
+                            selectedPipelineIndex = newSteps.size,
+                            activeRects = emptyList(),
+                            segmentationResults = emptyList(),
+                            binaryPreview = null,
+                            isLoading = false
+                        )
+                    }
+                } else {
+                    stateFlow.update { it.copy(isLoading = false) }
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                stateFlow.update { it.copy(isLoading = false) }
+                onError("加载文件出错: ${e.message}")
+            }
+        }
+    }
 
     fun loadFile(event: ImageUiEvent.LoadFile) {
         scope.launch {

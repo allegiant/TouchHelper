@@ -3,13 +3,17 @@ package org.eu.freex.tools.modules.image.presentation.viewmodel
 import androidx.compose.ui.geometry.Rect
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope // 必须导入
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import org.eu.freex.tools.model.WorkImage
 import org.eu.freex.tools.modules.image.data.repository.ImageRepositoryImpl
+import org.eu.freex.tools.modules.image.data.repository.ProjectDatabase
 import org.eu.freex.tools.modules.image.data.source.RustDataSource
 import org.eu.freex.tools.modules.image.presentation.contract.ImageUiEvent
 import org.eu.freex.tools.modules.image.presentation.contract.ImageUiState
@@ -38,7 +42,79 @@ class ImageViewModel : ViewModel() {
     fun handleEvent(event: ImageUiEvent) {
         when (event) {
             // --- 资源与截图 ---
-            is ImageUiEvent.LoadFile -> resourceHandler.loadFile(event)
+            is ImageUiEvent.LoadFile -> {
+                viewModelScope.launch {
+                    val file = event.file
+                    try {
+                        val image = ImageUtils.load(file)
+                        val workImage = WorkImage(
+                            name = file.name,
+                            bufferedImage = image,
+                            path = file.absolutePath // 【关键】记录路径
+                        )
+                        resourceHandler.addSourceImage(workImage)
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
+                }
+            }
+            // 【新增】保存工程
+            is ImageUiEvent.SaveProject -> {
+                viewModelScope.launch(Dispatchers.IO) {
+                    try {
+                        ProjectDatabase.saveProject(
+                            event.file,
+                            uiState.value.sourceImages,
+                            uiState.value.currentFilter,
+                            uiState.value.filterParams
+                        )
+                        // 可选：显示 Toast
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
+                }
+            }
+
+            // 【新增】加载工程
+            is ImageUiEvent.LoadProject -> {
+                viewModelScope.launch(Dispatchers.IO) {
+                    try {
+                        val (paths, steps) = ProjectDatabase.loadProject(event.file)
+
+                        // 1. 在 UI 线程清空当前资源
+                        withContext(Dispatchers.Main) {
+                            // 清空 sourceImages (需要在 ResourceHandler 增加 clear 方法)
+                            // resourceHandler.clear()
+                        }
+
+                        // 2. 重新加载图片
+                        paths.forEach { path ->
+                            val f = java.io.File(path)
+                            if (f.exists()) {
+                                handleEvent(ImageUiEvent.LoadFile(f)) // 复用加载逻辑
+                            }
+                        }
+
+                        // 3. 恢复滤镜参数 (简略版)
+                        if (steps.isNotEmpty()) {
+                            // TODO: 解析 steps[0].paramsJson 并设置到 filterParams
+                            // 这一步比较复杂，取决于参数如何反序列化，暂时略过
+                        }
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
+                }
+            }
+
+            // 【新增】导出图片
+            is ImageUiEvent.ExportImage -> {
+                viewModelScope.launch(Dispatchers.IO) {
+                    val bitmap = uiState.value.activeDisplayImage?.bufferedImage
+                    if (bitmap != null) {
+                        javax.imageio.ImageIO.write(bitmap, "png", event.file)
+                    }
+                }
+            }
             is ImageUiEvent.SelectSourceImage -> resourceHandler.selectSource(event.index)
             is ImageUiEvent.RemoveSourceImage -> resourceHandler.removeSource(event.index)
             is ImageUiEvent.StartScreenCapture -> resourceHandler.startCapture()

@@ -58,6 +58,9 @@ data class ImageUiState(
 }
 
 sealed class ImageUiEvent {
+    data class SaveProject(val file: java.io.File) : ImageUiEvent()
+    data class LoadProject(val file: java.io.File) : ImageUiEvent()
+    data class ExportImage(val file: java.io.File) : ImageUiEvent()
     // --- 资源 ---
     data class LoadFile(val file: File) : ImageUiEvent()
     data class SelectSourceImage(val index: Int) : ImageUiEvent()
