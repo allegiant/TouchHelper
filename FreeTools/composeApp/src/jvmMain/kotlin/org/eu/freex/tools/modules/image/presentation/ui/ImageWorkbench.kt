@@ -21,6 +21,7 @@ import org.eu.freex.tools.modules.image.presentation.ui.components.EditorCanvas
 import org.eu.freex.tools.modules.image.presentation.ui.components.inspector.InspectorPanel
 import org.eu.freex.tools.modules.image.presentation.ui.components.ProcessingPipeline
 import org.eu.freex.tools.modules.image.presentation.ui.components.ProjectExplorer
+import org.eu.freex.tools.modules.image.presentation.ui.components.inspector.core.LocalImageViewModel
 import org.eu.freex.tools.modules.image.presentation.viewmodel.ImageViewModel
 
 @Composable
@@ -83,20 +84,15 @@ fun ImageWorkbench(
             }
 
             // --- 右侧 ---
-            InspectorPanel(
-                modifier = Modifier.width(320.dp).fillMaxHeight(),
-                selectedTab = state.rightPanelTabIndex,
-                currentFilter = state.currentFilter,
-                thresholdRange = state.thresholdRange,
-                isRgbAvgEnabled = state.isRgbAvgEnabled,
+            CompositionLocalProvider(LocalImageViewModel provides viewModel) {
+                InspectorPanel(
+                    modifier = Modifier.width(320.dp).fillMaxHeight(),
+                    selectedTab = state.rightPanelTabIndex,
+                    onTabChange = { viewModel.handleEvent(ImageUiEvent.ChangePanelTab(it)) },
+                )
+            }
 
-                onTabChange = { viewModel.handleEvent(ImageUiEvent.ChangePanelTab(it)) },
-                onFilterChange = { viewModel.handleEvent(ImageUiEvent.SelectFilter(it)) },
-                onThresholdChange = { viewModel.handleEvent(ImageUiEvent.UpdateThreshold(it)) },
-                onRgbAvgChange = { viewModel.handleEvent(ImageUiEvent.ToggleRgbAvg(it)) },
-                onAddStep = { viewModel.handleEvent(ImageUiEvent.ApplyCurrentFilter) },
-                onModifyStep = { viewModel.handleEvent(ImageUiEvent.ModifyCurrentStep) },
-            )
+
         }
 
         // --- 全局弹窗层 ---

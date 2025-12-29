@@ -1,5 +1,7 @@
 package org.eu.freex.tools.modules.image.presentation.contract
 
+import FilterParams
+import NoParams
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
@@ -35,7 +37,8 @@ data class ImageUiState(
     val isScreenCropperVisible: Boolean = false,
     val fullScreenCapture: BufferedImage? = null,
     val isMappingDialogVisible: Boolean = false,
-    val mappingBitmap: BufferedImage? = null
+    val mappingBitmap: BufferedImage? = null,
+    val filterParams: FilterParams = NoParams // 使用强类型接口
 ) {
     val currentSourceImage: WorkImage? get() = sourceImages.getOrNull(selectedSourceIndex)
 
@@ -87,4 +90,6 @@ sealed class ImageUiEvent {
     object DismissDialogs : ImageUiEvent()
     data class OpenMappingDialog(val rect: Rect) : ImageUiEvent()
     data class ConfirmMapping(val char: String) : ImageUiEvent()
+
+    data class UpdateFilterParams(val params: FilterParams) : ImageUiEvent()
 }

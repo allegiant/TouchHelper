@@ -77,6 +77,10 @@ class ImageViewModel : ViewModel() {
             // 纯交互，暂不需处理
             is ImageUiEvent.HoverCanvas -> {}
             is ImageUiEvent.ColorPick -> {}
+            is ImageUiEvent.UpdateFilterParams -> {
+                _uiState.update { it.copy(filterParams = event.params) }
+                filterHandler.triggerStepUpdate()
+            }
             else -> {}
         }
     }

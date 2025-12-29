@@ -1,10 +1,13 @@
-package org.eu.freex.tools.modules.image.presentation.ui.components.inspector.controls
+package org.eu.freex.tools.modules.image.presentation.ui.components.inspector.impl
 
+import BinarizationParams
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.material.Checkbox
 import androidx.compose.material.CheckboxDefaults
 import androidx.compose.material.ExperimentalMaterialApi
@@ -12,17 +15,53 @@ import androidx.compose.material.RangeSlider
 import androidx.compose.material.SliderDefaults
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import org.eu.freex.tools.modules.image.presentation.ui.components.inspector.core.FilterRenderer
+import org.eu.freex.tools.modules.image.presentation.ui.components.inspector.core.LocalImageViewModel
+import org.eu.freex.tools.modules.image.presentation.contract.ImageUiEvent
+
+object BinarizationRenderer : FilterRenderer {
+
+    @Composable
+    override fun Content() {
+        val viewModel = LocalImageViewModel.current
+        val state by viewModel.uiState.collectAsState()
+
+        // 安全获取参数，如果类型不对则使用默认值
+        val params = state.filterParams as? BinarizationParams ?: BinarizationParams()
+
+        Column {
+            ThresholdControl(
+                range = params.thresholdRange,
+                onValueChange = {
+                    val newParams = params.copy(thresholdRange = it)
+                    viewModel.handleEvent(ImageUiEvent.UpdateFilterParams(newParams))
+                }
+            )
+            Spacer(Modifier.height(10.dp))
+            RgbAvgControl(
+                isEnabled = params.isRgbAvgEnabled,
+                onChange = {
+                    val newParams = params.copy(isRgbAvgEnabled = it)
+                    viewModel.handleEvent(ImageUiEvent.UpdateFilterParams(newParams))
+                }
+            )
+        }
+    }
+}
 
 /**
  * 阈值调节滑块组件
  */
 @OptIn(ExperimentalMaterialApi::class)
 @Composable
-fun ThresholdControl(
+private fun ThresholdControl(
     range: ClosedFloatingPointRange<Float>,
     onValueChange: (ClosedFloatingPointRange<Float>) -> Unit
 ) {
@@ -55,7 +94,7 @@ fun ThresholdControl(
  * RGB 平均值开关组件
  */
 @Composable
-fun RgbAvgControl(
+private fun RgbAvgControl(
     isEnabled: Boolean,
     onChange: (Boolean) -> Unit
 ) {
