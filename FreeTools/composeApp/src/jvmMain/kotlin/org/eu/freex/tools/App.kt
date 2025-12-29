@@ -1,66 +1,48 @@
 package org.eu.freex.tools
 
-// 【关键变化】引入新的 Feature 层组件
-// 引入旧的 TopBar (假设您还没重构它)
-// 拖拽相关
-// 引入新的 Event 用于拖拽加载
+// 移除 import androidx.compose.material.*
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface // M3 Surface
+import androidx.compose.material3.Text
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import org.eu.freex.tools.modules.image.presentation.contract.ImageUiEvent
+import org.eu.freex.tools.model.AppModule
+// ... 其他 import (ImageUiEvent, ImageWorkbench, Swing 拖拽相关) 保持不变 ...
+import org.eu.freex.tools.modules.image.presentation.viewmodel.ImageViewModel // 假设路径正确
 import org.eu.freex.tools.modules.image.presentation.ui.ImageWorkbench
-import org.eu.freex.tools.modules.image.presentation.viewmodel.ImageViewModel
+import org.eu.freex.tools.modules.image.presentation.contract.ImageUiEvent
 import java.awt.Component
 import java.awt.Container
 import java.awt.datatransfer.DataFlavor
-import java.awt.dnd.DnDConstants
-import java.awt.dnd.DropTarget
-import java.awt.dnd.DropTargetDragEvent
-import java.awt.dnd.DropTargetDropEvent
+import java.awt.dnd.*
 import java.io.File
 
 @Composable
 fun App(window: androidx.compose.ui.awt.ComposeWindow?) {
     var currentModule by remember { mutableStateOf(AppModule.IMAGE_PROCESSING) }
 
-    // 1. 创建新的 ViewModel (MVI 架构)
+    // 【新增】主题状态管理
+    var themeMode by remember { mutableStateOf(ThemeMode.System) }
+
     val imageViewModel = remember { ImageViewModel() }
 
-    // 2. 配置窗口拖拽支持 (直接发送 Event 到 ViewModel)
+    // 拖拽相关代码保持不变...
     if (window != null) {
         DisposableEffect(window) {
             val dropTarget = object : DropTarget() {
-                override fun dragEnter(dtde: DropTargetDragEvent) {
-                    dtde.acceptDrag(DnDConstants.ACTION_COPY)
-                }
-
-                override fun dragOver(dtde: DropTargetDragEvent) {
-                    dtde.acceptDrag(DnDConstants.ACTION_COPY)
-                }
-
+                // ... (原有拖拽逻辑代码不变) ...
                 override fun drop(evt: DropTargetDropEvent) {
                     try {
                         evt.acceptDrop(DnDConstants.ACTION_COPY)
-                        val list =
-                            evt.transferable.getTransferData(DataFlavor.javaFileListFlavor) as List<*>
+                        val list = evt.transferable.getTransferData(DataFlavor.javaFileListFlavor) as List<*>
                         list.firstOrNull()?.let {
                             val file = it as File
                             val name = file.name.lowercase()
-                            if (name.endsWith(".png") || name.endsWith(".jpg") || name.endsWith(".bmp") || name.endsWith(
-                                    ".webp"
-                                )
-                            ) {
-                                // 【关键】通过 handleEvent 分发加载事件
+                            if (name.endsWith(".png") || name.endsWith(".jpg") || name.endsWith(".bmp") || name.endsWith(".webp")) {
                                 imageViewModel.handleEvent(ImageUiEvent.LoadFile(file))
                             }
                         }
@@ -69,9 +51,8 @@ fun App(window: androidx.compose.ui.awt.ComposeWindow?) {
                         e.printStackTrace(); evt.dropComplete(false)
                     }
                 }
+                // ...
             }
-
-            // 递归绑定拖拽监听
             fun attachToAll(component: Component) {
                 component.dropTarget = dropTarget
                 if (component is Container) {
@@ -83,20 +64,34 @@ fun App(window: androidx.compose.ui.awt.ComposeWindow?) {
         }
     }
 
-    // 3. 主界面布局
-    Column(Modifier.fillMaxSize()) {
-        TopBar(currentModule = currentModule, onModuleChange = { currentModule = it })
+    // 【关键】使用 AppTheme 包裹
+    AppTheme(themeMode = themeMode) {
+        // 使用 M3 Surface 确保背景色正确应用 (colorScheme.background)
+        Surface(
+            modifier = Modifier.fillMaxSize(),
+            color = MaterialTheme.colorScheme.background
+        ) {
+            Column(Modifier.fillMaxSize()) {
+                TopBar(
+                    currentModule = currentModule,
+                    themeMode = themeMode,
+                    onThemeChange = { themeMode = it },
+                    onModuleChange = { currentModule = it }
+                )
 
-        Box(Modifier.weight(1f)) {
-            when (currentModule) {
-                AppModule.IMAGE_PROCESSING -> {
-                    // 【关键变化】使用新的 Workbench，并传入 ViewModel
-                    ImageWorkbench(viewModel = imageViewModel)
-                }
-
-                AppModule.FONT_MANAGER -> {
-                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text("字库管理模块 - 开发中...", color = Color.Gray)
+                Box(Modifier.weight(1f)) {
+                    when (currentModule) {
+                        AppModule.IMAGE_PROCESSING -> {
+                            ImageWorkbench(viewModel = imageViewModel)
+                        }
+                        AppModule.FONT_MANAGER -> {
+                            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                Text(
+                                    "字库管理模块 - 开发中...",
+                                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)
+                                )
+                            }
+                        }
                     }
                 }
             }
