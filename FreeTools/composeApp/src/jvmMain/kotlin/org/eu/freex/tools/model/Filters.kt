@@ -108,9 +108,7 @@ val CommonFilterType.description: String
 
 // --- 5. 常量定义 ---
 object FilterConstantsUI {
-    const val TITLE_COLOR = "针对彩色进行处理:"
-    const val TITLE_BW = "针对黑白进行处理:"
-    const val TITLE_COMMON = "通用预处理:"
-
-    val THEME_COLOR = Color(0xFFFF8A80)
+    const val GROUP_COLOR = "针对彩色进行处理:"
+    const val GROUP_BINARY = "针对黑白进行处理:"
+    const val GROUP_COMMON = "通用预处理:"
 }

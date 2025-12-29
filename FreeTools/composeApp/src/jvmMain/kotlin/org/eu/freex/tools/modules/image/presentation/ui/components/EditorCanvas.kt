@@ -13,8 +13,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.material.Surface
-import androidx.compose.material.Text
+import androidx.compose.material3.MaterialTheme // 【修改】引入 Material3
+import androidx.compose.material3.Surface      // 【修改】引入 Material3 Surface
+import androidx.compose.material3.Text         // 【修改】引入 Material3 Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -23,10 +24,10 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip // 新增：用于裁剪
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.RectangleShape // 新增：裁剪形状
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.toComposeImageBitmap
@@ -35,7 +36,6 @@ import androidx.compose.ui.input.pointer.onPointerEvent
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import org.eu.freex.tools.model.WorkImage
 
 @OptIn(ExperimentalComposeUiApi::class)
@@ -56,6 +56,7 @@ fun EditorCanvas(
     val currentOffset by rememberUpdatedState(offset)
     val currentOnTransformChange by rememberUpdatedState(onTransformChange)
 
+    // 滚轮缩放逻辑
     val scrollModifier = Modifier.onPointerEvent(PointerEventType.Scroll) {
         val change = it.changes.first()
         val scrollDelta = change.scrollDelta.y
@@ -64,7 +65,7 @@ fun EditorCanvas(
         currentOnTransformChange(newScale, currentOffset)
     }
 
-    // 拖拽逻辑 (保持之前的修复)
+    // 拖拽逻辑
     val smoothDragModifier = Modifier.pointerInput(Unit) {
         var startDragOffset = Offset.Zero
         var dragOffsetAccumulator = Offset.Zero
@@ -83,6 +84,7 @@ fun EditorCanvas(
         )
     }
 
+    // 悬浮取色逻辑
     val hoverModifier = Modifier.onPointerEvent(PointerEventType.Move) {
         val pos = it.changes.first().position
         val imgX = ((pos.x - offset.x) / scale).toInt()
@@ -107,12 +109,14 @@ fun EditorCanvas(
 
     BoxWithConstraints(
         modifier = modifier
-            .background(Color(0xFF1E1E1E))
-            .clip(RectangleShape) // 【关键修复】将内容裁剪至组件边界内
+            // 【修改】使用主题语义颜色，不再硬编码 0xFF1E1E1E
+            .background(MaterialTheme.colorScheme.surfaceContainer)
+            .clip(RectangleShape)
             .then(scrollModifier)
             .then(smoothDragModifier)
             .then(hoverModifier)
     ) {
+        // 初始加载时居中图片
         LaunchedEffect(workImage) {
             if (workImage != null) {
                 val img = workImage.bufferedImage
@@ -148,18 +152,40 @@ fun EditorCanvas(
 
 @Composable
 private fun PixelMagnifier(modifier: Modifier, color: Color, pos: IntOffset) {
+    // 【修改】适配主题的 HUD 样式
+    val containerColor = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.95f)
+    val contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+    val borderColor = MaterialTheme.colorScheme.outlineVariant
+
     Surface(
         modifier = modifier.padding(8.dp),
-        color = Color.Black.copy(alpha = 0.7f),
-        shape = androidx.compose.foundation.shape.RoundedCornerShape(4.dp)
+        color = containerColor, // 【修改】使用主题色
+        contentColor = contentColor, // 【修改】确保文字可见
+        shape = androidx.compose.foundation.shape.RoundedCornerShape(4.dp),
+        shadowElevation = 4.dp // 【修改】增加阴影
     ) {
         Column(Modifier.padding(8.dp)) {
-            Text("X: ${pos.x}, Y: ${pos.y}", color = Color.White, fontSize = 10.sp)
+            // 【修改】使用 labelSmall 样式
+            Text("X: ${pos.x}, Y: ${pos.y}", style = MaterialTheme.typography.labelSmall)
+
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(12.dp).background(color).border(1.dp, Color.White))
+                Box(
+                    Modifier
+                        .size(12.dp)
+                        .background(color)
+                        // 【修改】边框颜色适配浅色背景
+                        .border(1.dp, borderColor)
+                )
                 Spacer(Modifier.width(4.dp))
-                val hex = "#%02X%02X%02X".format(color.red.times(255).toInt(), color.green.times(255).toInt(), color.blue.times(255).toInt())
-                Text(hex, color = Color.White, fontSize = 10.sp)
+
+                val hex = "#%02X%02X%02X".format(
+                    color.red.times(255).toInt(),
+                    color.green.times(255).toInt(),
+                    color.blue.times(255).toInt()
+                )
+
+                // 【修改】使用 labelSmall 样式
+                Text(hex, style = MaterialTheme.typography.labelSmall)
             }
         }
     }

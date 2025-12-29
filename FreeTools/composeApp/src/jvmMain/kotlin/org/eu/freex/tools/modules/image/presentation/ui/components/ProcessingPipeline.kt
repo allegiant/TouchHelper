@@ -9,6 +9,7 @@ import androidx.compose.material.Icon
 import androidx.compose.material.Text
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -33,22 +34,25 @@ fun ProcessingPipeline(
     onSelect: (Int) -> Unit,
     onDelete: (Int) -> Unit
 ) {
+    // 【修改】容器背景色
+    val containerColor = MaterialTheme.colorScheme.surfaceContainer
+    val titleBarColor = MaterialTheme.colorScheme.surface // 稍微深/浅一点以区分标题
     Column(
-        modifier = modifier.background(Color(0xFF3C3C3C))
+        modifier = modifier.background(containerColor)
     ) {
         // 标题栏
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(24.dp)
-                .background(Color(0xFF252526))
+                .height(28.dp)
+                .background(titleBarColor)
                 .padding(horizontal = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
                 "PIPELINE (处理流水线)",
-                color = Color.LightGray,
-                fontSize = 11.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant, // 【修改】
+                style = MaterialTheme.typography.labelSmall,
                 fontWeight = FontWeight.Bold
             )
         }
@@ -93,15 +97,15 @@ private fun PipelineStepItem(
     onClick: () -> Unit,
     onDelete: () -> Unit
 ) {
+    val borderColor = if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent
+    val backgroundColor = MaterialTheme.colorScheme.surfaceVariant // 卡片背景
+
     Column(
         modifier = Modifier
             .width(100.dp)
             .fillMaxHeight()
-            .background(Color(0xFF2B2B2B))
-            .border(
-                width = if (isSelected) 2.dp else 0.dp,
-                color = if (isSelected) Color(0xFF007ACC) else Color.Transparent
-            )
+            .background(backgroundColor)
+            .border(width = if (isSelected) 2.dp else 0.dp, color = borderColor)
             .clickable(onClick = onClick)
     ) {
         // 【优化】缩略图懒加载
@@ -114,33 +118,37 @@ private fun PipelineStepItem(
                 bitmap = thumbBitmap,
                 contentDescription = null,
                 contentScale = ContentScale.Fit,
-                modifier = Modifier.fillMaxSize().background(Color.Black)
+                modifier = Modifier.fillMaxSize().background(Color.Black) // 图片预览背景保持黑
             )
 
             // 步骤序号
             Box(
                 modifier = Modifier
                     .align(Alignment.TopStart)
-                    .background(Color.Black.copy(0.6f))
+                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.7f))
                     .padding(2.dp)
             ) {
-                Text("${index}", color = Color.White, fontSize = 10.sp)
+                Text(
+                    "$index",
+                    color = MaterialTheme.colorScheme.onSurface,
+                    style = MaterialTheme.typography.labelSmall
+                )
             }
 
-            // 删除按钮 (右上角)
+            // 删除按钮
             if (isDeletable) {
                 Box(
                     modifier = Modifier
                         .align(Alignment.TopEnd)
                         .size(20.dp)
-                        .background(Color.Red.copy(0.7f))
+                        .background(MaterialTheme.colorScheme.error.copy(alpha = 0.8f)) // 【修改】语义错误色
                         .clickable(onClick = onDelete),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         Icons.Default.Close,
                         contentDescription = "Delete",
-                        tint = Color.White,
+                        tint = MaterialTheme.colorScheme.onError,
                         modifier = Modifier.size(14.dp)
                     )
                 }
@@ -148,17 +156,20 @@ private fun PipelineStepItem(
         }
 
         // 标签区域
+        val labelBg = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant
+        val labelColor = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(24.dp)
-                .background(if (isSelected) Color(0xFF007ACC) else Color(0xFF454545)),
+                .background(labelBg),
             contentAlignment = Alignment.Center
         ) {
             Text(
                 item.label,
-                color = Color.White,
-                fontSize = 11.sp,
+                color = labelColor,
+                style = MaterialTheme.typography.labelSmall,
                 maxLines = 1
             )
         }

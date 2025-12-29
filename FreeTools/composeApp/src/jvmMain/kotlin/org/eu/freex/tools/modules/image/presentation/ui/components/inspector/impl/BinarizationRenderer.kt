@@ -8,23 +8,21 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.material.Checkbox
-import androidx.compose.material.CheckboxDefaults
-import androidx.compose.material.ExperimentalMaterialApi
-import androidx.compose.material.RangeSlider
-import androidx.compose.material.SliderDefaults
-import androidx.compose.material.Text
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CheckboxDefaults
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.RangeSlider
+import androidx.compose.material3.SliderDefaults
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import org.eu.freex.tools.modules.image.presentation.contract.ImageUiEvent
 import org.eu.freex.tools.modules.image.presentation.ui.components.inspector.core.FilterRenderer
 import org.eu.freex.tools.modules.image.presentation.ui.components.inspector.core.LocalImageViewModel
-import org.eu.freex.tools.modules.image.presentation.contract.ImageUiEvent
 
 object BinarizationRenderer : FilterRenderer {
 
@@ -59,7 +57,6 @@ object BinarizationRenderer : FilterRenderer {
 /**
  * 阈值调节滑块组件
  */
-@OptIn(ExperimentalMaterialApi::class)
 @Composable
 private fun ThresholdControl(
     range: ClosedFloatingPointRange<Float>,
@@ -70,11 +67,15 @@ private fun ThresholdControl(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Text("阈值范围", color = Color.Gray, fontSize = 12.sp)
+            Text(
+                "阈值范围",
+                color = MaterialTheme.colorScheme.onSurfaceVariant, // 【修改】使用语义颜色
+                style = MaterialTheme.typography.labelMedium // 【修改】使用语义排版
+            )
             Text(
                 "${range.start.toInt()} - ${range.endInclusive.toInt()}",
-                color = Color.Gray,
-                fontSize = 12.sp
+                color = MaterialTheme.colorScheme.onSurfaceVariant, // 【修改】
+                style = MaterialTheme.typography.labelMedium
             )
         }
         RangeSlider(
@@ -82,9 +83,9 @@ private fun ThresholdControl(
             onValueChange = onValueChange,
             valueRange = 0f..255f,
             colors = SliderDefaults.colors(
-                thumbColor = Color(0xFF007ACC),
-                activeTrackColor = Color(0xFF007ACC),
-                inactiveTrackColor = Color(0xFF3E3E42)
+                thumbColor = MaterialTheme.colorScheme.primary, // 【修改】主色
+                activeTrackColor = MaterialTheme.colorScheme.primary,
+                inactiveTrackColor = MaterialTheme.colorScheme.surfaceVariant // 【修改】适配深/浅模式的轨道色
             )
         )
     }
@@ -105,8 +106,15 @@ private fun RgbAvgControl(
         Checkbox(
             checked = isEnabled,
             onCheckedChange = onChange,
-            colors = CheckboxDefaults.colors(checkedColor = Color(0xFF007ACC))
+            colors = CheckboxDefaults.colors(
+                checkedColor = MaterialTheme.colorScheme.primary, // 【修改】
+                uncheckedColor = MaterialTheme.colorScheme.outline // 【修改】未选中时的边框色
+            )
         )
-        Text("使用 RGB 平均值", color = Color.LightGray, fontSize = 12.sp)
+        Text(
+            "使用 RGB 平均值",
+            color = MaterialTheme.colorScheme.onSurface, // 【修改】确保文字清晰
+            style = MaterialTheme.typography.bodyMedium
+        )
     }
 }

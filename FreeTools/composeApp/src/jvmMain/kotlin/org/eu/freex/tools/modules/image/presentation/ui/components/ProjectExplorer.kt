@@ -5,7 +5,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.*
+import androidx.compose.material3.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
@@ -41,13 +41,16 @@ fun ProjectExplorer(
     onImportFile: (File) -> Unit,
     onScreenCapture: () -> Unit
 ) {
+    // 获取当前主题的颜色
+    val surfaceColor = MaterialTheme.colorScheme.surface
+    val borderColor = MaterialTheme.colorScheme.outlineVariant // M3 推荐的边框色
     Column(
         modifier = modifier
-            .background(Color(0xFF252526)) // VSCode 风格深色背景
+            .background(surfaceColor)
             .drawBehind {
                 // 右侧分割线
                 drawLine(
-                    color = Color(0xFF3E3E42),
+                    color = borderColor,
                     start = Offset(size.width, 0f),
                     end = Offset(size.width, size.height),
                     strokeWidth = 1.dp.toPx()
@@ -62,8 +65,8 @@ fun ProjectExplorer(
         ) {
             Text(
                 text = "工程资源",
-                color = Color.White,
-                fontSize = 12.sp,
+                color = MaterialTheme.colorScheme.onSurface,
+                style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.Bold
             )
             // 导入按钮
@@ -71,12 +74,12 @@ fun ProjectExplorer(
                 onClick = {
                     ImageUtils.pickFile()?.let { onImportFile(it) }
                 },
-                modifier = Modifier.size(20.dp)
+                modifier = Modifier.size(24.dp)
             ) {
                 Icon(
                     imageVector = Icons.Default.Add,
                     contentDescription = "Import",
-                    tint = Color.LightGray
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant // 【修改】次级图标色
                 )
             }
         }
@@ -87,14 +90,15 @@ fun ProjectExplorer(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 8.dp)
-                .height(28.dp),
+                .height(36.dp),
             contentPadding = PaddingValues(0.dp),
+            shape = RoundedCornerShape(4.dp), // 保持您喜欢的方角风格
             colors = ButtonDefaults.buttonColors(
-                backgroundColor = Color(0xFF007ACC), // VSCode 蓝色
-                contentColor = Color.White
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary
             )
         ) {
-            Text("截图导入", fontSize = 12.sp)
+            Text("截图导入", style = MaterialTheme.typography.labelMedium)
         }
 
         Spacer(Modifier.height(8.dp))
@@ -128,14 +132,24 @@ private fun ResourceItem(
     val imageBitmap = remember(item.bufferedImage) {
         item.bufferedImage.toComposeImageBitmap()
     }
+    // 【修改】选中态使用 SecondaryContainer 或 SurfaceVariant
+    val backgroundColor = if (isSelected) {
+        MaterialTheme.colorScheme.secondaryContainer
+    } else {
+        Color.Transparent
+    }
+
+    // 【修改】选中态文字颜色
+    val textColor = if (isSelected) {
+        MaterialTheme.colorScheme.onSecondaryContainer
+    } else {
+        MaterialTheme.colorScheme.onSurfaceVariant
+    }
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(36.dp)
-            .background(
-                if (isSelected) Color(0xFF37373D) else Color.Transparent,
-                RoundedCornerShape(4.dp)
-            )
+            .height(40.dp)
+            .background(backgroundColor, RoundedCornerShape(4.dp))
             .clickable(onClick = onClick)
             .padding(horizontal = 4.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -155,8 +169,8 @@ private fun ResourceItem(
         // 文件名
         Text(
             text = item.name,
-            color = Color.LightGray,
-            fontSize = 12.sp,
+            color = textColor,
+            style = MaterialTheme.typography.bodySmall,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f)
@@ -170,8 +184,8 @@ private fun ResourceItem(
             Icon(
                 imageVector = Icons.Default.Delete,
                 contentDescription = null,
-                tint = if (isSelected) Color.White else Color.Gray,
-                modifier = Modifier.size(12.dp)
+                tint = textColor.copy(alpha = 0.7f),
+                modifier = Modifier.size(16.dp)
             )
         }
     }

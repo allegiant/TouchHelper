@@ -8,14 +8,13 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.Text
+import androidx.compose.material3.MaterialTheme // 【修改】引入 Material3
+import androidx.compose.material3.Text         // 【修改】引入 Material3 Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import org.eu.freex.tools.model.FilterConstantsUI
 import org.eu.freex.tools.model.label
 import uniffi.touch_core.BlackWhiteFilterType
@@ -38,27 +37,24 @@ fun FilterSelectionList(
         modifier = modifier
             .verticalScroll(rememberScrollState())
             .padding(12.dp),
-        verticalArrangement = Arrangement.spacedBy(20.dp)
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // 1. 彩色处理组
         FilterGroup(
-            title = FilterConstantsUI.TITLE_COLOR,
+            title = FilterConstantsUI.GROUP_COLOR,
             filters = colorFilters,
             currentFilter = currentFilter,
             onSelect = onFilterChange
         )
 
-        // 2. 黑白处理组
         FilterGroup(
-            title = FilterConstantsUI.TITLE_BW,
+            title = FilterConstantsUI.GROUP_BINARY,
             filters = bwFilters,
             currentFilter = currentFilter,
             onSelect = onFilterChange
         )
 
-        // 3. 通用处理组
         FilterGroup(
-            title = FilterConstantsUI.TITLE_COMMON,
+            title = FilterConstantsUI.GROUP_COMMON,
             filters = commonFilters,
             currentFilter = currentFilter,
             onSelect = onFilterChange
@@ -76,8 +72,8 @@ private fun FilterGroup(
     Column {
         Text(
             text = title,
-            color = Color(0xFF569CD6),
-            fontSize = 11.sp,
+            color = MaterialTheme.colorScheme.primary,
+            style = MaterialTheme.typography.titleSmall,
             fontWeight = FontWeight.Bold,
             modifier = Modifier.padding(bottom = 8.dp)
         )
@@ -93,6 +89,7 @@ private fun FilterGroup(
                     for (i in 0 until 3) {
                         if (i < rowFilters.size) {
                             val filter = rowFilters[i]
+                            // 注意：FilterChip 已经在 SharedComponents.kt 中适配过颜色了
                             FilterChip(
                                 text = filter.label,
                                 isSelected = isSameFilter(currentFilter, filter),
