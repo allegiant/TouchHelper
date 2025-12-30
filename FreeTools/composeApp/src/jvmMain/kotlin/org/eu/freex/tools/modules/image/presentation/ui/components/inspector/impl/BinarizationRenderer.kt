@@ -20,7 +20,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import org.eu.freex.tools.model.BinarizationFilter
-import org.eu.freex.tools.modules.image.presentation.contract.ImageUiEvent
+import org.eu.freex.tools.modules.image.presentation.contract.events.UpdateFilter
 import org.eu.freex.tools.modules.image.presentation.ui.components.inspector.core.FilterRenderer
 import org.eu.freex.tools.modules.image.presentation.ui.components.inspector.core.LocalImageViewModel
 
@@ -46,7 +46,7 @@ object BinarizationRenderer : FilterRenderer {
                     )
 
                     // 【修改 4】发送事件，将新滤镜对象传回 ViewModel
-                    viewModel.handleEvent(ImageUiEvent.UpdateFilter(newFilter))
+                    viewModel.handleEvent(UpdateFilter(newFilter))
                 }
             )
             Spacer(Modifier.height(10.dp))
@@ -54,7 +54,7 @@ object BinarizationRenderer : FilterRenderer {
                 isEnabled = filter.isRgbAvg,
                 onChange = { isChecked ->
                     val newFilter = filter.copy(isRgbAvg = isChecked)
-                    viewModel.handleEvent(ImageUiEvent.UpdateFilter(newFilter))
+                    viewModel.handleEvent(UpdateFilter(newFilter))
                 }
             )
         }

@@ -30,7 +30,19 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.toOffset
 import org.eu.freex.tools.dialogs.CharMappingDialog
 import org.eu.freex.tools.dialogs.ScreenCropperDialog
-import org.eu.freex.tools.modules.image.presentation.contract.ImageUiEvent
+import org.eu.freex.tools.modules.image.presentation.contract.events.ChangePanelTab
+import org.eu.freex.tools.modules.image.presentation.contract.events.ColorPick
+import org.eu.freex.tools.modules.image.presentation.contract.events.ConfirmMapping
+import org.eu.freex.tools.modules.image.presentation.contract.events.ConfirmScreenCrop
+import org.eu.freex.tools.modules.image.presentation.contract.events.DeletePipelineStep
+import org.eu.freex.tools.modules.image.presentation.contract.events.DismissDialogs
+import org.eu.freex.tools.modules.image.presentation.contract.events.HoverCanvas
+import org.eu.freex.tools.modules.image.presentation.contract.events.LoadFile
+import org.eu.freex.tools.modules.image.presentation.contract.events.RemoveSourceImage
+import org.eu.freex.tools.modules.image.presentation.contract.events.SelectPipelineStep
+import org.eu.freex.tools.modules.image.presentation.contract.events.SelectSourceImage
+import org.eu.freex.tools.modules.image.presentation.contract.events.StartScreenCapture
+import org.eu.freex.tools.modules.image.presentation.contract.events.UpdateCanvasTransform
 import org.eu.freex.tools.modules.image.presentation.ui.components.EditorCanvas
 import org.eu.freex.tools.modules.image.presentation.ui.components.ProcessingPipeline
 import org.eu.freex.tools.modules.image.presentation.ui.components.ProjectExplorer
@@ -63,10 +75,10 @@ fun ImageWorkbench(
                     modifier = Modifier.width(260.dp).fillMaxHeight(),
                     sourceImages = state.sourceImages,
                     selectedIndex = state.selectedSourceIndex,
-                    onSelect = { viewModel.handleEvent(ImageUiEvent.SelectSourceImage(it)) },
-                    onImportFile = { file -> viewModel.handleEvent(ImageUiEvent.LoadFile(file)) },
-                    onScreenCapture = { viewModel.handleEvent(ImageUiEvent.StartScreenCapture) },
-                    onRemove = { viewModel.handleEvent(ImageUiEvent.RemoveSourceImage(it)) }
+                    onSelect = { viewModel.handleEvent(SelectSourceImage(it)) },
+                    onImportFile = { file -> viewModel.handleEvent(LoadFile(file)) },
+                    onScreenCapture = { viewModel.handleEvent(StartScreenCapture) },
+                    onRemove = { viewModel.handleEvent(RemoveSourceImage(it)) }
                 )
 
                 // --- 中间 ---
@@ -86,14 +98,14 @@ fun ImageWorkbench(
                             hoverColor = state.hoverColor,
                             hoverPos = state.hoverPixelPos,
                             onTransformChange = { s, o ->
-                                viewModel.handleEvent(ImageUiEvent.UpdateCanvasTransform(s, o))
+                                viewModel.handleEvent(UpdateCanvasTransform(s, o))
                             },
                             onHover = { pos, color ->
                                 val fixedPos = pos?.toOffset() ?: Offset.Zero
-                                viewModel.handleEvent(ImageUiEvent.HoverCanvas(fixedPos, color))
+                                viewModel.handleEvent(HoverCanvas(fixedPos, color))
                             },
                             onColorPick = { hex ->
-                                viewModel.handleEvent(ImageUiEvent.ColorPick(hex))
+                                viewModel.handleEvent(ColorPick(hex))
                             }
                         )
                     }
@@ -101,8 +113,8 @@ fun ImageWorkbench(
                         modifier = Modifier.fillMaxWidth().height(140.dp),
                         processChain = state.displayChain,
                         selectedIndex = state.selectedPipelineIndex,
-                        onSelect = { viewModel.handleEvent(ImageUiEvent.SelectPipelineStep(it)) },
-                        onDelete = { viewModel.handleEvent(ImageUiEvent.DeletePipelineStep(it)) }
+                        onSelect = { viewModel.handleEvent(SelectPipelineStep(it)) },
+                        onDelete = { viewModel.handleEvent(DeletePipelineStep(it)) }
                     )
                 }
 
@@ -111,7 +123,7 @@ fun ImageWorkbench(
                     InspectorPanel(
                         modifier = Modifier.width(320.dp).fillMaxHeight(),
                         selectedTab = state.rightPanelTabIndex,
-                        onTabChange = { viewModel.handleEvent(ImageUiEvent.ChangePanelTab(it)) },
+                        onTabChange = { viewModel.handleEvent(ChangePanelTab(it)) },
                     )
                 }
 
@@ -122,10 +134,10 @@ fun ImageWorkbench(
             if (state.isScreenCropperVisible && state.fullScreenCapture != null) {
                 ScreenCropperDialog(
                     fullScreenImage = state.fullScreenCapture!!,
-                    onDismiss = { viewModel.handleEvent(ImageUiEvent.DismissDialogs) },
+                    onDismiss = { viewModel.handleEvent(DismissDialogs) },
                     onCropConfirm = { cropped ->
                         viewModel.handleEvent(
-                            ImageUiEvent.ConfirmScreenCrop(
+                            ConfirmScreenCrop(
                                 cropped
                             )
                         )
@@ -136,8 +148,8 @@ fun ImageWorkbench(
             if (state.isMappingDialogVisible && state.mappingBitmap != null) {
                 CharMappingDialog(
                     bitmap = state.mappingBitmap!!.toComposeImageBitmap(),
-                    onDismiss = { viewModel.handleEvent(ImageUiEvent.DismissDialogs) },
-                    onConfirm = { char -> viewModel.handleEvent(ImageUiEvent.ConfirmMapping(char)) }
+                    onDismiss = { viewModel.handleEvent(DismissDialogs) },
+                    onConfirm = { char -> viewModel.handleEvent(ConfirmMapping(char)) }
                 )
             }
 

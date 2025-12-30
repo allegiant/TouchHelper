@@ -40,16 +40,15 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import org.eu.freex.tools.model.AppModule
-import org.eu.freex.tools.modules.image.presentation.contract.ImageUiEvent
+import org.eu.freex.tools.modules.image.presentation.contract.events.ExportImage
+import org.eu.freex.tools.modules.image.presentation.contract.events.LoadProject
+import org.eu.freex.tools.modules.image.presentation.contract.events.SaveProject
 import org.eu.freex.tools.modules.image.presentation.viewmodel.ImageViewModel
 import org.eu.freex.tools.theme.ThemeMode
 import org.eu.freex.tools.utils.ImageUtils
 import java.awt.FileDialog
 import java.awt.Frame
 import java.io.File
-import java.io.FilenameFilter
-import javax.swing.JFileChooser
-import javax.swing.filechooser.FileNameExtensionFilter
 
 // enum class AppModule 保持不变 (如果在其他文件没定义，请保留在这里)
 // enum class AppModule { IMAGE_PROCESSING, FONT_MANAGER }
@@ -183,8 +182,12 @@ fun FileMenu(viewModel: ImageViewModel) {
                 onClick = {
                     expanded = false
                     ImageUtils.pickFile()
-                    val file = showFileChooser(save = true, filterDesc = "FreeTools Project", ext = "fxproj")
-                    if (file != null) viewModel.handleEvent(ImageUiEvent.SaveProject(file))
+                    val file = showFileChooser(
+                        save = true,
+                        filterDesc = "FreeTools Project",
+                        ext = "fxproj"
+                    )
+                    if (file != null) viewModel.handleEvent(SaveProject(file))
                 },
                 leadingIcon = { Icon(Icons.Default.Save, null) }
             )
@@ -193,8 +196,12 @@ fun FileMenu(viewModel: ImageViewModel) {
                 text = { Text("打开工程") },
                 onClick = {
                     expanded = false
-                    val file = showFileChooser(save = false, filterDesc = "FreeTools Project", ext = "fxproj")
-                    if (file != null) viewModel.handleEvent(ImageUiEvent.LoadProject(file))
+                    val file = showFileChooser(
+                        save = false,
+                        filterDesc = "FreeTools Project",
+                        ext = "fxproj"
+                    )
+                    if (file != null) viewModel.handleEvent(LoadProject(file))
                 },
                 leadingIcon = { Icon(Icons.Default.FolderOpen, null) }
             )
@@ -206,7 +213,7 @@ fun FileMenu(viewModel: ImageViewModel) {
                 onClick = {
                     expanded = false
                     val file = showFileChooser(save = true, filterDesc = "PNG Image", ext = "png")
-                    if (file != null) viewModel.handleEvent(ImageUiEvent.ExportImage(file))
+                    if (file != null) viewModel.handleEvent(ExportImage(file))
                 }
             )
         }

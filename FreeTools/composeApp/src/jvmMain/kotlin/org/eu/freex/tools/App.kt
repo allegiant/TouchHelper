@@ -14,6 +14,7 @@ import org.eu.freex.tools.model.AppModule
 import org.eu.freex.tools.modules.image.presentation.viewmodel.ImageViewModel // 假设路径正确
 import org.eu.freex.tools.modules.image.presentation.ui.ImageWorkbench
 import org.eu.freex.tools.modules.image.presentation.contract.ImageUiEvent
+import org.eu.freex.tools.modules.image.presentation.contract.events.LoadFile
 import org.eu.freex.tools.theme.AppTheme
 import org.eu.freex.tools.theme.ThemeMode
 import java.awt.Component
@@ -44,7 +45,7 @@ fun App(window: androidx.compose.ui.awt.ComposeWindow?) {
                             val file = it as File
                             val name = file.name.lowercase()
                             if (name.endsWith(".png") || name.endsWith(".jpg") || name.endsWith(".bmp") || name.endsWith(".webp")) {
-                                imageViewModel.handleEvent(ImageUiEvent.LoadFile(file))
+                                imageViewModel.handleEvent(LoadFile(file))
                             }
                         }
                         evt.dropComplete(true)

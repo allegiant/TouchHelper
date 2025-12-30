@@ -22,6 +22,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import org.eu.freex.tools.modules.image.presentation.contract.ImageUiEvent
+import org.eu.freex.tools.modules.image.presentation.contract.events.ApplyCurrentFilter
+import org.eu.freex.tools.modules.image.presentation.contract.events.ModifyCurrentStep
+import org.eu.freex.tools.modules.image.presentation.contract.events.SelectFilter
 import org.eu.freex.tools.modules.image.presentation.ui.components.inspector.core.LocalImageViewModel
 
 /**
@@ -99,7 +102,7 @@ fun InspectorPanel(
                             modifier = Modifier.weight(1f),
                             currentFilter = state.currentFilter,
                             onFilterChange = { newFilter ->
-                                viewModel.handleEvent(ImageUiEvent.SelectFilter(newFilter))
+                                viewModel.handleEvent(SelectFilter(newFilter))
                             }
                         )
 
@@ -128,7 +131,7 @@ fun InspectorPanel(
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 // 按钮 1: 更新当前步骤 (使用 Tonal 按钮，层级稍低)
                                 Button(
-                                    onClick = { viewModel.handleEvent(ImageUiEvent.ModifyCurrentStep) },
+                                    onClick = { viewModel.handleEvent(ModifyCurrentStep) },
                                     modifier = Modifier.weight(1f).height(36.dp), // M3 标准高度通常为 40dp，这里保持紧凑 36dp
                                     colors = ButtonDefaults.buttonColors(
                                         containerColor = MaterialTheme.colorScheme.secondaryContainer,
@@ -142,7 +145,7 @@ fun InspectorPanel(
 
                                 // 按钮 2: 添加新步骤 (使用 Filled 按钮，主操作)
                                 Button(
-                                    onClick = { viewModel.handleEvent(ImageUiEvent.ApplyCurrentFilter) },
+                                    onClick = { viewModel.handleEvent(ApplyCurrentFilter) },
                                     modifier = Modifier.weight(1f).height(36.dp),
                                     colors = ButtonDefaults.buttonColors(
                                         containerColor = MaterialTheme.colorScheme.primary,
