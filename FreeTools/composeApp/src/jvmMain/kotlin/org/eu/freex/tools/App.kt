@@ -9,6 +9,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.viewmodel.compose.viewModel
 import org.eu.freex.tools.modules.image.domain.model.AppModule
 // ... 其他 import (ImageUiEvent, ImageWorkbench, Swing 拖拽相关) 保持不变 ...
 import org.eu.freex.tools.modules.image.presentation.viewmodel.ImageViewModel // 假设路径正确
@@ -16,6 +17,7 @@ import org.eu.freex.tools.modules.image.presentation.ui.ImageWorkbench
 import org.eu.freex.tools.modules.image.presentation.contract.events.LoadFile
 import org.eu.freex.tools.common.theme.AppTheme
 import org.eu.freex.tools.common.theme.ThemeMode
+import org.koin.compose.koinInject
 import java.awt.Component
 import java.awt.Container
 import java.awt.datatransfer.DataFlavor
@@ -29,7 +31,7 @@ fun App(window: androidx.compose.ui.awt.ComposeWindow?) {
     // 【新增】主题状态管理
     var themeMode by remember { mutableStateOf(ThemeMode.System) }
 
-    val imageViewModel = remember { ImageViewModel() }
+    val imageViewModel = koinInject<ImageViewModel>()
 
     // 拖拽相关代码保持不变...
     if (window != null) {
@@ -76,7 +78,7 @@ fun App(window: androidx.compose.ui.awt.ComposeWindow?) {
                 TopBar(
                     currentModule = currentModule,
                     themeMode = themeMode,
-                    viewModel = imageViewModel,
+                    viewModel =  imageViewModel,
                     onThemeChange = { themeMode = it },
                     onModuleChange = { currentModule = it }
                 )

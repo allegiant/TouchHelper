@@ -9,7 +9,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import org.eu.freex.tools.modules.image.data.repository.ImageRepositoryImpl
+import org.eu.freex.tools.modules.image.domain.repository.ImageRepository
 import org.eu.freex.tools.modules.image.domain.usecase.FilterProcessor
 import org.eu.freex.tools.modules.image.domain.usecase.ProjectProcessor
 import org.eu.freex.tools.modules.image.domain.usecase.ResourceProcessor
@@ -18,7 +18,9 @@ import org.eu.freex.tools.modules.image.presentation.contract.ImageActionScope
 import org.eu.freex.tools.modules.image.presentation.contract.ImageUiEvent
 import org.eu.freex.tools.modules.image.presentation.contract.ImageUiState
 
-class ImageViewModel : ViewModel(), ImageActionScope {
+class ImageViewModel(
+    private val repository: ImageRepository
+) : ViewModel(), ImageActionScope {
 
     // 1. 状态管理
     private val _uiState = MutableStateFlow(ImageUiState())
@@ -30,7 +32,6 @@ class ImageViewModel : ViewModel(), ImageActionScope {
     val uiEffect = _uiEffect.receiveAsFlow()
 
     // 3. 依赖注入
-    private val repository = ImageRepositoryImpl()
     override val filterProcessor = FilterProcessor(repository)
     override val resourceProcessor = ResourceProcessor(repository)
     override val segmentationProcessor = SegmentationProcessor(repository)

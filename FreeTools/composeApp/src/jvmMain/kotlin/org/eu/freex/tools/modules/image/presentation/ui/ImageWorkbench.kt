@@ -49,10 +49,11 @@ import org.eu.freex.tools.modules.image.presentation.ui.components.ProjectExplor
 import org.eu.freex.tools.modules.image.presentation.ui.components.inspector.InspectorPanel
 import org.eu.freex.tools.modules.image.presentation.ui.components.inspector.core.LocalImageViewModel
 import org.eu.freex.tools.modules.image.presentation.viewmodel.ImageViewModel
+import org.koin.compose.koinInject
 
 @Composable
 fun ImageWorkbench(
-    viewModel: ImageViewModel = remember { ImageViewModel() }
+    viewModel: ImageViewModel = koinInject()
 ) {
     val state by viewModel.uiState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }

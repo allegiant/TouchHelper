@@ -28,6 +28,8 @@ kotlin {
             implementation("org.jetbrains.exposed:exposed-core:$exposedVersion")
             implementation("org.jetbrains.exposed:exposed-jdbc:$exposedVersion")
             implementation("org.jetbrains.exposed:exposed-dao:$exposedVersion") // 可选，如果用 DAO 模式
+            implementation(libs.koin.core)
+            implementation(libs.koin.compose)
 
             // 用于序列化滤镜参数 (Map -> JSON String)
             implementation(libs.kotlinx.serialization.json)

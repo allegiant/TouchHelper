@@ -46,6 +46,7 @@ import org.eu.freex.tools.modules.image.presentation.contract.events.SaveProject
 import org.eu.freex.tools.modules.image.presentation.viewmodel.ImageViewModel
 import org.eu.freex.tools.common.theme.ThemeMode
 import org.eu.freex.tools.common.utils.ImageUtils
+import org.koin.compose.koinInject
 import java.awt.FileDialog
 import java.awt.Frame
 import java.io.File
@@ -57,7 +58,7 @@ import java.io.File
 fun TopBar(
     currentModule: AppModule,
     themeMode: ThemeMode,
-    viewModel: ImageViewModel, // 传入 ViewModel 以便发送事件
+    viewModel: ImageViewModel,
     onThemeChange: (ThemeMode) -> Unit,
     onModuleChange: (AppModule) -> Unit
 ) {
