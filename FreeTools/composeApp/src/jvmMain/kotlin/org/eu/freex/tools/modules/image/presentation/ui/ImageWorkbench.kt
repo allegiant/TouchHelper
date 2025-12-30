@@ -28,8 +28,8 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.toComposeImageBitmap
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.toOffset
-import org.eu.freex.tools.dialogs.CharMappingDialog
-import org.eu.freex.tools.dialogs.ScreenCropperDialog
+import org.eu.freex.tools.modules.image.presentation.ui.dialogs.CharMappingDialog
+import org.eu.freex.tools.modules.image.presentation.ui.dialogs.ScreenCropperDialog
 import org.eu.freex.tools.modules.image.presentation.contract.events.ChangePanelTab
 import org.eu.freex.tools.modules.image.presentation.contract.events.ColorPick
 import org.eu.freex.tools.modules.image.presentation.contract.events.ConfirmMapping

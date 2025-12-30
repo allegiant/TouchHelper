@@ -39,13 +39,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import org.eu.freex.tools.model.AppModule
+import org.eu.freex.tools.modules.image.domain.model.AppModule
 import org.eu.freex.tools.modules.image.presentation.contract.events.ExportImage
 import org.eu.freex.tools.modules.image.presentation.contract.events.LoadProject
 import org.eu.freex.tools.modules.image.presentation.contract.events.SaveProject
 import org.eu.freex.tools.modules.image.presentation.viewmodel.ImageViewModel
-import org.eu.freex.tools.theme.ThemeMode
-import org.eu.freex.tools.utils.ImageUtils
+import org.eu.freex.tools.common.theme.ThemeMode
+import org.eu.freex.tools.common.utils.ImageUtils
 import java.awt.FileDialog
 import java.awt.Frame
 import java.io.File

@@ -1,8 +1,8 @@
 package org.eu.freex.tools.modules.image.domain.usecase
 
-import org.eu.freex.tools.model.WorkImage
+import org.eu.freex.tools.modules.image.domain.model.WorkImage
 import org.eu.freex.tools.modules.image.domain.repository.ImageRepository
-import org.eu.freex.tools.utils.ImageUtils
+import org.eu.freex.tools.common.utils.ImageUtils
 import java.io.File
 
 /**

@@ -36,7 +36,7 @@ import androidx.compose.ui.input.pointer.onPointerEvent
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
-import org.eu.freex.tools.model.WorkImage
+import org.eu.freex.tools.modules.image.domain.model.WorkImage
 
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable

@@ -19,8 +19,7 @@ import androidx.compose.ui.graphics.toComposeImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import org.eu.freex.tools.model.WorkImage
+import org.eu.freex.tools.modules.image.domain.model.WorkImage
 
 /**
  * 3. 底部流水线 (ProcessingPipeline)

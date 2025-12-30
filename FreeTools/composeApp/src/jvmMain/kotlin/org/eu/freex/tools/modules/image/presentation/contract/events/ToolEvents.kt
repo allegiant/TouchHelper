@@ -3,13 +3,13 @@ package org.eu.freex.tools.modules.image.presentation.contract.events
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
-import org.eu.freex.tools.model.AppSegmentation
-import org.eu.freex.tools.model.AutoSegmentation
-import org.eu.freex.tools.model.GridParams
-import org.eu.freex.tools.model.GridSegmentation
+import org.eu.freex.tools.modules.image.domain.model.AppSegmentation
+import org.eu.freex.tools.modules.image.domain.model.AutoSegmentation
+import org.eu.freex.tools.modules.image.domain.model.GridParams
+import org.eu.freex.tools.modules.image.domain.model.GridSegmentation
 import org.eu.freex.tools.modules.image.presentation.contract.ImageActionScope
 import org.eu.freex.tools.modules.image.presentation.contract.ImageUiEvent
-import org.eu.freex.tools.utils.ImageUtils
+import org.eu.freex.tools.common.utils.ImageUtils
 
 // --- 切割 ---
 object PerformSegmentation : ImageUiEvent {

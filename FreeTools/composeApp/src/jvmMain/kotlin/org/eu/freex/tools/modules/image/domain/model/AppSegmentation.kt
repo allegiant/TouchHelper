@@ -1,4 +1,4 @@
-package org.eu.freex.tools.model
+package org.eu.freex.tools.modules.image.domain.model
 
 
 // 引入 Rust 生成的顶层函数

@@ -1,11 +1,9 @@
 package org.eu.freex.tools.modules.image.presentation.contract.events
 
-import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import org.eu.freex.tools.model.AppFilter
-import org.eu.freex.tools.model.BinarizationFilter
+import org.eu.freex.tools.modules.image.domain.model.AppFilter
+import org.eu.freex.tools.modules.image.domain.model.BinarizationFilter
 import org.eu.freex.tools.modules.image.presentation.contract.ImageActionScope
 import org.eu.freex.tools.modules.image.presentation.contract.ImageUiEvent
 import org.eu.freex.tools.modules.image.presentation.contract.getPrevStepImage

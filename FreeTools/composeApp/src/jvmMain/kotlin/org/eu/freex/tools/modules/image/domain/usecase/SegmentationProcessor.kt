@@ -1,7 +1,7 @@
 package org.eu.freex.tools.modules.image.domain.usecase
 
-import org.eu.freex.tools.model.AppSegmentation
-import org.eu.freex.tools.model.WorkImage
+import org.eu.freex.tools.modules.image.domain.model.AppSegmentation
+import org.eu.freex.tools.modules.image.domain.model.WorkImage
 import org.eu.freex.tools.modules.image.domain.repository.ImageRepository
 import androidx.compose.ui.geometry.Rect
 

@@ -15,13 +15,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import org.eu.freex.tools.model.AppFilter
-import org.eu.freex.tools.model.BinarizationFilter
-import org.eu.freex.tools.model.BlackWhiteInvertFilter
-import org.eu.freex.tools.model.ColorInvertFilter
-import org.eu.freex.tools.model.DenoiseFilter
-import org.eu.freex.tools.model.GrayscaleFilter
-import org.eu.freex.tools.model.ViewFilter
+import org.eu.freex.tools.modules.image.domain.model.AppFilter
+import org.eu.freex.tools.modules.image.domain.model.BinarizationFilter
+import org.eu.freex.tools.modules.image.domain.model.BlackWhiteInvertFilter
+import org.eu.freex.tools.modules.image.domain.model.ColorInvertFilter
+import org.eu.freex.tools.modules.image.domain.model.DenoiseFilter
+import org.eu.freex.tools.modules.image.domain.model.GrayscaleFilter
+import org.eu.freex.tools.modules.image.domain.model.ViewFilter
 
 
 @Composable

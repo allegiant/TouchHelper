@@ -4,10 +4,10 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.IntOffset
-import org.eu.freex.tools.model.AppFilter
-import org.eu.freex.tools.model.GridParams
-import org.eu.freex.tools.model.ViewFilter
-import org.eu.freex.tools.model.WorkImage
+import org.eu.freex.tools.modules.image.domain.model.AppFilter
+import org.eu.freex.tools.modules.image.domain.model.GridParams
+import org.eu.freex.tools.modules.image.domain.model.ViewFilter
+import org.eu.freex.tools.modules.image.domain.model.WorkImage
 import java.awt.image.BufferedImage
 
 data class ImageUiState(

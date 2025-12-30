@@ -1,4 +1,4 @@
-package org.eu.freex.tools.dialogs
+package org.eu.freex.tools.modules.image.presentation.ui.dialogs
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -25,7 +25,7 @@ import androidx.compose.ui.window.rememberWindowState
 import java.awt.image.BufferedImage
 import kotlin.math.max
 import kotlin.math.min
-import org.eu.freex.tools.utils.ImageUtils
+import org.eu.freex.tools.common.utils.ImageUtils
 
 @Composable
 fun ScreenCropperDialog(

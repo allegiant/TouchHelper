@@ -2,7 +2,7 @@ package org.eu.freex.tools.modules.image.presentation.contract.events
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import org.eu.freex.tools.model.WorkImage
+import org.eu.freex.tools.modules.image.domain.model.WorkImage
 import org.eu.freex.tools.modules.image.presentation.contract.ImageActionScope
 import org.eu.freex.tools.modules.image.presentation.contract.ImageUiEvent
 import java.io.File

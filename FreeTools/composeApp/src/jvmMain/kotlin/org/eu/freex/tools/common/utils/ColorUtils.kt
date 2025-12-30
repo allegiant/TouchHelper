@@ -1,4 +1,4 @@
-package org.eu.freex.tools.utils
+package org.eu.freex.tools.common.utils
 
 import androidx.compose.ui.graphics.Color
 import uniffi.touch_core.ColorRule

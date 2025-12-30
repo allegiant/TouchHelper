@@ -1,11 +1,13 @@
-package org.eu.freex.tools.utils
+package org.eu.freex.tools.common.utils
 
+import androidx.compose.ui.geometry.Rect
 import java.awt.FileDialog
 import java.awt.Frame
 import java.awt.Rectangle
 import java.awt.Robot
 import java.awt.Toolkit
 import java.awt.image.BufferedImage
+import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FilenameFilter
 import javax.imageio.ImageIO
@@ -43,7 +45,7 @@ object ImageUtils {
         return Robot().createScreenCapture(screenRect)
     }
 
-    fun cropImage(image: BufferedImage, rect: androidx.compose.ui.geometry.Rect): BufferedImage {
+    fun cropImage(image: BufferedImage, rect: Rect): BufferedImage {
         val x = rect.left.toInt().coerceAtLeast(0)
         val y = rect.top.toInt().coerceAtLeast(0)
         val w = rect.width.toInt().coerceAtMost(image.width - x)
@@ -110,7 +112,7 @@ object ImageUtils {
     // 保留旧方法作为兼容或备用
     @Deprecated("性能较差，建议迁移到 Rust Raw Pixel 接口")
     fun bufferedImageToBytes(image: BufferedImage, format: String = "png"): ByteArray {
-        val outputStream = java.io.ByteArrayOutputStream()
+        val outputStream = ByteArrayOutputStream()
         ImageIO.write(image, format, outputStream)
         return outputStream.toByteArray()
     }

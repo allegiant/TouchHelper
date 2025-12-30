@@ -2,13 +2,13 @@ package org.eu.freex.tools.modules.image.data.repository
 
 
 import kotlinx.serialization.json.Json
-import org.eu.freex.tools.model.AppFilter
-import org.eu.freex.tools.model.PipelineStepsTable
-import org.eu.freex.tools.model.ProjectInfoTable
-import org.eu.freex.tools.model.SourceImagesTable
-import org.eu.freex.tools.model.ViewFilter
-import org.eu.freex.tools.model.WorkImage
-import org.eu.freex.tools.model.type
+import org.eu.freex.tools.modules.image.domain.model.AppFilter
+import org.eu.freex.tools.modules.image.domain.model.PipelineStepsTable
+import org.eu.freex.tools.modules.image.domain.model.ProjectInfoTable
+import org.eu.freex.tools.modules.image.domain.model.SourceImagesTable
+import org.eu.freex.tools.modules.image.domain.model.ViewFilter
+import org.eu.freex.tools.modules.image.domain.model.WorkImage
+import org.eu.freex.tools.modules.image.domain.model.type
 import org.jetbrains.exposed.sql.Database
 import org.jetbrains.exposed.sql.SchemaUtils
 import org.jetbrains.exposed.sql.deleteAll

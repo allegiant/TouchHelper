@@ -9,14 +9,13 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import org.eu.freex.tools.model.AppModule
+import org.eu.freex.tools.modules.image.domain.model.AppModule
 // ... 其他 import (ImageUiEvent, ImageWorkbench, Swing 拖拽相关) 保持不变 ...
 import org.eu.freex.tools.modules.image.presentation.viewmodel.ImageViewModel // 假设路径正确
 import org.eu.freex.tools.modules.image.presentation.ui.ImageWorkbench
-import org.eu.freex.tools.modules.image.presentation.contract.ImageUiEvent
 import org.eu.freex.tools.modules.image.presentation.contract.events.LoadFile
-import org.eu.freex.tools.theme.AppTheme
-import org.eu.freex.tools.theme.ThemeMode
+import org.eu.freex.tools.common.theme.AppTheme
+import org.eu.freex.tools.common.theme.ThemeMode
 import java.awt.Component
 import java.awt.Container
 import java.awt.datatransfer.DataFlavor

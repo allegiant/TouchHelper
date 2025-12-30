@@ -19,7 +19,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import org.eu.freex.tools.model.BinarizationFilter
+import org.eu.freex.tools.modules.image.domain.model.BinarizationFilter
 import org.eu.freex.tools.modules.image.presentation.contract.events.UpdateFilter
 import org.eu.freex.tools.modules.image.presentation.ui.components.inspector.core.FilterRenderer
 import org.eu.freex.tools.modules.image.presentation.ui.components.inspector.core.LocalImageViewModel

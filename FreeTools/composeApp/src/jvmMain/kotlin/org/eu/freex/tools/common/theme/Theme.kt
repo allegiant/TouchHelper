@@ -1,4 +1,4 @@
-package org.eu.freex.tools.theme
+package org.eu.freex.tools.common.theme
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.lightColorScheme

@@ -1,5 +1,5 @@
 // composeApp/src/jvmMain/kotlin/org/eu/freex/tools/dialogs/CharMappingDialog.kt
-package org.eu.freex.tools.dialogs
+package org.eu.freex.tools.modules.image.presentation.ui.dialogs
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background

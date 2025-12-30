@@ -1,11 +1,9 @@
 package org.eu.freex.tools.modules.image.domain.repository
 
 import androidx.compose.ui.geometry.Rect
-import org.eu.freex.tools.model.AppFilter
-import org.eu.freex.tools.model.AppSegmentation
-import org.eu.freex.tools.model.GridParams
-import org.eu.freex.tools.model.WorkImage
-import uniffi.touch_core.ColorRule
+import org.eu.freex.tools.modules.image.domain.model.AppFilter
+import org.eu.freex.tools.modules.image.domain.model.AppSegmentation
+import org.eu.freex.tools.modules.image.domain.model.WorkImage
 import java.io.File
 
 interface ImageRepository {

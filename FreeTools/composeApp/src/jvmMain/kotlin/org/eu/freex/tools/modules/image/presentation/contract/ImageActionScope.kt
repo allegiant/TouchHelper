@@ -2,7 +2,7 @@ package org.eu.freex.tools.modules.image.presentation.contract
 
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
-import org.eu.freex.tools.model.WorkImage
+import org.eu.freex.tools.modules.image.domain.model.WorkImage
 import org.eu.freex.tools.modules.image.domain.usecase.*
 
 /**

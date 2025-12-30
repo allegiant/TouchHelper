@@ -1,7 +1,7 @@
 package org.eu.freex.tools.modules.image.domain.usecase
 
-import org.eu.freex.tools.model.AppFilter
-import org.eu.freex.tools.model.WorkImage
+import org.eu.freex.tools.modules.image.domain.model.AppFilter
+import org.eu.freex.tools.modules.image.domain.model.WorkImage
 import org.eu.freex.tools.modules.image.domain.repository.ImageRepository
 
 /**

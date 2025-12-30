@@ -1,9 +1,14 @@
-package org.eu.freex.tools.model
+package org.eu.freex.tools.modules.image.domain.model
 
 import kotlinx.serialization.InternalSerializationApi
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.serializer
+import uniffi.touch_core.applyBinarization
+import uniffi.touch_core.applyBlackwhiteInvert
+import uniffi.touch_core.applyColorInvert
+import uniffi.touch_core.applyDenoise
+import uniffi.touch_core.applyGrayscale
 import kotlin.math.roundToInt
 import uniffi.touch_core.BinarizationFilter as RustBinarizationFilter
 import uniffi.touch_core.BlackWhiteInvertFilter as RustBlackWhiteInvertFilter
@@ -61,7 +66,7 @@ data class BinarizationFilter(
             isRgbAvg = isRgbAvg
         )
         // 调用具体的 Rust 函数
-        return uniffi.touch_core.applyBinarization(pixels, w, h, rustOptions)
+        return applyBinarization(pixels, w, h, rustOptions)
     }
 }
 
@@ -74,7 +79,7 @@ object GrayscaleFilter : AppFilter {
     override val name = "灰度化"
     override fun apply(pixels: ByteArray, w: Int, h: Int): ByteArray {
         val rustOptions = RustGrayscaleFilter()
-        return uniffi.touch_core.applyGrayscale(pixels, w, h, rustOptions)
+        return applyGrayscale(pixels, w, h, rustOptions)
     }
 }
 
@@ -87,7 +92,7 @@ object ColorInvertFilter : AppFilter {
     override val name = "颜色反转"
     override fun apply(pixels: ByteArray, w: Int, h: Int): ByteArray {
         val rustOptions = RustColorInvertFilter()
-        return uniffi.touch_core.applyColorInvert(pixels, w, h, rustOptions)
+        return applyColorInvert(pixels, w, h, rustOptions)
     }
 }
 
@@ -102,7 +107,7 @@ data class DenoiseFilter(
     override val name = "去噪"
     override fun apply(pixels: ByteArray, w: Int, h: Int): ByteArray {
         val rustOptions = RustDenoiseFilter(radius)
-        return uniffi.touch_core.applyDenoise(pixels, w, h, rustOptions)
+        return applyDenoise(pixels, w, h, rustOptions)
     }
 }
 
@@ -115,6 +120,6 @@ object BlackWhiteInvertFilter : AppFilter {
     override val name = "黑白反转"
     override fun apply(pixels: ByteArray, w: Int, h: Int): ByteArray {
         val rustOptions = RustBlackWhiteInvertFilter()
-        return uniffi.touch_core.applyBlackwhiteInvert(pixels, w, h, rustOptions)
+        return applyBlackwhiteInvert(pixels, w, h, rustOptions)
     }
 }

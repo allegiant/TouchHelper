@@ -1,6 +1,11 @@
 package org.eu.freex.tools.modules.image.presentation.ui.components.inspector
 
-import org.eu.freex.tools.model.* // 引入 AppFilter 及其所有子类
+import org.eu.freex.tools.modules.image.domain.model.AppFilter
+import org.eu.freex.tools.modules.image.domain.model.BinarizationFilter
+import org.eu.freex.tools.modules.image.domain.model.BlackWhiteInvertFilter
+import org.eu.freex.tools.modules.image.domain.model.ColorInvertFilter
+import org.eu.freex.tools.modules.image.domain.model.DenoiseFilter
+import org.eu.freex.tools.modules.image.domain.model.GrayscaleFilter
 import org.eu.freex.tools.modules.image.presentation.ui.components.inspector.core.FilterRenderer
 import org.eu.freex.tools.modules.image.presentation.ui.components.inspector.impl.BinarizationRenderer
 import org.eu.freex.tools.modules.image.presentation.ui.components.inspector.impl.EmptyRenderer
