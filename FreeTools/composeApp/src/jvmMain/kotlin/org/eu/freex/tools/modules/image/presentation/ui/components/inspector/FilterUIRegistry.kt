@@ -18,7 +18,7 @@ object FilterUIRegistry {
 
         // 2. 无参数的滤镜 (object)：通常不需要额外的 UI 面板，直接绑定 EmptyRenderer
         // 也可以不写，依赖 getRenderer 的默认值，但显式写出来更清晰
-        ViewFilter::class to EmptyRenderer,
+       // ViewFilter::class to EmptyRenderer,
         GrayscaleFilter::class to EmptyRenderer,
         ColorInvertFilter::class to EmptyRenderer,
         BlackWhiteInvertFilter::class to EmptyRenderer

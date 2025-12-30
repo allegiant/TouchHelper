@@ -4,6 +4,9 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import org.eu.freex.tools.model.AppSegmentation
+import org.eu.freex.tools.model.AutoSegmentation
+import org.eu.freex.tools.model.GridSegmentation
 import org.eu.freex.tools.modules.image.domain.repository.ImageRepository
 import org.eu.freex.tools.modules.image.presentation.contract.ImageUiState
 
@@ -23,13 +26,14 @@ class SegmentationHandler(
         scope.launch {
             stateFlow.update { it.copy(isLoading = true) }
             try {
-                // 已移除 activeColorRules，传递空列表
-                val (rects, subImages) = repository.segmentImage(
-                    source,
-                    state.isGridMode,
-                    state.gridParams,
-                    emptyList()
-                )
+                val segmentationStrategy: AppSegmentation = if (state.isGridMode) {
+                    GridSegmentation(state.gridParams)
+                } else {
+                    AutoSegmentation(rules = emptyList()) // 或者传入 state.activeRules
+                }
+
+                val (rects, subImages) = repository.segmentImage(source, segmentationStrategy)
+
                 stateFlow.update {
                     it.copy(
                         activeRects = rects,

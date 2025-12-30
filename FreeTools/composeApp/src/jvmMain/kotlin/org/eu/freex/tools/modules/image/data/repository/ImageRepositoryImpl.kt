@@ -3,18 +3,14 @@ package org.eu.freex.tools.modules.image.data.repository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.eu.freex.tools.model.AppFilter
-import org.eu.freex.tools.model.GridParams
+import org.eu.freex.tools.model.AppSegmentation
 import org.eu.freex.tools.model.WorkImage
-import org.eu.freex.tools.modules.image.data.source.RustDataSource
 import org.eu.freex.tools.modules.image.domain.repository.ImageRepository
 import org.eu.freex.tools.utils.ImageUtils
-import uniffi.touch_core.ColorRule
 import java.io.File
 import javax.imageio.ImageIO
 
-class ImageRepositoryImpl(
-    private val dataSource: RustDataSource
-) : ImageRepository {
+class ImageRepositoryImpl : ImageRepository {
 
     override suspend fun loadFile(file: File): WorkImage? = withContext(Dispatchers.IO) {
         try {
@@ -53,27 +49,15 @@ class ImageRepositoryImpl(
 
     override suspend fun segmentImage(
         source: WorkImage,
-        isGridMode: Boolean,
-        gridParams: GridParams,
-        activeRules: List<ColorRule>
+        segmentation: AppSegmentation
     ): Pair<List<androidx.compose.ui.geometry.Rect>, List<WorkImage>> =
         withContext(Dispatchers.Default) {
             val pixels = ImageUtils.toRgbaPixels(source.bufferedImage)
             val width = source.bufferedImage.width
             val height = source.bufferedImage.height
+            val rustRects = segmentation.segment(pixels, width, height)
 
-            // 扫描逻辑保持不变，依然调用 DataSource
-            val rects = dataSource.scanComponents(
-                pixels = pixels,
-                width = width,
-                height = height,
-                rules = activeRules,
-                isGridMode = isGridMode,
-                gridRows = if (isGridMode) gridParams.rowCount else null,
-                gridCols = if (isGridMode) gridParams.colCount else null
-            )
-
-            val composeRects = rects.map {
+            val composeRects = rustRects.map {
                 androidx.compose.ui.geometry.Rect(
                     left = it.left.toFloat(),
                     top = it.top.toFloat(),

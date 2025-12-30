@@ -30,7 +30,7 @@ class ImageViewModel : ViewModel() {
     val uiEffect = _uiEffect.receiveAsFlow()
 
     // 3. 依赖注入
-    private val repository = ImageRepositoryImpl(RustDataSource())
+    private val repository = ImageRepositoryImpl()
 
     // 4. 初始化子处理器
     // 使用 viewModelScope 替代手动创建的 scope
