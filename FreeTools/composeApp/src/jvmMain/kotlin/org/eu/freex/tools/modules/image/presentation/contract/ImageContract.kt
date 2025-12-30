@@ -1,13 +1,13 @@
 package org.eu.freex.tools.modules.image.presentation.contract
 
-import FilterParams
-import NoParams
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.IntOffset
-import org.eu.freex.tools.model.*
-import uniffi.touch_core.ImageFilter
+import org.eu.freex.tools.model.AppFilter
+import org.eu.freex.tools.model.GridParams
+import org.eu.freex.tools.model.ViewFilter
+import org.eu.freex.tools.model.WorkImage
 import java.awt.image.BufferedImage
 import java.io.File
 
@@ -23,9 +23,7 @@ data class ImageUiState(
     val selectedPipelineIndex: Int = 0,
     val isLoading: Boolean = false,
     val rightPanelTabIndex: Int = 0,
-    val currentFilter: ImageFilter = ImageFilter.View,
-    val thresholdRange: ClosedFloatingPointRange<Float> = 0f..72f,
-    val isRgbAvgEnabled: Boolean = true,
+    val currentFilter: AppFilter = ViewFilter,
 
     // 【关键修改】isGridMode 默认为 false (智能模式)，或 true (网格模式)
     val isGridMode: Boolean = true,
@@ -38,29 +36,31 @@ data class ImageUiState(
     val fullScreenCapture: BufferedImage? = null,
     val isMappingDialogVisible: Boolean = false,
     val mappingBitmap: BufferedImage? = null,
-    val filterParams: FilterParams = NoParams // 使用强类型接口
 ) {
     val currentSourceImage: WorkImage? get() = sourceImages.getOrNull(selectedSourceIndex)
 
-    val activeDisplayImage: WorkImage? get() {
-        if (pipelineSteps.isNotEmpty() && selectedPipelineIndex > 0) {
-            return pipelineSteps.getOrNull(selectedPipelineIndex - 1)
+    val activeDisplayImage: WorkImage?
+        get() {
+            if (pipelineSteps.isNotEmpty() && selectedPipelineIndex > 0) {
+                return pipelineSteps.getOrNull(selectedPipelineIndex - 1)
+            }
+            return currentSourceImage
         }
-        return currentSourceImage
-    }
 
-    val displayChain: List<WorkImage> get() {
-        val list = mutableListOf<WorkImage>()
-        currentSourceImage?.let { list.add(it.copy(label = "原图")) }
-        list.addAll(pipelineSteps)
-        return list
-    }
+    val displayChain: List<WorkImage>
+        get() {
+            val list = mutableListOf<WorkImage>()
+            currentSourceImage?.let { list.add(it.copy(label = "原图")) }
+            list.addAll(pipelineSteps)
+            return list
+        }
 }
 
 sealed class ImageUiEvent {
-    data class SaveProject(val file: java.io.File) : ImageUiEvent()
-    data class LoadProject(val file: java.io.File) : ImageUiEvent()
-    data class ExportImage(val file: java.io.File) : ImageUiEvent()
+    data class SaveProject(val file: File) : ImageUiEvent()
+    data class LoadProject(val file: File) : ImageUiEvent()
+    data class ExportImage(val file: File) : ImageUiEvent()
+
     // --- 资源 ---
     data class LoadFile(val file: File) : ImageUiEvent()
     data class SelectSourceImage(val index: Int) : ImageUiEvent()
@@ -71,11 +71,10 @@ sealed class ImageUiEvent {
     // --- 滤镜 ---
     object ApplyCurrentFilter : ImageUiEvent()
     object ModifyCurrentStep : ImageUiEvent()
-    data class SelectFilter(val filter: ImageFilter) : ImageUiEvent()
+    data class SelectFilter(val filter: AppFilter) : ImageUiEvent()
+    data class UpdateFilter(val filter: AppFilter) : ImageUiEvent()
     data class SelectPipelineStep(val index: Int) : ImageUiEvent()
     data class DeletePipelineStep(val index: Int) : ImageUiEvent()
-    data class UpdateThreshold(val range: ClosedFloatingPointRange<Float>) : ImageUiEvent()
-    data class ToggleRgbAvg(val enabled: Boolean) : ImageUiEvent()
 
     // --- 规则与切割 ---
     object PerformSegmentation : ImageUiEvent()
@@ -93,6 +92,4 @@ sealed class ImageUiEvent {
     object DismissDialogs : ImageUiEvent()
     data class OpenMappingDialog(val rect: Rect) : ImageUiEvent()
     data class ConfirmMapping(val char: String) : ImageUiEvent()
-
-    data class UpdateFilterParams(val params: FilterParams) : ImageUiEvent()
 }

@@ -23,7 +23,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import uniffi.touch_core.ImageFilter
 
 @Composable
 fun FilterChip(
@@ -88,5 +87,3 @@ fun SectionHeader(title: String) {
         )
     }
 }
-
-fun isSameFilter(a: ImageFilter, b: ImageFilter): Boolean = a == b

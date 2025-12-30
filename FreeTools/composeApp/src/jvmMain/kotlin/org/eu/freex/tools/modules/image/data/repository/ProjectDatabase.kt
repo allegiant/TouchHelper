@@ -2,10 +2,13 @@ package org.eu.freex.tools.modules.image.data.repository
 
 
 import kotlinx.serialization.json.Json
+import org.eu.freex.tools.model.AppFilter
 import org.eu.freex.tools.model.PipelineStepsTable
 import org.eu.freex.tools.model.ProjectInfoTable
 import org.eu.freex.tools.model.SourceImagesTable
+import org.eu.freex.tools.model.ViewFilter
 import org.eu.freex.tools.model.WorkImage
+import org.eu.freex.tools.model.type
 import org.jetbrains.exposed.sql.Database
 import org.jetbrains.exposed.sql.SchemaUtils
 import org.jetbrains.exposed.sql.deleteAll
@@ -13,11 +16,15 @@ import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.update
-import uniffi.touch_core.ImageFilter
 import java.io.File
 
 object ProjectDatabase {
-    private val json = Json { ignoreUnknownKeys = true }
+    private val json = Json {
+        ignoreUnknownKeys = true
+        // 开启多态支持（默认开启，但显式配置更安全）
+        useArrayPolymorphism = false
+        classDiscriminator = "type" // 指定类型字段名为 'type'
+    }
 
     // 连接数据库
     private fun connect(dbFile: File): Database {
@@ -29,17 +36,12 @@ object ProjectDatabase {
      * 保存工程
      * @param file 目标 .fxproj 文件
      * @param sourceImages 源图片列表
-     * @param filters 当前应用的滤镜链 (注意：这里需要您在 ViewModel 里维护一个 List<ImageFilter> 或者 List<Step>)
-     * @param filterParams 滤镜参数 Map (Key是滤镜类型，Value是参数对象)
+     * @param currentFilter 当前滤镜
      */
     fun saveProject(
         file: File,
         sourceImages: List<WorkImage>,
-        // 假设我们要保存当前的滤镜配置。
-        // 由于您的 ViewModel 目前似乎是单步操作，我们这里暂时只演示保存“当前选中的滤镜及其参数”作为一步。
-        // 如果您有完整的 filterChain，请传入 List。
-        currentFilter: ImageFilter?,
-        currentParams: Any? // ViewModel 中的 filterParams
+        currentFilters: List<AppFilter>?,
     ) {
         val db = connect(file)
 
@@ -74,16 +76,15 @@ object ProjectDatabase {
             }
 
             // 写入滤镜步骤 (示例：将当前配置存为步骤 0)
-            if (currentFilter != null && currentParams != null) {
-                val typeStr = getFilterTypeString(currentFilter)
-                // 简单序列化参数对象为 String (实际项目中建议用 kotlinx.serialization 序列化 params 对象)
-                val paramsStr = currentParams.toString()
-
-                PipelineStepsTable.insert {
-                    it[type] = typeStr
-                    it[paramsJson] = paramsStr
-                    it[orderIndex] = 0
-                    it[isEnabled] = true
+            currentFilters?.forEach { filter ->
+                if (filter !is ViewFilter) {
+                    val jsonString = json.encodeToString(AppFilter.serializer(), filter)
+                    PipelineStepsTable.insert {
+                        it[type] = filter.type
+                        it[paramsJson] = jsonString
+                        it[orderIndex] = 0
+                        it[isEnabled] = true
+                    }
                 }
             }
         }
@@ -93,10 +94,10 @@ object ProjectDatabase {
      * 加载工程
      * 返回: (图片路径列表, 步骤列表)
      */
-    fun loadProject(file: File): Pair<List<String>, List<LoadedStep>> {
+    fun loadProject(file: File): Pair<List<String>, List<AppFilter>> {
         val db = connect(file)
         val paths = mutableListOf<String>()
-        val steps = mutableListOf<LoadedStep>()
+        val filters = mutableListOf<AppFilter>()
 
         transaction(db) {
             if (!file.exists()) return@transaction
@@ -106,25 +107,14 @@ object ProjectDatabase {
                 paths.add(it[SourceImagesTable.path])
             }
 
-            // 读取步骤
+            // 读取步骤并反序列化为 AppFilter
             PipelineStepsTable.selectAll().orderBy(PipelineStepsTable.orderIndex).forEach {
-                steps.add(LoadedStep(
-                    type = it[PipelineStepsTable.type],
-                    paramsJson = it[PipelineStepsTable.paramsJson]
-                ))
+                val jsonString = it[PipelineStepsTable.paramsJson]
+                val loadedFilter: AppFilter =
+                    json.decodeFromString(AppFilter.serializer(), jsonString)
+                filters.add(loadedFilter)
             }
         }
-        return Pair(paths, steps)
-    }
-
-    data class LoadedStep(val type: String, val paramsJson: String)
-
-    private fun getFilterTypeString(filter: ImageFilter): String {
-        return when (filter) {
-            is ImageFilter.BlackWhite -> "BINARY"
-            is ImageFilter.Color -> "COLOR"
-            is ImageFilter.Common -> "COMMON"
-            else -> "UNKNOWN"
-        }
+        return Pair(paths, filters)
     }
 }

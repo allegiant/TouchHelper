@@ -1,9 +1,10 @@
 package org.eu.freex.tools.modules.image.domain.repository
 
 import androidx.compose.ui.geometry.Rect
-import org.eu.freex.tools.model.*
+import org.eu.freex.tools.model.AppFilter
+import org.eu.freex.tools.model.GridParams
+import org.eu.freex.tools.model.WorkImage
 import uniffi.touch_core.ColorRule
-import uniffi.touch_core.ImageFilter
 import java.io.File
 
 interface ImageRepository {
@@ -11,8 +12,7 @@ interface ImageRepository {
 
     suspend fun applyFilter(
         source: WorkImage,
-        filter: ImageFilter,
-        params: Map<String, Any>
+        filter: AppFilter,
     ): WorkImage
 
     suspend fun segmentImage(

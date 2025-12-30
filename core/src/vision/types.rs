@@ -1,6 +1,8 @@
 // 必须引入 uniffi，或者确保 Cargo.toml 中有 uniffi = { version = "...", features = ["derive"] }
 // 通常 lib.rs 中有 uniffi::setup_scaffolding!(); 就行
 
+use serde::{Deserialize, Serialize};
+
 // ==========================================
 // 1. ColorRule (纯数据 -> Record)
 // ==========================================
@@ -38,58 +40,27 @@ pub struct GridParams {
     pub row_count: i32,
 }
 
-// 对应 Kotlin 的 ColorFilterType
-#[derive(Debug, Clone, Copy, uniffi::Enum)]
-pub enum ColorFilterType {
-    Binarization,
-    ColorPick,
-    Posterize,
-    Grayscale,
-    Invert,
+// 1. 必须引入 uniffi，并且加上 Serialize/Deserialize 以支持 JS
+#[derive(Debug, Clone, Serialize, Deserialize, uniffi::Record)]
+pub struct BinarizationFilter {
+    pub threshold_min: i32,
+    pub threshold_max: i32,
+    pub is_rgb_avg: bool,
 }
 
-// 对应 Kotlin 的 BlackWhiteFilterType
-#[derive(Debug, Clone, Copy, uniffi::Enum)]
-pub enum BlackWhiteFilterType {
-    Denoise,
-    RemoveLines,
-    Contours,
-    ExtractBlobs,
-    Deskew,
-    RotateCorrect,
-    Invert,
-    DilateErode,
-    Skeleton,
-    FenceAdjust,
-    ValidImage,
-    KeepSize,
+#[derive(Debug, Clone, Serialize, Deserialize, uniffi::Record)]
+pub struct GrayscaleFilter {}
+
+#[derive(Debug, Clone, Serialize, Deserialize, uniffi::Record)]
+pub struct ColorInvertFilter {}
+
+#[derive(Debug, Clone, Serialize, Deserialize, uniffi::Record)]
+pub struct DenoiseFilter {
+    pub radius: u32,
 }
 
-// 对应 Kotlin 的 CommonFilterType
-#[derive(Debug, Clone, Copy, uniffi::Enum)]
-pub enum CommonFilterType {
-    ScaleRatio,
-    ScaleNorm,
-    FixedRotate,
-    ExtendCrop,
-    FixedSmooth,
-    MedianBlur,
-}
-
-// 为了在统一接口中使用，我们可以定义一个包含所有滤镜的大枚举
-// 注意：UniFFI 目前对嵌套枚举的支持有限，通常建议在接口参数中直接使用具体的枚举，
-// 或者定义一个扁平化的 ImageFilter 枚举。
-#[derive(Debug, Clone, Copy, uniffi::Enum)]
-pub enum ImageFilter {
-    // Color filters
-    Color(ColorFilterType),
-    // Black & White filters
-    BlackWhite(BlackWhiteFilterType),
-    // Common filters
-    Common(CommonFilterType),
-    // 或者，如果你只是想有一个通用的 "ViewFilter" (浏览模式)
-    View,
-}
+#[derive(Debug, Clone, Serialize, Deserialize, uniffi::Record)]
+pub struct BlackWhiteInvertFilter {}
 
 // 【新增】定义错误类型
 #[derive(Debug, thiserror::Error, uniffi::Error)]

@@ -1,24 +1,33 @@
+use image::{DynamicImage, ImageBuffer, Rgba};
+
 use crate::vision::types::{
-    BlackWhiteFilterType, ColorFilterType, ColorRule, ImageFilter, Rect, VisionError,
+    BinarizationFilter, BlackWhiteInvertFilter, ColorInvertFilter, ColorRule, DenoiseFilter,
+    GrayscaleFilter, Rect, VisionError,
 };
 use crate::vision::{analysis, filters};
 
-/// 应用滤镜
-/// ⚡️ 性能优化版：接收 Raw RGBA Pixels
-#[uniffi::export]
-pub fn apply_filter(
+// =========================================================
+// 1. 公共辅助函数 (Private Helper)
+// =========================================================
+
+/// 通用的图像处理包装器
+/// 负责：参数校验、Raw -> DynamicImage 转换、调用处理逻辑、DynamicImage -> Raw 转换
+fn process_image_wrapper<F>(
     pixels: Vec<u8>,
     width: i32,
     height: i32,
-    filter: ImageFilter,
-    param1: Option<i32>,
-    param2: Option<i32>,
-    param3: Option<i32>,
-) -> Result<Vec<u8>, VisionError> {
+    processor: F,
+) -> Result<Vec<u8>, VisionError>
+where
+    // F 是一个闭包：接收 &DynamicImage，返回处理后的 DynamicImage
+    F: FnOnce(&DynamicImage) -> DynamicImage,
+{
     let width_u32 = width as u32;
     let height_u32 = height as u32;
+    // RGBA 格式，每个像素 4 字节
     let expected_len = (width_u32 * height_u32 * 4) as usize;
 
+    // 1. 校验数据长度
     if pixels.len() != expected_len {
         return Err(VisionError::LoadError(format!(
             "Pixel data mismatch: expected {} bytes, got {}",
@@ -27,43 +36,98 @@ pub fn apply_filter(
         )));
     }
 
-    // 极速加载
-    let img_buffer =
-        image::ImageBuffer::<image::Rgba<u8>, Vec<u8>>::from_raw(width_u32, height_u32, pixels)
-            .ok_or_else(|| VisionError::LoadError("Failed to create image buffer".to_string()))?;
+    // 2. 零拷贝加载 (from_raw 直接拿走 pixels 的所有权，不产生额外内存分配)
+    let img_buffer = ImageBuffer::<Rgba<u8>, Vec<u8>>::from_raw(width_u32, height_u32, pixels)
+        .ok_or_else(|| VisionError::LoadError("Failed to create image buffer".to_string()))?;
 
-    let img = image::DynamicImage::ImageRgba8(img_buffer);
+    let img = DynamicImage::ImageRgba8(img_buffer);
 
-    // 处理图像
-    let processed_img = match filter {
-        ImageFilter::Color(cf) => match cf {
-            ColorFilterType::Binarization => {
-                let min = param1.unwrap_or(0) as u8;
-                let max = param2.unwrap_or(255) as u8;
-                // param3: 1 = 使用 RGB 平均值 (默认), 0 = 使用单阈值 (min 作为阈值)
-                let use_rgb_avg = param3.unwrap_or(1) == 1;
+    // 3. 执行传入的具体处理逻辑
+    let processed_img = processor(&img);
 
-                if use_rgb_avg {
-                    // 逻辑 1: RGB 均值必须在 min~max 之间
-                    filters::binarize_rgb_avg(&img, min, max)
-                } else {
-                    // 逻辑 2: 标准二值化，亮度 > min 变白
-                    filters::binarize(&img, min)
-                }
-            }
-            ColorFilterType::Grayscale => filters::grayscale(&img),
-            ColorFilterType::Invert => filters::invert(&img),
-            _ => img,
-        },
-        ImageFilter::BlackWhite(bw) => match bw {
-            BlackWhiteFilterType::Denoise => filters::denoise(&img, 1),
-            BlackWhiteFilterType::Invert => filters::invert(&img),
-            _ => img,
-        },
-        _ => img,
-    };
-
+    // 4. 转回 Raw Vec<u8>
     Ok(processed_img.to_rgba8().into_raw())
+}
+
+/// 对图片应用二值化滤镜
+#[uniffi::export]
+pub fn apply_binarization(
+    pixels: Vec<u8>,
+    width: i32,
+    height: i32,
+    filter: BinarizationFilter,
+) -> Result<Vec<u8>, VisionError> {
+    log::info!("Executing Binarization: {:?}", filter);
+
+    let threshold_min_u8 = filter.threshold_min.clamp(0, 255) as u8;
+    let threshold_max_u8 = filter.threshold_max.clamp(0, 255) as u8;
+    process_image_wrapper(pixels, width, height, |img| {
+        if filter.is_rgb_avg {
+            // 逻辑 1: RGB 均值范围
+            filters::binarize_rgb_avg(img, threshold_min_u8, threshold_max_u8)
+        } else {
+            // 逻辑 2: 标准二值化
+            filters::binarize(img, threshold_min_u8)
+        }
+    })
+}
+
+/// 对图片应用灰度滤镜
+#[uniffi::export]
+pub fn apply_grayscale(
+    pixels: Vec<u8>,
+    width: i32,
+    height: i32,
+    filter: GrayscaleFilter,
+) -> Result<Vec<u8>, VisionError> {
+    log::info!("Executing Grayscale: {:?}", filter);
+
+    // 调用公共方法
+    process_image_wrapper(pixels, width, height, |img| {
+        // 如果 GrayscaleFilter 将来有参数，可以在这里使用 filter.mode
+        filters::grayscale(img)
+    })
+}
+
+/// 对黑白图片应用去噪滤镜
+#[uniffi::export]
+pub fn apply_denoise(
+    pixels: Vec<u8>,
+    width: i32,
+    height: i32,
+    filter: DenoiseFilter,
+) -> Result<Vec<u8>, VisionError> {
+    log::info!("Executing Denoise with radius: {:?}", filter);
+
+    process_image_wrapper(pixels, width, height, |img| {
+        filters::denoise(img, filter.radius)
+    })
+}
+
+/// 对图片应用反色滤镜
+#[uniffi::export]
+pub fn apply_color_invert(
+    pixels: Vec<u8>,
+    width: i32,
+    height: i32,
+    filter: ColorInvertFilter,
+) -> Result<Vec<u8>, VisionError> {
+    log::info!("Executing color invert: {:?}", filter);
+
+    process_image_wrapper(pixels, width, height, |img| filters::invert(img))
+}
+
+/// 对黑白图片应用反色滤镜
+#[uniffi::export]
+pub fn apply_blackwhite_invert(
+    pixels: Vec<u8>,
+    width: i32,
+    height: i32,
+    filter: BlackWhiteInvertFilter,
+) -> Result<Vec<u8>, VisionError> {
+    log::info!("Executing black-white invert: {:?}", filter);
+
+    process_image_wrapper(pixels, width, height, |img| filters::invert(img))
 }
 
 /// 扫描组件
@@ -122,4 +186,3 @@ pub fn scan_components(
         Ok(rects)
     }
 }
-

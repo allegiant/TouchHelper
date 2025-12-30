@@ -1,31 +1,34 @@
 package org.eu.freex.tools.modules.image.presentation.ui.components.inspector
 
-import org.eu.freex.tools.model.label
+import org.eu.freex.tools.model.* // 引入 AppFilter 及其所有子类
 import org.eu.freex.tools.modules.image.presentation.ui.components.inspector.core.FilterRenderer
 import org.eu.freex.tools.modules.image.presentation.ui.components.inspector.impl.BinarizationRenderer
 import org.eu.freex.tools.modules.image.presentation.ui.components.inspector.impl.EmptyRenderer
-import uniffi.touch_core.ColorFilterType
-import uniffi.touch_core.ImageFilter
+import kotlin.reflect.KClass // 必须引入这个
 
 object FilterUIRegistry {
-    // 核心映射表：Key 是滤镜类型的唯一标识，Value 是渲染器
-    // 提示：如果 ImageFilter 是 data class，可以直接作为 Key，
-    // 但为了性能和匹配逻辑，通常推荐使用枚举或特征字符串作为 Key。
 
-    private val renderers = mapOf<String, FilterRenderer>(
-        // 绑定二值化 -> 二值化渲染器
-        ImageFilter.Color(ColorFilterType.BINARIZATION).label to BinarizationRenderer,
+    // 【核心改动 1】 Key 的类型改为 KClass<out AppFilter>
+    // 这意味着我们通过“这个对象属于哪个类”来决定“使用哪个渲染器”
+    private val renderers = mapOf<KClass<out AppFilter>, FilterRenderer>(
 
-        // 绑定灰度 -> 灰度渲染器 (假设您实现了 GrayscaleRenderer)
-        // ImageFilter.Color(ColorFilterType.GRAYSCALE).label to GrayscaleRenderer,
+        // 1. 有参数的滤镜：绑定专门的渲染器
+        BinarizationFilter::class to BinarizationRenderer,
+        DenoiseFilter::class to EmptyRenderer, // 如果你有 DenoiseRenderer 就换成它，没有就用 Empty
+
+        // 2. 无参数的滤镜 (object)：通常不需要额外的 UI 面板，直接绑定 EmptyRenderer
+        // 也可以不写，依赖 getRenderer 的默认值，但显式写出来更清晰
+        ViewFilter::class to EmptyRenderer,
+        GrayscaleFilter::class to EmptyRenderer,
+        ColorInvertFilter::class to EmptyRenderer,
+        BlackWhiteInvertFilter::class to EmptyRenderer
     )
 
     /**
-     * 对外提供查找方法
-     * 只有这里可能残留一点点逻辑，但主界面完全不知情
+     * 【核心改动 2】 根据传入实例的类型查找
      */
-    fun getRenderer(filter: ImageFilter): FilterRenderer {
-        // 直接查表，查不到就返回空渲染器
-        return renderers[filter.label] ?: EmptyRenderer
+    fun getRenderer(filter: AppFilter): FilterRenderer {
+        // filter::class 拿到的是这个实例的具体类型（例如 BinarizationFilter）
+        return renderers[filter::class] ?: EmptyRenderer
     }
 }

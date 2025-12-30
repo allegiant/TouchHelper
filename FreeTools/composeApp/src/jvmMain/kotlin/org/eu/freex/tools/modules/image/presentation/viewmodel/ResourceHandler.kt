@@ -6,15 +6,10 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import org.eu.freex.tools.model.WorkImage
-import org.eu.freex.tools.model.label
 import org.eu.freex.tools.modules.image.domain.repository.ImageRepository
 import org.eu.freex.tools.modules.image.presentation.contract.ImageUiEvent
 import org.eu.freex.tools.modules.image.presentation.contract.ImageUiState
 import org.eu.freex.tools.utils.ImageUtils
-import uniffi.touch_core.BlackWhiteFilterType
-import uniffi.touch_core.ColorFilterType
-import uniffi.touch_core.CommonFilterType
-import uniffi.touch_core.ImageFilter
 
 /**
  * 资源处理器：负责文件加载、资源管理、截图
@@ -176,10 +171,18 @@ class ResourceHandler(
 
     fun startCapture() {
         scope.launch(Dispatchers.IO) {
-            try { Thread.sleep(300) } catch (e: Exception) {}
+            try {
+                Thread.sleep(300)
+            } catch (e: Exception) {
+            }
             try {
                 val capture = ImageUtils.captureFullScreen()
-                stateFlow.update { it.copy(fullScreenCapture = capture, isScreenCropperVisible = true) }
+                stateFlow.update {
+                    it.copy(
+                        fullScreenCapture = capture,
+                        isScreenCropperVisible = true
+                    )
+                }
             } catch (e: Exception) {
                 e.printStackTrace()
                 scope.launch { onError("截图失败: ${e.message}") }
@@ -222,16 +225,17 @@ class ResourceHandler(
 
     // --- 核心逻辑：重放流水线 ---
 
-    private suspend fun reapplyPipeline(source: WorkImage, oldSteps: List<WorkImage>): List<WorkImage> {
+    private suspend fun reapplyPipeline(
+        source: WorkImage,
+        oldSteps: List<WorkImage>
+    ): List<WorkImage> {
         val newSteps = mutableListOf<WorkImage>()
         var currentInput = source
 
         for (step in oldSteps) {
-            val filter = findFilterByLabel(step.label) ?: continue
-            val params = step.params ?: emptyMap()
-
+            val filter = step.appliedFilter ?: continue
             try {
-                val result = repository.applyFilter(currentInput, filter, params)
+                val result = repository.applyFilter(currentInput, filter)
                 newSteps.add(result)
                 currentInput = result
             } catch (e: Exception) {
@@ -240,11 +244,5 @@ class ResourceHandler(
             }
         }
         return newSteps
-    }
-
-    private fun findFilterByLabel(label: String): ImageFilter? {
-        return ColorFilterType.entries.find { it.label == label }?.let { ImageFilter.Color(it) }
-            ?: BlackWhiteFilterType.entries.find { it.label == label }?.let { ImageFilter.BlackWhite(it) }
-            ?: CommonFilterType.entries.find { it.label == label }?.let { ImageFilter.Common(it) }
     }
 }

@@ -1,6 +1,5 @@
 package org.eu.freex.tools.modules.image.presentation.ui.components.inspector.impl
 
-import BinarizationParams
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -20,6 +19,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import org.eu.freex.tools.model.BinarizationFilter
 import org.eu.freex.tools.modules.image.presentation.contract.ImageUiEvent
 import org.eu.freex.tools.modules.image.presentation.ui.components.inspector.core.FilterRenderer
 import org.eu.freex.tools.modules.image.presentation.ui.components.inspector.core.LocalImageViewModel
@@ -32,22 +32,29 @@ object BinarizationRenderer : FilterRenderer {
         val state by viewModel.uiState.collectAsState()
 
         // 安全获取参数，如果类型不对则使用默认值
-        val params = state.filterParams as? BinarizationParams ?: BinarizationParams()
+        val filter = state.currentFilter as? BinarizationFilter ?: BinarizationFilter()
 
         Column {
             ThresholdControl(
-                range = params.thresholdRange,
-                onValueChange = {
-                    val newParams = params.copy(thresholdRange = it)
-                    viewModel.handleEvent(ImageUiEvent.UpdateFilterParams(newParams))
+                range = filter.min..filter.max,
+                onValueChange = { newRange ->
+                    // 【修改 3】使用 data class 的 copy 方法更新参数
+                    // 这里创建了一个全新的 AppFilter 对象
+                    val newFilter = filter.copy(
+                        min = newRange.start,
+                        max = newRange.endInclusive
+                    )
+
+                    // 【修改 4】发送事件，将新滤镜对象传回 ViewModel
+                    viewModel.handleEvent(ImageUiEvent.UpdateFilter(newFilter))
                 }
             )
             Spacer(Modifier.height(10.dp))
             RgbAvgControl(
-                isEnabled = params.isRgbAvgEnabled,
-                onChange = {
-                    val newParams = params.copy(isRgbAvgEnabled = it)
-                    viewModel.handleEvent(ImageUiEvent.UpdateFilterParams(newParams))
+                isEnabled = filter.isRgbAvg,
+                onChange = { isChecked ->
+                    val newFilter = filter.copy(isRgbAvg = isChecked)
+                    viewModel.handleEvent(ImageUiEvent.UpdateFilter(newFilter))
                 }
             )
         }

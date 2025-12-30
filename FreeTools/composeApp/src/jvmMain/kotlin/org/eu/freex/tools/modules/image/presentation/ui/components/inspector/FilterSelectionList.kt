@@ -15,23 +15,40 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import org.eu.freex.tools.model.FilterConstantsUI
-import org.eu.freex.tools.model.label
-import uniffi.touch_core.BlackWhiteFilterType
-import uniffi.touch_core.ColorFilterType
-import uniffi.touch_core.CommonFilterType
-import uniffi.touch_core.ImageFilter
+import org.eu.freex.tools.model.AppFilter
+import org.eu.freex.tools.model.BinarizationFilter
+import org.eu.freex.tools.model.BlackWhiteInvertFilter
+import org.eu.freex.tools.model.ColorInvertFilter
+import org.eu.freex.tools.model.DenoiseFilter
+import org.eu.freex.tools.model.GrayscaleFilter
+import org.eu.freex.tools.model.ViewFilter
+
 
 @Composable
 fun FilterSelectionList(
     modifier: Modifier = Modifier,
-    currentFilter: ImageFilter,
-    onFilterChange: (ImageFilter) -> Unit
+    currentFilter: AppFilter,
+    onFilterChange: (AppFilter) -> Unit
 ) {
     // 准备数据
-    val colorFilters = remember { ColorFilterType.values().map { ImageFilter.Color(it) } }
-    val bwFilters = remember { BlackWhiteFilterType.values().map { ImageFilter.BlackWhite(it) } }
-    val commonFilters = remember { CommonFilterType.values().map { ImageFilter.Common(it) } }
+    val colorFilters = remember {
+        listOf(
+            ViewFilter,
+            GrayscaleFilter,
+            ColorInvertFilter
+        )
+    }
+    val bwFilters = remember {
+        listOf(
+            BinarizationFilter(),
+            BlackWhiteInvertFilter
+        )
+    }
+    val commonFilters = remember {
+        listOf(
+            DenoiseFilter()
+        )
+    }
 
     Column(
         modifier = modifier
@@ -40,21 +57,21 @@ fun FilterSelectionList(
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         FilterGroup(
-            title = FilterConstantsUI.GROUP_COLOR,
+            title = "针对彩色进行处理:",
             filters = colorFilters,
             currentFilter = currentFilter,
             onSelect = onFilterChange
         )
 
         FilterGroup(
-            title = FilterConstantsUI.GROUP_BINARY,
+            title = "针对黑白进行处理:",
             filters = bwFilters,
             currentFilter = currentFilter,
             onSelect = onFilterChange
         )
 
         FilterGroup(
-            title = FilterConstantsUI.GROUP_COMMON,
+            title = "通用预处理:",
             filters = commonFilters,
             currentFilter = currentFilter,
             onSelect = onFilterChange
@@ -65,9 +82,9 @@ fun FilterSelectionList(
 @Composable
 private fun FilterGroup(
     title: String,
-    filters: List<ImageFilter>,
-    currentFilter: ImageFilter,
-    onSelect: (ImageFilter) -> Unit
+    filters: List<AppFilter>,
+    currentFilter: AppFilter,
+    onSelect: (AppFilter) -> Unit
 ) {
     Column {
         Text(
@@ -90,11 +107,16 @@ private fun FilterGroup(
                         if (i < rowFilters.size) {
                             val filter = rowFilters[i]
                             // 注意：FilterChip 已经在 SharedComponents.kt 中适配过颜色了
+                            val isSelected = currentFilter::class == filter::class
                             FilterChip(
-                                text = filter.label,
-                                isSelected = isSameFilter(currentFilter, filter),
+                                text = filter.name,
+                                isSelected = isSelected,
                                 modifier = Modifier.weight(1f),
-                                onClick = { onSelect(filter) }
+                                onClick = {
+                                    if (!isSelected) {
+                                        onSelect(filter)
+                                    }
+                                }
                             )
                         } else {
                             Spacer(modifier = Modifier.weight(1f))

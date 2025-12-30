@@ -37,7 +37,8 @@ class ImageViewModel : ViewModel() {
     // 传入 showToast 回调给 Handler 使用
     private val resourceHandler = ResourceHandler(viewModelScope, repository, _uiState, ::showToast)
     private val filterHandler = FilterHandler(viewModelScope, repository, _uiState, ::showToast)
-    private val segmentationHandler = SegmentationHandler(viewModelScope, repository, _uiState, ::showToast)
+    private val segmentationHandler =
+        SegmentationHandler(viewModelScope, repository, _uiState, ::showToast)
 
     fun handleEvent(event: ImageUiEvent) {
         when (event) {
@@ -62,15 +63,16 @@ class ImageViewModel : ViewModel() {
             is ImageUiEvent.SaveProject -> {
                 viewModelScope.launch(Dispatchers.IO) {
                     try {
+                        val filtersToSave = uiState.value.pipelineSteps.mapNotNull { it.appliedFilter }
                         ProjectDatabase.saveProject(
                             event.file,
                             uiState.value.sourceImages,
-                            uiState.value.currentFilter,
-                            uiState.value.filterParams
+                            currentFilters = filtersToSave
                         )
-                        // 可选：显示 Toast
+                        showToast("工程已保存")
                     } catch (e: Exception) {
                         e.printStackTrace()
+                        showToast("保存失败")
                     }
                 }
             }
@@ -79,29 +81,41 @@ class ImageViewModel : ViewModel() {
             is ImageUiEvent.LoadProject -> {
                 viewModelScope.launch(Dispatchers.IO) {
                     try {
-                        val (paths, steps) = ProjectDatabase.loadProject(event.file)
+                        // 假设 ProjectDatabase.loadProject 现在返回 Pair<List<File>, List<WorkImage>>
+                        // 或者 Pair<List<String>, List<AppFilter>>，具体取决于你的 DB 层实现。
+                        // 这里假设它返回的是 (图片路径列表, 还原后的步骤列表)
+                        val (paths, loadedSteps) = ProjectDatabase.loadProject(event.file)
 
-                        // 1. 在 UI 线程清空当前资源
                         withContext(Dispatchers.Main) {
-                            // 清空 sourceImages (需要在 ResourceHandler 增加 clear 方法)
-                            // resourceHandler.clear()
-                        }
-
-                        // 2. 重新加载图片
-                        paths.forEach { path ->
-                            val f = java.io.File(path)
-                            if (f.exists()) {
-                                handleEvent(ImageUiEvent.LoadFile(f)) // 复用加载逻辑
+                            val files = paths.mapNotNull {
+                                val file = java.io.File(it)
+                                if (file.exists()) file else null
                             }
-                        }
 
-                        // 3. 恢复滤镜参数 (简略版)
-                        if (steps.isNotEmpty()) {
-                            // TODO: 解析 steps[0].paramsJson 并设置到 filterParams
-                            // 这一步比较复杂，取决于参数如何反序列化，暂时略过
+                            // 2. 恢复源图片
+                            files.forEach { file -> ImageUiEvent.LoadFile(file) }
+
+                            // 3. 【关键修复】恢复流水线步骤
+                            val firstImage = files.firstOrNull() ?: return@withContext
+
+                            val workImages = loadedSteps.map {
+                                WorkImage(
+                                    name = it.name,
+                                    bufferedImage = ImageUtils.load(file = firstImage),
+                                    label = it.name,
+                                    appliedFilter = it
+                                )
+                            }
+                            _uiState.update {
+                                it.copy(
+                                    pipelineSteps = workImages, // 直接赋值
+                                    selectedPipelineIndex = loadedSteps.size // 选中最后一步
+                                )
+                            }
                         }
                     } catch (e: Exception) {
                         e.printStackTrace()
+                        showToast("加载工程失败: ${e.message}")
                     }
                 }
             }
@@ -115,6 +129,7 @@ class ImageViewModel : ViewModel() {
                     }
                 }
             }
+
             is ImageUiEvent.SelectSourceImage -> resourceHandler.selectSource(event.index)
             is ImageUiEvent.RemoveSourceImage -> resourceHandler.removeSource(event.index)
             is ImageUiEvent.StartScreenCapture -> resourceHandler.startCapture()
@@ -123,15 +138,14 @@ class ImageViewModel : ViewModel() {
             // --- 滤镜与流水线 ---
             is ImageUiEvent.ApplyCurrentFilter -> filterHandler.applyFilterAsNewStep()
             is ImageUiEvent.ModifyCurrentStep -> filterHandler.modifyCurrentStep()
-            is ImageUiEvent.UpdateThreshold -> {
-                _uiState.update { it.copy(thresholdRange = event.range) }
-                filterHandler.triggerStepUpdate()
-            }
-            is ImageUiEvent.ToggleRgbAvg -> {
-                _uiState.update { it.copy(isRgbAvgEnabled = event.enabled) }
-                filterHandler.triggerStepUpdate()
-            }
             is ImageUiEvent.SelectFilter -> _uiState.update { it.copy(currentFilter = event.filter) }
+            is ImageUiEvent.UpdateFilter -> {
+                // 1. 更新 UI 状态中的 currentFilter (让滑块数值变化生效)
+                _uiState.update { it.copy(currentFilter = event.filter) }
+
+                // 2. 触发 FilterHandler 的防抖预览逻辑
+                filterHandler.triggerStepUpdate()
+            }
             is ImageUiEvent.SelectPipelineStep -> _uiState.update { it.copy(selectedPipelineIndex = event.index) }
             // 删除流水线步骤暂时没有 Handler 实现，如果需要可以加在 FilterHandler
             is ImageUiEvent.DeletePipelineStep -> {
@@ -144,19 +158,27 @@ class ImageViewModel : ViewModel() {
             is ImageUiEvent.ToggleGridMode -> _uiState.update { it.copy(isGridMode = event.isGrid) }
 
             // --- 简单的 UI 状态更新 (直接处理) ---
-            is ImageUiEvent.UpdateCanvasTransform -> _uiState.update { it.copy(mainScale = event.scale, mainOffset = event.offset) }
+            is ImageUiEvent.UpdateCanvasTransform -> _uiState.update {
+                it.copy(
+                    mainScale = event.scale,
+                    mainOffset = event.offset
+                )
+            }
+
             is ImageUiEvent.ChangePanelTab -> _uiState.update { it.copy(rightPanelTabIndex = event.index) }
-            is ImageUiEvent.DismissDialogs -> _uiState.update { it.copy(isScreenCropperVisible = false, isMappingDialogVisible = false) }
+            is ImageUiEvent.DismissDialogs -> _uiState.update {
+                it.copy(
+                    isScreenCropperVisible = false,
+                    isMappingDialogVisible = false
+                )
+            }
+
             is ImageUiEvent.OpenMappingDialog -> openMappingDialog(event.rect)
             is ImageUiEvent.ConfirmMapping -> confirmMapping(event.char)
 
             // 纯交互，暂不需处理
             is ImageUiEvent.HoverCanvas -> {}
             is ImageUiEvent.ColorPick -> {}
-            is ImageUiEvent.UpdateFilterParams -> {
-                _uiState.update { it.copy(filterParams = event.params) }
-                filterHandler.triggerStepUpdate()
-            }
             else -> {}
         }
     }
@@ -170,7 +192,12 @@ class ImageViewModel : ViewModel() {
 
     private fun openMappingDialog(rect: Rect) {
         val s = _uiState.value.activeDisplayImage?.bufferedImage ?: return
-        _uiState.update { it.copy(isMappingDialogVisible = true, mappingBitmap = ImageUtils.cropImage(s, rect)) }
+        _uiState.update {
+            it.copy(
+                isMappingDialogVisible = true,
+                mappingBitmap = ImageUtils.cropImage(s, rect)
+            )
+        }
     }
 
     private fun confirmMapping(char: String) {
