@@ -31,6 +31,10 @@ interface ImageActionScope {
         setState { copy(project = project.reducer()) }
     }
 
+    fun setPipeline(reducer: PipelineState.() -> PipelineState) {
+        setState { copy(pipeline = pipeline.reducer()) }
+    }
+
     fun setUi(reducer: UiInteractionState.() -> UiInteractionState) {
         setState { copy(ui = ui.reducer()) }
     }
@@ -50,14 +54,14 @@ interface ImageActionScope {
  * 用于滤镜修改或删除时，确定输入源是谁。
  */
 fun ImageActionScope.getPrevStepImage(stepIndex: Int): WorkImage? {
-    // 适配新的 State 结构 (通过 state.project 访问)
-    // 注意：如果你在第一步保留了 state.currentSourceImage 的兼容属性，这里也可以直接用旧写法
-
-    // 新写法 (更严谨，直接访问 ProjectState):
-    val project = state.project
-    return if (stepIndex == 0) {
-        project.sourceImages.getOrNull(project.selectedSourceIndex)
-    } else {
-        project.pipelineSteps.getOrNull(stepIndex - 1)
+    // 1. 如果是第 0 步 (第一个滤镜)，它的“上一步”就是原图
+    // 原图存在 ProjectState 里
+    if (stepIndex == 0) {
+        return state.project.currentSourceImage
+    }
+    // 2. 如果是第 N 步，它的“上一步”就是流水线里的第 N-1 步的结果
+    // 步骤存在 PipelineState 里
+    else {
+        return state.pipeline.pipelineSteps.getOrNull(stepIndex - 1)
     }
 }

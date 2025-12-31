@@ -44,6 +44,7 @@ import org.eu.freex.tools.modules.image.presentation.ui.components.inspector.cor
 import org.eu.freex.tools.modules.image.presentation.ui.dialogs.CharMappingDialog
 import org.eu.freex.tools.modules.image.presentation.ui.dialogs.ScreenCropperDialog
 import org.eu.freex.tools.modules.image.presentation.ui.state.rememberEditorState
+import org.eu.freex.tools.modules.image.presentation.ui.state.rememberProjectExplorerState
 import org.eu.freex.tools.modules.image.presentation.viewmodel.ImageViewModel
 import org.koin.compose.koinInject
 
@@ -53,6 +54,11 @@ fun ImageWorkbench(
 ) {
     val fullState by viewModel.uiState.collectAsState()
     val projectState by remember(fullState) { derivedStateOf { fullState.project } }
+    // 1. 创建 State
+    val explorerState = rememberProjectExplorerState(
+        projectState = projectState,
+        onEvent = viewModel::handleEvent // 直接传递函数引用
+    )
     val uiState by remember(fullState) { derivedStateOf { fullState.ui } }
 
     val editorState = rememberEditorState()
@@ -74,11 +80,7 @@ fun ImageWorkbench(
                 // --- 左侧 ---
                 ProjectExplorer(
                     modifier = Modifier.width(260.dp).fillMaxHeight(),
-                    projectState =projectState,
-                    onSelect = { viewModel.handleEvent(SelectSourceImage(it)) },
-                    onImportFile = { file -> viewModel.handleEvent(LoadFile(file)) },
-                    onScreenCapture = { viewModel.handleEvent(StartScreenCapture) },
-                    onRemove = { viewModel.handleEvent(RemoveSourceImage(it)) }
+                    state = explorerState,
                 )
 
                 // --- 中间 ---

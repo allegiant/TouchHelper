@@ -1,12 +1,7 @@
 package org.eu.freex.tools.modules.image.presentation.contract
 
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.unit.IntOffset
-import org.eu.freex.tools.modules.image.domain.model.AppFilter
 import org.eu.freex.tools.modules.image.domain.model.GridParams
-import org.eu.freex.tools.modules.image.domain.model.ViewFilter
 import org.eu.freex.tools.modules.image.domain.model.WorkImage
 import java.awt.image.BufferedImage
 
@@ -16,25 +11,17 @@ import java.awt.image.BufferedImage
 data class ProjectState(
     val sourceImages: List<WorkImage> = emptyList(),
     val selectedSourceIndex: Int = -1,
-    val pipelineSteps: List<WorkImage> = emptyList(),
-    val selectedPipelineIndex: Int = 0,
-    val currentFilter: AppFilter = ViewFilter
 ) {
     val currentSourceImage: WorkImage?
         get() = sourceImages.getOrNull(selectedSourceIndex)
-
-    val activeDisplayImage: WorkImage?
-        get() = if (selectedPipelineIndex == 0) currentSourceImage
-        else pipelineSteps.getOrNull(selectedPipelineIndex - 1)
-
-    val displayChain: List<WorkImage>
-        get() {
-            val list = mutableListOf<WorkImage>()
-            currentSourceImage?.let { list.add(it.copy(label = "原图")) }
-            list.addAll(pipelineSteps)
-            return list
-        }
 }
+
+// 1. 新增：专注于处理流程的状态
+data class PipelineState(
+    val pipelineSteps: List<WorkImage> = emptyList(),
+    val selectedPipelineIndex: Int = 0,
+    val currentImage: WorkImage? = null
+)
 
 data class SegmentationState(
     val isGridMode: Boolean = true,
@@ -53,9 +40,25 @@ data class UiInteractionState(
 )
 
 data class ImageUiState(
-// 真实的数据源
     val project: ProjectState = ProjectState(),
+    val pipeline: PipelineState = PipelineState(),
     val segmentation: SegmentationState = SegmentationState(),
     val ui: UiInteractionState = UiInteractionState(),
-)
+) {
+    val activeDisplayImage: WorkImage?
+        get() = when {
+            // 1. 预览模式 (优先级最高)
+            pipeline.currentImage != null -> pipeline.currentImage
+            // 2. 历史步骤
+            pipeline.selectedPipelineIndex > 0 -> pipeline.pipelineSteps.getOrNull(pipeline.selectedPipelineIndex - 1)
+            // 3. 原图 (兜底)
+            // 【优化】这里做一个浅拷贝，把标签改成 "原图"，与底部列表 displayChain 保持一致
+            else -> project.currentSourceImage?.copy(label = "原图")
+        }
+    val displayChain: List<WorkImage>
+        get() = buildList {
+            project.currentSourceImage?.let { add(it.copy(label = "原图")) }
+            addAll(pipeline.pipelineSteps)
+        }
+}
 

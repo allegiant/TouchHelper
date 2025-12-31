@@ -5,10 +5,10 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -21,10 +21,9 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import org.eu.freex.tools.modules.image.domain.model.WorkImage
 import org.eu.freex.tools.common.utils.ImageUtils
-import org.eu.freex.tools.modules.image.presentation.contract.ProjectState
-import java.io.File
+import org.eu.freex.tools.modules.image.domain.model.WorkImage
+import org.eu.freex.tools.modules.image.presentation.ui.state.ProjectExplorerState
 
 
 /**
@@ -34,11 +33,7 @@ import java.io.File
 @Composable
 fun ProjectExplorer(
     modifier: Modifier = Modifier,
-    projectState: ProjectState,
-    onSelect: (Int) -> Unit,
-    onRemove: (Int) -> Unit,
-    onImportFile: (File) -> Unit,
-    onScreenCapture: () -> Unit
+    state: ProjectExplorerState,
 ) {
     // 获取当前主题的颜色
     val surfaceColor = MaterialTheme.colorScheme.surface
@@ -71,7 +66,7 @@ fun ProjectExplorer(
             // 导入按钮
             IconButton(
                 onClick = {
-                    ImageUtils.pickFile()?.let { onImportFile(it) }
+                    ImageUtils.pickFile()?.let { state.importFile(it) }
                 },
                 modifier = Modifier.size(24.dp)
             ) {
@@ -85,7 +80,7 @@ fun ProjectExplorer(
 
         // --- 截图按钮 ---
         Button(
-            onClick = onScreenCapture,
+            onClick = { state.startScreenCapture() },
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 8.dp)
@@ -106,15 +101,16 @@ fun ProjectExplorer(
         LazyColumn(
             contentPadding = PaddingValues(horizontal = 8.dp),
             verticalArrangement = Arrangement.spacedBy(2.dp),
-            modifier = Modifier.weight(1f)
+            modifier = Modifier.weight(1f),
+            state = state.listState
         ) {
-            itemsIndexed(projectState.sourceImages) { index, item ->
-                val isSelected = (index == projectState.selectedSourceIndex)
+            itemsIndexed(state.images) { index, item ->
+                val isSelected = (index == state.selectedIndex)
                 ResourceItem(
                     item = item,
                     isSelected = isSelected,
-                    onClick = { onSelect(index) },
-                    onDelete = { onRemove(index) }
+                    onClick = { state.select(index) },
+                    onDelete = { state.remove(index) }
                 )
             }
         }
