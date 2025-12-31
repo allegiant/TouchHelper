@@ -25,21 +25,17 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.toComposeImageBitmap
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.toOffset
 import org.eu.freex.tools.modules.image.presentation.contract.events.ConfirmMapping
 import org.eu.freex.tools.modules.image.presentation.contract.events.ConfirmScreenCrop
 import org.eu.freex.tools.modules.image.presentation.contract.events.DeletePipelineStep
 import org.eu.freex.tools.modules.image.presentation.contract.events.DismissDialogs
-import org.eu.freex.tools.modules.image.presentation.contract.events.HoverCanvas
 import org.eu.freex.tools.modules.image.presentation.contract.events.LoadFile
 import org.eu.freex.tools.modules.image.presentation.contract.events.RemoveSourceImage
 import org.eu.freex.tools.modules.image.presentation.contract.events.SelectPipelineStep
 import org.eu.freex.tools.modules.image.presentation.contract.events.SelectSourceImage
 import org.eu.freex.tools.modules.image.presentation.contract.events.StartScreenCapture
-import org.eu.freex.tools.modules.image.presentation.contract.events.UpdateCanvasTransform
 import org.eu.freex.tools.modules.image.presentation.ui.components.EditorCanvas
 import org.eu.freex.tools.modules.image.presentation.ui.components.ProcessingPipeline
 import org.eu.freex.tools.modules.image.presentation.ui.components.ProjectExplorer
@@ -47,6 +43,7 @@ import org.eu.freex.tools.modules.image.presentation.ui.components.inspector.Ins
 import org.eu.freex.tools.modules.image.presentation.ui.components.inspector.core.LocalImageViewModel
 import org.eu.freex.tools.modules.image.presentation.ui.dialogs.CharMappingDialog
 import org.eu.freex.tools.modules.image.presentation.ui.dialogs.ScreenCropperDialog
+import org.eu.freex.tools.modules.image.presentation.ui.state.rememberEditorState
 import org.eu.freex.tools.modules.image.presentation.viewmodel.ImageViewModel
 import org.koin.compose.koinInject
 
@@ -56,9 +53,9 @@ fun ImageWorkbench(
 ) {
     val fullState by viewModel.uiState.collectAsState()
     val projectState by remember(fullState) { derivedStateOf { fullState.project } }
-    val canvasState by remember(fullState) { derivedStateOf { fullState.canvas } }
     val uiState by remember(fullState) { derivedStateOf { fullState.ui } }
 
+    val editorState = rememberEditorState()
     val snackbarHostState = remember { SnackbarHostState() }
 
     LaunchedEffect(viewModel) {
@@ -95,14 +92,7 @@ fun ImageWorkbench(
                         EditorCanvas(
                             modifier = Modifier.fillMaxSize(),
                             workImage = projectState.activeDisplayImage,
-                            canvasState = canvasState,
-                            onTransformChange = { s, o ->
-                                viewModel.handleEvent(UpdateCanvasTransform(s, o))
-                            },
-                            onHover = { pos, color ->
-                                val fixedPos = pos?.toOffset() ?: Offset.Zero
-                                viewModel.handleEvent(HoverCanvas(fixedPos, color))
-                            },
+                            state = editorState
                         )
                     }
                     ProcessingPipeline(

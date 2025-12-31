@@ -3,7 +3,10 @@ package org.eu.freex.tools.modules.image.presentation.contract
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import org.eu.freex.tools.modules.image.domain.model.WorkImage
-import org.eu.freex.tools.modules.image.domain.usecase.*
+import org.eu.freex.tools.modules.image.domain.usecase.FilterProcessor
+import org.eu.freex.tools.modules.image.domain.usecase.ProjectProcessor
+import org.eu.freex.tools.modules.image.domain.usecase.ResourceProcessor
+import org.eu.freex.tools.modules.image.domain.usecase.SegmentationProcessor
 
 /**
  * ViewModel 能力契约
@@ -26,10 +29,6 @@ interface ImageActionScope {
     // --- 【核心优化 2】子状态更新语法糖 ---
     fun setProject(reducer: ProjectState.() -> ProjectState) {
         setState { copy(project = project.reducer()) }
-    }
-
-    fun setCanvas(reducer: CanvasState.() -> CanvasState) {
-        setState { copy(canvas = canvas.reducer()) }
     }
 
     fun setUi(reducer: UiInteractionState.() -> UiInteractionState) {

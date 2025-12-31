@@ -13,9 +13,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.material3.MaterialTheme // 【修改】引入 Material3
-import androidx.compose.material3.Surface      // 【修改】引入 Material3 Surface
-import androidx.compose.material3.Text         // 【修改】引入 Material3 Text
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -37,62 +37,57 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import org.eu.freex.tools.modules.image.domain.model.WorkImage
-import org.eu.freex.tools.modules.image.presentation.contract.CanvasState
+import org.eu.freex.tools.modules.image.presentation.ui.state.EditorState
+import org.eu.freex.tools.modules.image.presentation.ui.state.rememberEditorState
 
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
 fun EditorCanvas(
     modifier: Modifier = Modifier,
     workImage: WorkImage?,
-    canvasState: CanvasState,
-    onTransformChange: (Float, Offset) -> Unit,
-    onHover: (IntOffset?, Color) -> Unit,
+    // 【关键修改】接收 UI 层状态对象，替代 ViewModel 数据
+    state: EditorState = rememberEditorState(),
 ) {
-
     val binaryPreview: WorkImage? = null
-    val currentState by rememberUpdatedState(canvasState)
-    val currentOnTransformChange by rememberUpdatedState(onTransformChange)
+    val currentWorkImage by rememberUpdatedState(workImage)
+    // 依然使用 UpdatedState 防止闭包捕获旧 State 引用
+    val currentState by rememberUpdatedState(state)
 
     // 滚轮缩放逻辑
     val scrollModifier = Modifier.onPointerEvent(PointerEventType.Scroll) {
         val change = it.changes.first()
         val scrollDelta = change.scrollDelta.y
         val zoomFactor = if (scrollDelta > 0) 0.9f else 1.1f
-        val newScale = (currentState.mainScale * zoomFactor).coerceIn(0.1f, 20f)
-        currentOnTransformChange(newScale, currentState.mainOffset)
+        // 直接修改 UI 状态
+        currentState.zoom(zoomFactor)
     }
 
     // 拖拽逻辑
     val smoothDragModifier = Modifier.pointerInput(Unit) {
-        var startDragOffset = Offset.Zero
-        var dragOffsetAccumulator = Offset.Zero
-
-        detectDragGestures(
-            onDragStart = {
-                startDragOffset = currentState.mainOffset
-                dragOffsetAccumulator = Offset.Zero
-            },
-            onDrag = { change, dragAmount ->
-                change.consume()
-                dragOffsetAccumulator += dragAmount
-                val targetOffset = startDragOffset + dragOffsetAccumulator
-                currentOnTransformChange(currentState.mainScale, targetOffset)
-            }
-        )
+        detectDragGestures { change, dragAmount ->
+            change.consume()
+            // 直接修改 UI 状态
+            currentState.pan(dragAmount)
+        }
     }
 
     // 悬浮取色逻辑
     val hoverModifier = Modifier.onPointerEvent(PointerEventType.Move) {
         val pos = it.changes.first().position
-        val imgX = ((pos.x - currentState.mainOffset.x) / currentState.mainScale).toInt()
-        val imgY = ((pos.y - currentState.mainOffset.y) / currentState.mainScale).toInt()
-        val bufImg = workImage?.bufferedImage
+        val scale = currentState.mainScale
+        val offset = currentState.mainOffset
+
+        val imgX = ((pos.x - offset.x) / scale).toInt()
+        val imgY = ((pos.y - offset.y) / scale).toInt()
+
+        val bufImg = currentWorkImage?.bufferedImage
         if (bufImg != null && imgX in 0 until bufImg.width && imgY in 0 until bufImg.height) {
             val rgb = bufImg.getRGB(imgX, imgY)
             val color = Color(rgb)
-            onHover(IntOffset(imgX, imgY), color)
+            // 直接更新 UI 状态，不走 ViewModel
+            currentState.updateHover(IntOffset(imgX, imgY), color)
         } else {
-            onHover(null, Color.Transparent)
+            currentState.updateHover(null, Color.Transparent)
         }
     }
 
@@ -106,7 +101,6 @@ fun EditorCanvas(
 
     BoxWithConstraints(
         modifier = modifier
-            // 【修改】使用主题语义颜色，不再硬编码 0xFF1E1E1E
             .background(MaterialTheme.colorScheme.surfaceContainer)
             .clip(RectangleShape)
             .then(scrollModifier)
@@ -119,29 +113,36 @@ fun EditorCanvas(
                 val img = workImage.bufferedImage
                 val canvasW = constraints.maxWidth
                 val canvasH = constraints.maxHeight
-                val imgDisplayW = img.width * currentState.mainScale
-                val imgDisplayH = img.height * currentState.mainScale
+
+                // 计算初始缩放比例（比如适应屏幕）
+                // 这里暂时保持 1.0f 或者你可以加 logic 自动 fit
+                val targetScale = state.mainScale
+
+                val imgDisplayW = img.width * targetScale
+                val imgDisplayH = img.height * targetScale
                 val centerX = (canvasW - imgDisplayW) / 2f
                 val centerY = (canvasH - imgDisplayH) / 2f
-                onTransformChange(currentState.mainScale, Offset(centerX, centerY))
+
+                // 重置视图
+                state.reset(targetScale, Offset(centerX, centerY))
             }
         }
 
         Canvas(modifier = Modifier.fillMaxSize()) {
             withTransform({
-                translate(currentState.mainOffset.x, currentState.mainOffset.y)
-                scale(currentState.mainScale, pivot = Offset.Zero)
+                translate(state.mainOffset.x, state.mainOffset.y)
+                scale(state.mainScale, pivot = Offset.Zero)
             }) {
                 mainBitmap?.let { img -> drawImage(img) }
                 previewBitmap?.let { bin -> drawImage(bin, alpha = 0.8f) }
             }
         }
 
-        if (currentState.hoverPixelPos != null) {
+        if (state.hoverPixelPos != null) {
             PixelMagnifier(
                 modifier = Modifier.align(Alignment.TopEnd),
-                color = currentState.hoverColor,
-                pos = currentState.hoverPixelPos!!
+                color = state.hoverColor,
+                pos = state.hoverPixelPos!!
             )
         }
     }
@@ -149,20 +150,18 @@ fun EditorCanvas(
 
 @Composable
 private fun PixelMagnifier(modifier: Modifier, color: Color, pos: IntOffset) {
-    // 【修改】适配主题的 HUD 样式
     val containerColor = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.95f)
     val contentColor = MaterialTheme.colorScheme.onSurfaceVariant
     val borderColor = MaterialTheme.colorScheme.outlineVariant
 
     Surface(
         modifier = modifier.padding(8.dp),
-        color = containerColor, // 【修改】使用主题色
-        contentColor = contentColor, // 【修改】确保文字可见
+        color = containerColor,
+        contentColor = contentColor,
         shape = androidx.compose.foundation.shape.RoundedCornerShape(4.dp),
-        shadowElevation = 4.dp // 【修改】增加阴影
+        shadowElevation = 4.dp
     ) {
         Column(Modifier.padding(8.dp)) {
-            // 【修改】使用 labelSmall 样式
             Text("X: ${pos.x}, Y: ${pos.y}", style = MaterialTheme.typography.labelSmall)
 
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -170,7 +169,6 @@ private fun PixelMagnifier(modifier: Modifier, color: Color, pos: IntOffset) {
                     Modifier
                         .size(12.dp)
                         .background(color)
-                        // 【修改】边框颜色适配浅色背景
                         .border(1.dp, borderColor)
                 )
                 Spacer(Modifier.width(4.dp))
@@ -181,7 +179,6 @@ private fun PixelMagnifier(modifier: Modifier, color: Color, pos: IntOffset) {
                     color.blue.times(255).toInt()
                 )
 
-                // 【修改】使用 labelSmall 样式
                 Text(hex, style = MaterialTheme.typography.labelSmall)
             }
         }

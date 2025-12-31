@@ -12,7 +12,7 @@ object ApplyCurrentFilter : ImageUiEvent {
     override fun ImageActionScope.execute() {
         // 0 是原图，流水线从 1 开始，所以取 index-1
         val source =
-            if (state.project.selectedPipelineIndex == 0) state.currentSourceImage else state.project.pipelineSteps.getOrNull(
+            if (state.project.selectedPipelineIndex == 0) state.project.currentSourceImage else state.project.pipelineSteps.getOrNull(
                 state.project.selectedPipelineIndex - 1
             )
         if (source == null) return
@@ -154,7 +154,7 @@ data class DeletePipelineStep(val index: Int) : ImageUiEvent {
             val filtersToReplay = tailSteps.mapNotNull { it.appliedFilter }
 
             // 3. 确定重算的起始基座图片
-            val baseImage = keptSteps.lastOrNull() ?: state.currentSourceImage ?: return@launch
+            val baseImage = keptSteps.lastOrNull() ?: state.project.currentSourceImage ?: return@launch
 
             // 4. 调用处理器进行级联重算 (Processor 负责复杂计算)
             filterProcessor.processChain(baseImage, filtersToReplay)

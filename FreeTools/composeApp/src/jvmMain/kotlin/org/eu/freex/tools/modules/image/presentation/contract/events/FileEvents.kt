@@ -79,7 +79,7 @@ data class LoadProject(val file: File) : ImageUiEvent {
 data class ExportImage(val file: File) : ImageUiEvent {
     override fun ImageActionScope.execute() {
         launch {
-            val bitmap = state.activeDisplayImage?.bufferedImage
+            val bitmap = state.project.activeDisplayImage?.bufferedImage
             if (bitmap != null) {
                 runCatching { ImageIO.write(bitmap, "png", file) }
                     .onSuccess { showToast("导出成功") }

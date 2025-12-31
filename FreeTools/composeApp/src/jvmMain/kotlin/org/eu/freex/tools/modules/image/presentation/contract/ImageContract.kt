@@ -36,13 +36,6 @@ data class ProjectState(
         }
 }
 
-data class CanvasState(
-    val mainScale: Float = 1f,
-    val mainOffset: Offset = Offset.Zero,
-    val hoverPixelPos: IntOffset? = null,
-    val hoverColor: Color = Color.Transparent
-)
-
 data class SegmentationState(
     val isGridMode: Boolean = true,
     val gridParams: GridParams = GridParams(0, 0, 100, 100, 0, 0, 1, 1),
@@ -62,7 +55,6 @@ data class UiInteractionState(
 data class ImageUiState(
 // 真实的数据源
     val project: ProjectState = ProjectState(),
-    val canvas: CanvasState = CanvasState(),
     val segmentation: SegmentationState = SegmentationState(),
     val ui: UiInteractionState = UiInteractionState(),
 )
