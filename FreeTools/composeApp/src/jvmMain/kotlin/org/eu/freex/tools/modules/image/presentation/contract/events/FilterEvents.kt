@@ -1,137 +1,124 @@
+// 路径: src/jvmMain/kotlin/org/eu/freex/tools/modules/image/presentation/contract/events/FilterEvents.kt
 package org.eu.freex.tools.modules.image.presentation.contract.events
 
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 import org.eu.freex.tools.modules.image.domain.model.AppFilter
-import org.eu.freex.tools.modules.image.domain.model.BinarizationFilter
 import org.eu.freex.tools.modules.image.presentation.contract.ImageActionScope
 import org.eu.freex.tools.modules.image.presentation.contract.ImageUiEvent
 import org.eu.freex.tools.modules.image.presentation.contract.getPrevStepImage
 
-object ApplyCurrentFilter : ImageUiEvent {
+// =================================================================================
+// 1. 预览与参数调节 (Preview & Adjustment)
+// =================================================================================
+
+/**
+ * 选中滤镜（菜单点击）
+ * 动作：立即基于当前输入跑一遍默认参数，生成预览图放入 currentImage
+ */
+data class SelectFilter(val filter: AppFilter) : ImageUiEvent {
     override fun ImageActionScope.execute() {
-        // 0 是原图，流水线从 1 开始，所以取 index-1
-        val source =
-            if (state.project.selectedPipelineIndex == 0) state.project.currentSourceImage else state.project.pipelineSteps.getOrNull(
-                state.project.selectedPipelineIndex - 1
-            )
-        if (source == null) return
+        val inputImage = getPrevStepImage(state.pipeline.selectedPipelineIndex) ?: return
+
         launch {
-            filterProcessor.applyFilter(source, state.project.currentFilter)
-                .onSuccess { newImage ->
-                    setProject {
-                        val newSteps = pipelineSteps + newImage
-                        copy(
-                            pipelineSteps = newSteps,
-                            selectedPipelineIndex = newSteps.size
-                        )
-                    }
+            // 单步处理，生成预览
+            filterProcessor.processSingle(inputImage, filter)
+                .onSuccess { previewImage ->
+                    setPipeline { copy(currentImage = previewImage) }
+                }
+                .onFailure {
+                    showToast("滤镜预览失败: ${it.message}")
                 }
         }
     }
 }
 
 /**
- * 场景 1: 按钮触发的强制修改 (Modify & Cascade)
- * 对应 ImageUiEvent.ModifyCurrentStep
- * 特点：级联重算后续所有步骤，确保流水线数据一致性
+ * 更新滤镜参数（滑块拖动）
+ * 动作：增量计算，更新 currentImage
+ */
+data class UpdateFilter(val filter: AppFilter) : ImageUiEvent {
+    override fun ImageActionScope.execute() {
+        val inputImage = getPrevStepImage(state.pipeline.selectedPipelineIndex) ?: return
+
+        launch {
+            filterProcessor.processSingle(inputImage, filter)
+                .onSuccess { previewImage ->
+                    setPipeline { copy(currentImage = previewImage) }
+                }
+        }
+    }
+}
+
+/**
+ * 取消/退出预览
+ */
+object CancelPreview : ImageUiEvent {
+    override fun ImageActionScope.execute() {
+        setPipeline { copy(currentImage = null) }
+    }
+}
+
+// =================================================================================
+// 2. 提交与修改 (Commit & Modify)
+// =================================================================================
+
+/**
+ * 应用当前滤镜
+ * 动作：将预览图 (currentImage) 正式加入流水线步骤
+ */
+object ApplyCurrentFilter : ImageUiEvent {
+    override fun ImageActionScope.execute() {
+        val preview = state.pipeline.currentImage ?: return
+
+        val insertIndex = state.pipeline.selectedPipelineIndex
+        val currentSteps = state.pipeline.pipelineSteps
+
+        // 截断逻辑：保留插入点之前的步骤，追加新步骤
+        val newSteps = currentSteps.take(insertIndex).toMutableList()
+        newSteps.add(preview)
+
+        setPipeline {
+            copy(
+                pipelineSteps = newSteps,
+                selectedPipelineIndex = newSteps.size,
+                currentImage = null // 退出预览
+            )
+        }
+    }
+}
+
+/**
+ * 修改当前步骤
+ * 动作：将当前选中的步骤“加载”进 currentImage，进入预览/编辑模式
  */
 object ModifyCurrentStep : ImageUiEvent {
     override fun ImageActionScope.execute() {
-        // 1. 基础校验
-        if (state.project.selectedPipelineIndex == 0) {
-            showToast("原图无法修改")
+        val index = state.pipeline.selectedPipelineIndex
+        if (index == 0) {
+            showToast("无法修改原图")
             return
         }
-        val stepIndex = state.project.selectedPipelineIndex - 1
 
-        // 2. 准备输入源 (Input Image)
-        val inputImage = getPrevStepImage(stepIndex) ?: return showToast("无法修改原图")
+        val stepToModify = state.pipeline.pipelineSteps.getOrNull(index - 1) ?: return
 
-        // 3. 准备滤镜链条 (Filter Chain)
-        // [当前新滤镜] + [后续所有步骤的滤镜]
-        val newCurrentFilter = state.project.currentFilter
-
-        // 从当前步骤的后一步开始，提取后续所有滤镜
-        // 注意：这里依赖 WorkImage.appliedFilter 字段来还原滤镜
-        val subsequentSteps = state.project.pipelineSteps.drop(stepIndex + 1)
-        val subsequentFilters = subsequentSteps.mapNotNull { it.appliedFilter }
-
-        // 合并成完整的重算任务链
-        val filtersToRun = listOf(newCurrentFilter) + subsequentFilters
-
-        // 4. 取消预览，开始正式计算
-        filterPreviewJob?.cancel()
-
-        filterPreviewJob = scope.launch {
-            setUi { copy(isLoading = true) }
-
-            // 调用 Processor 批量处理
-            filterProcessor.processChain(inputImage, filtersToRun)
-                .onSuccess { newImages ->
-                    // 5. 拼接结果
-                    // 保留：被修改步骤之前的所有步骤
-                    val keptSteps = state.project.pipelineSteps.take(stepIndex)
-                    // 新流水线 = 保留部分 + 重算部分
-                    val finalSteps = keptSteps + newImages
-
-                    setProject { copy(pipelineSteps = finalSteps) }
-                    setUi { copy(isLoading = false) }
-                    showToast("步骤及其后续流水线已更新")
-                }
-                .onFailure {
-                    it.printStackTrace()
-                    setUi { copy(isLoading = false) }
-                    showToast("级联更新失败: ${it.message}")
-                }
+        // 进入编辑模式
+        setPipeline {
+            copy(currentImage = stepToModify)
         }
     }
 }
 
-data class UpdateFilter(val filter: AppFilter) : ImageUiEvent {
-    override fun ImageActionScope.execute() {
-        // 1. 立即更新 UI 数值
-        setProject { copy(currentFilter = filter) }
-        // 2. 只有二值化等交互式滤镜才预览
-        if (filter !is BinarizationFilter) return
-        if (state.project.selectedPipelineIndex == 0) return
-
-        // 3. 防抖预览
-        filterPreviewJob?.cancel()
-        filterPreviewJob = scope.launch {
-            delay(15)
-            val stepIndex = state.project.selectedPipelineIndex - 1
-            val input = getPrevStepImage(stepIndex) ?: return@launch
-
-            // 校验：确保当前选中的步骤确实是这个类型的滤镜生成的
-            val currentStep = state.project.pipelineSteps.getOrNull(stepIndex)
-            if (currentStep?.appliedFilter != null && currentStep.appliedFilter::class != filter::class) return@launch
-
-            // 静默计算
-            filterProcessor.applyFilter(input, filter).onSuccess { updatedImage ->
-                setProject {
-                    val newSteps = pipelineSteps.toMutableList()
-                    if (stepIndex in newSteps.indices) {
-                        newSteps[stepIndex] = updatedImage
-                        copy(pipelineSteps = newSteps) // 不改 isLoading
-                    } else {
-                        copy()
-                    }
-                }
-            }
-        }
-    }
-}
-
-data class SelectFilter(val filter: AppFilter) : ImageUiEvent {
-    override fun ImageActionScope.execute() {
-        setProject { copy(currentFilter = filter) }
-    }
-}
+// =================================================================================
+// 3. 流水线管理
+// =================================================================================
 
 data class SelectPipelineStep(val index: Int) : ImageUiEvent {
     override fun ImageActionScope.execute() {
-        setProject { copy(selectedPipelineIndex = index) }
+        setPipeline {
+            copy(
+                selectedPipelineIndex = index,
+                currentImage = null // 切步骤时强制退出预览模式
+            )
+        }
     }
 }
 
@@ -142,31 +129,34 @@ data class DeletePipelineStep(val index: Int) : ImageUiEvent {
             return
         }
         val stepIndexToRemove = index - 1
-        val currentSteps = state.project.pipelineSteps
+        val currentSteps = state.pipeline.pipelineSteps
         if (stepIndexToRemove !in currentSteps.indices) return
 
         launch {
-            // 1. 拆分列表 (UI 逻辑)
-            val keptSteps = currentSteps.take(stepIndexToRemove) // 删除点之前的保留
-            val tailSteps = currentSteps.drop(stepIndexToRemove + 1) // 删除点之后的需要重算
+            // 1. 拆分
+            val keptSteps = currentSteps.take(stepIndexToRemove)
+            val tailSteps = currentSteps.drop(stepIndexToRemove + 1)
 
-            // 2. 提取需要重放的滤镜配方
+            // 2. 提取后续滤镜
             val filtersToReplay = tailSteps.mapNotNull { it.appliedFilter }
 
-            // 3. 确定重算的起始基座图片
+            // 3. 确定重算基座
             val baseImage = keptSteps.lastOrNull() ?: state.project.currentSourceImage ?: return@launch
 
-            // 4. 调用处理器进行级联重算 (Processor 负责复杂计算)
+            // 4. 级联重算
             filterProcessor.processChain(baseImage, filtersToReplay)
                 .onSuccess { recalculatedTail ->
-                    // 5. 合并结果并更新
-                    setProject {
+                    setPipeline {
                         val finalSteps = keptSteps + recalculatedTail
                         copy(
                             pipelineSteps = finalSteps,
-                            selectedPipelineIndex = finalSteps.size
+                            selectedPipelineIndex = finalSteps.size,
+                            currentImage = null
                         )
                     }
+                }
+                .onFailure {
+                    showToast("重算流水线失败: ${it.message}")
                 }
         }
     }

@@ -32,7 +32,7 @@ object BinarizationRenderer : FilterRenderer {
         val state by viewModel.uiState.collectAsState()
 
         // 安全获取参数，如果类型不对则使用默认值
-        val filter = state.project.currentFilter as? BinarizationFilter ?: BinarizationFilter()
+        val filter = state.pipeline.currentImage?.appliedFilter as? BinarizationFilter ?: BinarizationFilter()
 
         Column {
             ThresholdControl(

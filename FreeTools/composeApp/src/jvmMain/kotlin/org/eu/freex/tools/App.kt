@@ -78,7 +78,7 @@ fun App(window: androidx.compose.ui.awt.ComposeWindow?) {
                 TopBar(
                     currentModule = currentModule,
                     themeMode = themeMode,
-                    viewModel =  imageViewModel,
+                    onEvent = imageViewModel::handleEvent,
                     onThemeChange = { themeMode = it },
                     onModuleChange = { currentModule = it }
                 )

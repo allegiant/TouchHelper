@@ -110,7 +110,7 @@ fun InspectorPanel(
                         FilterSelectionList(
                             modifier = Modifier.weight(1f),
                             // 【关键修改】使用 projectState 中的数据
-                            currentFilter = projectState.currentFilter,
+                            currentFilter = projectState.currentSourceImage?.appliedFilter!!,
                             onFilterChange = { newFilter ->
                                 viewModel.handleEvent(SelectFilter(newFilter))
                             }
@@ -130,8 +130,8 @@ fun InspectorPanel(
 
                             // 动态加载具体的滤镜设置 UI
                             // 使用 remember 缓存 Renderer，只有当 Filter 类型或引用变化时才重新获取
-                            val renderer = remember(projectState.currentFilter) {
-                                FilterUIRegistry.getRenderer(projectState.currentFilter)
+                            val renderer = remember(projectState.currentSourceImage?.appliedFilter!!) {
+                                FilterUIRegistry.getRenderer(projectState.currentSourceImage?.appliedFilter!!)
                             }
                             renderer.Content()
 

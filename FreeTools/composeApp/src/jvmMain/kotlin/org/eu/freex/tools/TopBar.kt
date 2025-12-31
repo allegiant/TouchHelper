@@ -39,26 +39,22 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import org.eu.freex.tools.common.theme.ThemeMode
 import org.eu.freex.tools.modules.image.domain.model.AppModule
+import org.eu.freex.tools.modules.image.presentation.contract.ImageUiEvent
 import org.eu.freex.tools.modules.image.presentation.contract.events.ExportImage
 import org.eu.freex.tools.modules.image.presentation.contract.events.LoadProject
 import org.eu.freex.tools.modules.image.presentation.contract.events.SaveProject
-import org.eu.freex.tools.modules.image.presentation.viewmodel.ImageViewModel
-import org.eu.freex.tools.common.theme.ThemeMode
-import org.eu.freex.tools.common.utils.ImageUtils
-import org.koin.compose.koinInject
 import java.awt.FileDialog
 import java.awt.Frame
 import java.io.File
-
-// enum class AppModule 保持不变 (如果在其他文件没定义，请保留在这里)
-// enum class AppModule { IMAGE_PROCESSING, FONT_MANAGER }
 
 @Composable
 fun TopBar(
     currentModule: AppModule,
     themeMode: ThemeMode,
-    viewModel: ImageViewModel,
+    // 【重构】不再传递 ViewModel，而是传递通用的事件回调，解耦 UI 与 VM
+    onEvent: (ImageUiEvent) -> Unit,
     onThemeChange: (ThemeMode) -> Unit,
     onModuleChange: (AppModule) -> Unit
 ) {
@@ -69,7 +65,7 @@ fun TopBar(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(56.dp) // M3 标准高度通常稍高，也可以保持 48.dp
+            .height(56.dp)
             .background(backgroundColor)
             .padding(horizontal = 16.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -77,13 +73,13 @@ fun TopBar(
         Text(
             text = "FreexTools Pro",
             color = contentColor,
-            style = MaterialTheme.typography.titleMedium, // M3 排版样式
+            style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Bold
         )
 
         Spacer(Modifier.width(40.dp))
 
-        // 导航标签
+        // --- 模块导航 ---
         ModuleTab(
             text = "图像处理",
             icon = Icons.Default.Image,
@@ -104,15 +100,16 @@ fun TopBar(
 
         Spacer(Modifier.weight(1f))
 
-        FileMenu(viewModel)
+        // --- 文件菜单 ---
+        FileMenu(onEvent)
 
-        // 主题切换按钮
+        // --- 主题切换 ---
         ThemeSwitcher(themeMode, onThemeChange, contentColor)
     }
 }
 
 @Composable
-fun ThemeSwitcher(currentMode: ThemeMode, onChange: (ThemeMode) -> Unit, color: Color) {
+private fun ThemeSwitcher(currentMode: ThemeMode, onChange: (ThemeMode) -> Unit, color: Color) {
     val (icon, tooltip) = when (currentMode) {
         ThemeMode.Light -> Icons.Default.Brightness7 to "浅色模式"
         ThemeMode.Dark -> Icons.Default.Brightness4 to "深色模式"
@@ -132,14 +129,13 @@ fun ThemeSwitcher(currentMode: ThemeMode, onChange: (ThemeMode) -> Unit, color: 
 }
 
 @Composable
-fun ModuleTab(
+private fun ModuleTab(
     text: String,
     icon: ImageVector,
     isSelected: Boolean,
     baseColor: Color,
     onClick: () -> Unit
 ) {
-    // 选中态使用 Primary 色，未选中态使用 OnSurface 但降低透明度
     val color = if (isSelected) MaterialTheme.colorScheme.primary else baseColor.copy(alpha = 0.6f)
 
     Row(
@@ -166,7 +162,7 @@ fun ModuleTab(
 }
 
 @Composable
-fun FileMenu(viewModel: ImageViewModel) {
+private fun FileMenu(onEvent: (ImageUiEvent) -> Unit) {
     var expanded by remember { mutableStateOf(false) }
 
     Box {
@@ -182,13 +178,14 @@ fun FileMenu(viewModel: ImageViewModel) {
                 text = { Text("保存工程 (.fxproj)") },
                 onClick = {
                     expanded = false
-                    ImageUtils.pickFile()
+                    // 【重构】移除了多余的 ImageUtils.pickFile()
+                    // 直接调用 AWT 文件选择器
                     val file = showFileChooser(
                         save = true,
                         filterDesc = "FreeTools Project",
                         ext = "fxproj"
                     )
-                    if (file != null) viewModel.handleEvent(SaveProject(file))
+                    if (file != null) onEvent(SaveProject(file))
                 },
                 leadingIcon = { Icon(Icons.Default.Save, null) }
             )
@@ -202,7 +199,7 @@ fun FileMenu(viewModel: ImageViewModel) {
                         filterDesc = "FreeTools Project",
                         ext = "fxproj"
                     )
-                    if (file != null) viewModel.handleEvent(LoadProject(file))
+                    if (file != null) onEvent(LoadProject(file))
                 },
                 leadingIcon = { Icon(Icons.Default.FolderOpen, null) }
             )
@@ -214,39 +211,34 @@ fun FileMenu(viewModel: ImageViewModel) {
                 onClick = {
                     expanded = false
                     val file = showFileChooser(save = true, filterDesc = "PNG Image", ext = "png")
-                    if (file != null) viewModel.handleEvent(ExportImage(file))
+                    if (file != null) onEvent(ExportImage(file))
                 }
             )
         }
     }
 }
 
-// 使用原生 AWT FileDialog 的文件选择器
-fun showFileChooser(save: Boolean, filterDesc: String, ext: String): File? {
+/**
+ * 桌面端原生文件选择器 (基于 AWT)
+ * 注意：这是阻塞式调用，但在 Desktop Compose 点击回调中是安全的。
+ */
+private fun showFileChooser(save: Boolean, filterDesc: String, ext: String): File? {
     val mode = if (save) FileDialog.SAVE else FileDialog.LOAD
 
-    // 1. 创建 FileDialog (parent 传 null 会使用默认隐藏 Frame)
-    // title 使用 filterDesc 可以让用户知道要选什么文件
+    // parent 设为 null 会创建一个默认的隐藏 Frame 作为父窗口
     val dialog = FileDialog(null as Frame?, "$filterDesc (*.$ext)", mode)
 
-    // 2. 设置过滤器
-    // 设置默认文件名模式 (这对 Windows 有效，能过滤显示文件)
-    dialog.file = "*.$ext"
-    // 设置逻辑过滤器 (这对 macOS/Linux 有效)
-    dialog.setFilenameFilter { _, name -> name.endsWith(".$ext", ignoreCase = true) }
+    dialog.file = "*.$ext" // Windows 文件名过滤
+    dialog.setFilenameFilter { _, name -> name.endsWith(".$ext", ignoreCase = true) } // Mac/Linux 逻辑过滤
 
-    // 3. 显示对话框 (这行代码会阻塞线程，直到用户关闭对话框)
-    dialog.isVisible = true
+    dialog.isVisible = true // 阻塞直到关闭
 
-    // 4. 获取结果
     val fileName = dialog.file
     val directory = dialog.directory
 
-    // 如果 fileName 为 null，说明用户点击了取消
     if (fileName != null && directory != null) {
         var file = File(directory, fileName)
-
-        // 5. 自动补全后缀 (仅在保存模式下)
+        // 保存模式下自动补全后缀
         if (save && !file.name.lowercase().endsWith(".$ext")) {
             file = File(file.parent, "${file.name}.$ext")
         }

@@ -93,13 +93,13 @@ fun ImageWorkbench(
                     ) {
                         EditorCanvas(
                             modifier = Modifier.fillMaxSize(),
-                            workImage = projectState.activeDisplayImage,
+                            workImage = fullState.activeDisplayImage,
                             state = editorState
                         )
                     }
                     ProcessingPipeline(
                         modifier = Modifier.fillMaxWidth().height(140.dp),
-                        processChain = projectState.displayChain,
+                        processChain = fullState.displayChain,
                         projectState = projectState,
                         onSelect = { viewModel.handleEvent(SelectPipelineStep(it)) },
                         onDelete = { viewModel.handleEvent(DeletePipelineStep(it)) }
