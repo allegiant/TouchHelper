@@ -10,47 +10,61 @@ import org.eu.freex.tools.modules.image.domain.model.ViewFilter
 import org.eu.freex.tools.modules.image.domain.model.WorkImage
 import java.awt.image.BufferedImage
 
-data class ImageUiState(
-    val binaryPreview: WorkImage? = null,
+
+// --- 1. 定义子状态 (Domain Domains) ---
+
+data class ProjectState(
     val sourceImages: List<WorkImage> = emptyList(),
     val selectedSourceIndex: Int = -1,
+    val pipelineSteps: List<WorkImage> = emptyList(),
+    val selectedPipelineIndex: Int = 0,
+    val currentFilter: AppFilter = ViewFilter
+)
+
+data class CanvasState(
     val mainScale: Float = 1f,
     val mainOffset: Offset = Offset.Zero,
     val hoverPixelPos: IntOffset? = null,
-    val hoverColor: Color = Color.Transparent,
-    val pipelineSteps: List<WorkImage> = emptyList(),
-    val selectedPipelineIndex: Int = 0,
+    val hoverColor: Color = Color.Transparent
+)
+
+data class SegmentationState(
+    val isGridMode: Boolean = true,
+    val gridParams: GridParams = GridParams(0, 0, 100, 100, 0, 0, 1, 1),
+    val activeRects: List<Rect> = emptyList(),
+    val segmentationResults: List<WorkImage> = emptyList()
+)
+
+data class UiInteractionState(
     val isLoading: Boolean = false,
     val rightPanelTabIndex: Int = 0,
-    val currentFilter: AppFilter = ViewFilter,
-
-    // 【关键修改】isGridMode 默认为 false (智能模式)，或 true (网格模式)
-    val isGridMode: Boolean = true,
-    // 【关键修改】默认网格大小改为 100x100，避免太小看不见
-    val gridParams: GridParams = GridParams(0, 0, 100, 100, 0, 0, 1, 1),
-
-    val activeRects: List<Rect> = emptyList(),
-    val segmentationResults: List<WorkImage> = emptyList(),
     val isScreenCropperVisible: Boolean = false,
     val fullScreenCapture: BufferedImage? = null,
     val isMappingDialogVisible: Boolean = false,
-    val mappingBitmap: BufferedImage? = null,
+    val mappingBitmap: BufferedImage? = null
+)
+
+data class ImageUiState(
+// 真实的数据源
+    val project: ProjectState = ProjectState(),
+    val canvas: CanvasState = CanvasState(),
+    val segmentation: SegmentationState = SegmentationState(),
+    val ui: UiInteractionState = UiInteractionState(),
+
 ) {
-    val currentSourceImage: WorkImage? get() = sourceImages.getOrNull(selectedSourceIndex)
+    val currentSourceImage: WorkImage?
+        get() = project.sourceImages.getOrNull(project.selectedSourceIndex)
 
     val activeDisplayImage: WorkImage?
-        get() {
-            if (pipelineSteps.isNotEmpty() && selectedPipelineIndex > 0) {
-                return pipelineSteps.getOrNull(selectedPipelineIndex - 1)
-            }
-            return currentSourceImage
-        }
+        get() = if (project.selectedPipelineIndex == 0) currentSourceImage
+        else project.pipelineSteps.getOrNull(project.selectedPipelineIndex - 1)
 
     val displayChain: List<WorkImage>
         get() {
             val list = mutableListOf<WorkImage>()
             currentSourceImage?.let { list.add(it.copy(label = "原图")) }
-            list.addAll(pipelineSteps)
+            list.addAll(project.pipelineSteps)
             return list
         }
 }
+

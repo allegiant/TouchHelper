@@ -23,6 +23,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import org.eu.freex.tools.modules.image.domain.model.WorkImage
 import org.eu.freex.tools.common.utils.ImageUtils
+import org.eu.freex.tools.modules.image.presentation.contract.ProjectState
 import java.io.File
 
 
@@ -33,8 +34,7 @@ import java.io.File
 @Composable
 fun ProjectExplorer(
     modifier: Modifier = Modifier,
-    sourceImages: List<WorkImage>,
-    selectedIndex: Int,
+    projectState: ProjectState,
     onSelect: (Int) -> Unit,
     onRemove: (Int) -> Unit,
     onImportFile: (File) -> Unit,
@@ -108,8 +108,8 @@ fun ProjectExplorer(
             verticalArrangement = Arrangement.spacedBy(2.dp),
             modifier = Modifier.weight(1f)
         ) {
-            itemsIndexed(sourceImages) { index, item ->
-                val isSelected = (index == selectedIndex)
+            itemsIndexed(projectState.sourceImages) { index, item ->
+                val isSelected = (index == projectState.selectedSourceIndex)
                 ResourceItem(
                     item = item,
                     isSelected = isSelected,

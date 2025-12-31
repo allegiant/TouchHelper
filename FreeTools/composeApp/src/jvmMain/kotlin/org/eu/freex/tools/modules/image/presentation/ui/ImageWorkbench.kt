@@ -28,10 +28,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.toComposeImageBitmap
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.toOffset
-import org.eu.freex.tools.modules.image.presentation.ui.dialogs.CharMappingDialog
-import org.eu.freex.tools.modules.image.presentation.ui.dialogs.ScreenCropperDialog
-import org.eu.freex.tools.modules.image.presentation.contract.events.ChangePanelTab
-import org.eu.freex.tools.modules.image.presentation.contract.events.ColorPick
 import org.eu.freex.tools.modules.image.presentation.contract.events.ConfirmMapping
 import org.eu.freex.tools.modules.image.presentation.contract.events.ConfirmScreenCrop
 import org.eu.freex.tools.modules.image.presentation.contract.events.DeletePipelineStep
@@ -48,6 +44,8 @@ import org.eu.freex.tools.modules.image.presentation.ui.components.ProcessingPip
 import org.eu.freex.tools.modules.image.presentation.ui.components.ProjectExplorer
 import org.eu.freex.tools.modules.image.presentation.ui.components.inspector.InspectorPanel
 import org.eu.freex.tools.modules.image.presentation.ui.components.inspector.core.LocalImageViewModel
+import org.eu.freex.tools.modules.image.presentation.ui.dialogs.CharMappingDialog
+import org.eu.freex.tools.modules.image.presentation.ui.dialogs.ScreenCropperDialog
 import org.eu.freex.tools.modules.image.presentation.viewmodel.ImageViewModel
 import org.koin.compose.koinInject
 
@@ -74,8 +72,7 @@ fun ImageWorkbench(
                 // --- 左侧 ---
                 ProjectExplorer(
                     modifier = Modifier.width(260.dp).fillMaxHeight(),
-                    sourceImages = state.sourceImages,
-                    selectedIndex = state.selectedSourceIndex,
+                    projectState = state.project,
                     onSelect = { viewModel.handleEvent(SelectSourceImage(it)) },
                     onImportFile = { file -> viewModel.handleEvent(LoadFile(file)) },
                     onScreenCapture = { viewModel.handleEvent(StartScreenCapture) },
@@ -93,11 +90,7 @@ fun ImageWorkbench(
                         EditorCanvas(
                             modifier = Modifier.fillMaxSize(),
                             workImage = state.activeDisplayImage,
-                            binaryPreview = state.binaryPreview,
-                            scale = state.mainScale,
-                            offset = state.mainOffset,
-                            hoverColor = state.hoverColor,
-                            hoverPos = state.hoverPixelPos,
+                            canvasState = state.canvas,
                             onTransformChange = { s, o ->
                                 viewModel.handleEvent(UpdateCanvasTransform(s, o))
                             },
@@ -105,15 +98,12 @@ fun ImageWorkbench(
                                 val fixedPos = pos?.toOffset() ?: Offset.Zero
                                 viewModel.handleEvent(HoverCanvas(fixedPos, color))
                             },
-                            onColorPick = { hex ->
-                                viewModel.handleEvent(ColorPick(hex))
-                            }
                         )
                     }
                     ProcessingPipeline(
                         modifier = Modifier.fillMaxWidth().height(140.dp),
                         processChain = state.displayChain,
-                        selectedIndex = state.selectedPipelineIndex,
+                        projectState = state.project,
                         onSelect = { viewModel.handleEvent(SelectPipelineStep(it)) },
                         onDelete = { viewModel.handleEvent(DeletePipelineStep(it)) }
                     )
@@ -123,8 +113,8 @@ fun ImageWorkbench(
                 CompositionLocalProvider(LocalImageViewModel provides viewModel) {
                     InspectorPanel(
                         modifier = Modifier.width(320.dp).fillMaxHeight(),
-                        selectedTab = state.rightPanelTabIndex,
-                        onTabChange = { viewModel.handleEvent(ChangePanelTab(it)) },
+                        projectState = state.project,
+                        uiState = state.ui,
                     )
                 }
 
@@ -132,9 +122,9 @@ fun ImageWorkbench(
             }
 
             // --- 全局弹窗层 ---
-            if (state.isScreenCropperVisible && state.fullScreenCapture != null) {
+            if (state.ui.isScreenCropperVisible && state.ui.fullScreenCapture != null) {
                 ScreenCropperDialog(
-                    fullScreenImage = state.fullScreenCapture!!,
+                    fullScreenImage = state.ui.fullScreenCapture!!,
                     onDismiss = { viewModel.handleEvent(DismissDialogs) },
                     onCropConfirm = { cropped ->
                         viewModel.handleEvent(
@@ -146,16 +136,16 @@ fun ImageWorkbench(
                 )
             }
 
-            if (state.isMappingDialogVisible && state.mappingBitmap != null) {
+            if (state.ui.isMappingDialogVisible && state.ui.mappingBitmap != null) {
                 CharMappingDialog(
-                    bitmap = state.mappingBitmap!!.toComposeImageBitmap(),
+                    bitmap = state.ui.mappingBitmap!!.toComposeImageBitmap(),
                     onDismiss = { viewModel.handleEvent(DismissDialogs) },
                     onConfirm = { char -> viewModel.handleEvent(ConfirmMapping(char)) }
                 )
             }
 
             // 【关键修复】Loading 指示器 (移除了背景色)
-            if (state.isLoading) {
+            if (state.ui.isLoading) {
                 Box(
                     modifier = Modifier.fillMaxSize(), // 不再设置 background color
                     contentAlignment = Alignment.Center

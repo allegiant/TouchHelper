@@ -20,6 +20,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import org.eu.freex.tools.modules.image.domain.model.WorkImage
+import org.eu.freex.tools.modules.image.presentation.contract.ProjectState
 
 /**
  * 3. 底部流水线 (ProcessingPipeline)
@@ -29,7 +30,7 @@ import org.eu.freex.tools.modules.image.domain.model.WorkImage
 fun ProcessingPipeline(
     modifier: Modifier = Modifier,
     processChain: List<WorkImage>, // 包含原图+所有步骤
-    selectedIndex: Int,
+    projectState: ProjectState,
     onSelect: (Int) -> Unit,
     onDelete: (Int) -> Unit
 ) {
@@ -69,7 +70,7 @@ fun ProcessingPipeline(
                     PipelineStepItem(
                         item = item,
                         index = index,
-                        isSelected = (index == selectedIndex),
+                        isSelected = (index == projectState.selectedSourceIndex),
                         // 第一步(原图)通常不允许删除
                         isDeletable = index > 0,
                         onClick = { onSelect(index) },

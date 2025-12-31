@@ -37,23 +37,20 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import org.eu.freex.tools.modules.image.domain.model.WorkImage
+import org.eu.freex.tools.modules.image.presentation.contract.CanvasState
 
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
 fun EditorCanvas(
     modifier: Modifier = Modifier,
     workImage: WorkImage?,
-    binaryPreview: WorkImage? = null,
-    scale: Float,
-    offset: Offset,
-    hoverPos: IntOffset?,
-    hoverColor: Color,
+    canvasState: CanvasState,
     onTransformChange: (Float, Offset) -> Unit,
     onHover: (IntOffset?, Color) -> Unit,
-    onColorPick: (String) -> Unit
 ) {
-    val currentScale by rememberUpdatedState(scale)
-    val currentOffset by rememberUpdatedState(offset)
+
+    val binaryPreview: WorkImage? = null
+    val currentState by rememberUpdatedState(canvasState)
     val currentOnTransformChange by rememberUpdatedState(onTransformChange)
 
     // 滚轮缩放逻辑
@@ -61,8 +58,8 @@ fun EditorCanvas(
         val change = it.changes.first()
         val scrollDelta = change.scrollDelta.y
         val zoomFactor = if (scrollDelta > 0) 0.9f else 1.1f
-        val newScale = (currentScale * zoomFactor).coerceIn(0.1f, 20f)
-        currentOnTransformChange(newScale, currentOffset)
+        val newScale = (currentState.mainScale * zoomFactor).coerceIn(0.1f, 20f)
+        currentOnTransformChange(newScale, currentState.mainOffset)
     }
 
     // 拖拽逻辑
@@ -72,14 +69,14 @@ fun EditorCanvas(
 
         detectDragGestures(
             onDragStart = {
-                startDragOffset = currentOffset
+                startDragOffset = currentState.mainOffset
                 dragOffsetAccumulator = Offset.Zero
             },
             onDrag = { change, dragAmount ->
                 change.consume()
                 dragOffsetAccumulator += dragAmount
                 val targetOffset = startDragOffset + dragOffsetAccumulator
-                currentOnTransformChange(currentScale, targetOffset)
+                currentOnTransformChange(currentState.mainScale, targetOffset)
             }
         )
     }
@@ -87,8 +84,8 @@ fun EditorCanvas(
     // 悬浮取色逻辑
     val hoverModifier = Modifier.onPointerEvent(PointerEventType.Move) {
         val pos = it.changes.first().position
-        val imgX = ((pos.x - offset.x) / scale).toInt()
-        val imgY = ((pos.y - offset.y) / scale).toInt()
+        val imgX = ((pos.x - currentState.mainOffset.x) / currentState.mainScale).toInt()
+        val imgY = ((pos.y - currentState.mainOffset.y) / currentState.mainScale).toInt()
         val bufImg = workImage?.bufferedImage
         if (bufImg != null && imgX in 0 until bufImg.width && imgY in 0 until bufImg.height) {
             val rgb = bufImg.getRGB(imgX, imgY)
@@ -122,29 +119,29 @@ fun EditorCanvas(
                 val img = workImage.bufferedImage
                 val canvasW = constraints.maxWidth
                 val canvasH = constraints.maxHeight
-                val imgDisplayW = img.width * scale
-                val imgDisplayH = img.height * scale
+                val imgDisplayW = img.width * currentState.mainScale
+                val imgDisplayH = img.height * currentState.mainScale
                 val centerX = (canvasW - imgDisplayW) / 2f
                 val centerY = (canvasH - imgDisplayH) / 2f
-                onTransformChange(scale, Offset(centerX, centerY))
+                onTransformChange(currentState.mainScale, Offset(centerX, centerY))
             }
         }
 
         Canvas(modifier = Modifier.fillMaxSize()) {
             withTransform({
-                translate(offset.x, offset.y)
-                scale(scale, pivot = Offset.Zero)
+                translate(currentState.mainOffset.x, currentState.mainOffset.y)
+                scale(currentState.mainScale, pivot = Offset.Zero)
             }) {
                 mainBitmap?.let { img -> drawImage(img) }
                 previewBitmap?.let { bin -> drawImage(bin, alpha = 0.8f) }
             }
         }
 
-        if (hoverPos != null) {
+        if (currentState.hoverPixelPos != null) {
             PixelMagnifier(
                 modifier = Modifier.align(Alignment.TopEnd),
-                color = hoverColor,
-                pos = hoverPos
+                color = currentState.hoverColor,
+                pos = currentState.hoverPixelPos!!
             )
         }
     }

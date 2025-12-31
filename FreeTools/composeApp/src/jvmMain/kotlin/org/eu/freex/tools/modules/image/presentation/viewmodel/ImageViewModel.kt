@@ -18,14 +18,18 @@ import org.eu.freex.tools.modules.image.presentation.contract.ImageActionScope
 import org.eu.freex.tools.modules.image.presentation.contract.ImageUiEvent
 import org.eu.freex.tools.modules.image.presentation.contract.ImageUiState
 
-class ImageViewModel(
-    private val repository: ImageRepository
-) : ViewModel(), ImageActionScope {
+class ImageViewModel(repository: ImageRepository) : ViewModel(), ImageActionScope {
 
     // 1. 状态管理
     private val _uiState = MutableStateFlow(ImageUiState())
     override val state: ImageUiState get() = _uiState.value
     val uiState = _uiState.asStateFlow()
+
+    /*val projectState = _uiState.map { it.project }.stateIn(viewModelScope, SharingStarted.Lazily, _uiState.value.project)
+    val canvasState = _uiState.map { it.canvas }.stateIn(viewModelScope, SharingStarted.Lazily, _uiState.value.canvas)
+    val segmentationState = _uiState.map { it.segmentation }.stateIn(viewModelScope, SharingStarted.Lazily, _uiState.value.segmentation)
+    val uiStateState = _uiState.map { it.ui }.stateIn(viewModelScope, SharingStarted.Lazily, _uiState)
+*/
 
     // 2. 副作用通道 (用于发送 Toast/Snackbar 消息)
     private val _uiEffect = Channel<String>(Channel.BUFFERED)
@@ -40,30 +44,39 @@ class ImageViewModel(
     override val scope = viewModelScope
     override var filterPreviewJob: Job? = null
 
-
-    override fun updateState(reducer: (ImageUiState) -> ImageUiState) {
-        _uiState.update(reducer)
+    // 实现 setState
+    override fun setState(reducer: ImageUiState.() -> ImageUiState) {
+        _uiState.update { it.reducer() }
     }
 
     override fun showToast(message: String) {
         viewModelScope.launch { _uiEffect.send(message) }
     }
 
+    // 实现全自动 launch
     override fun launch(block: suspend ImageActionScope.() -> Unit) {
         viewModelScope.launch {
-            updateState { it.copy(isLoading = true) }
+            // 1. 自动开 Loading (注意是在 setUi 里)
+            setUi { copy(isLoading = true) }
             try {
+                // 2. 执行业务
                 block()
             } catch (e: Exception) {
+                // 3. 统一错误处理
                 e.printStackTrace()
-                updateState { it.copy(isLoading = false) }
                 showToast("操作失败: ${e.message}")
+            } finally {
+                // 4. 自动关 Loading
+                setUi { copy(isLoading = false) }
             }
         }
     }
 
     // --- 4. 唯一的入口 ---
     fun handleEvent(event: ImageUiEvent) {
-        event.execute(this)
+        // 调用时，让 event 在 'this' (ViewModel/Scope) 上执行
+        with(event) {
+            execute()
+        }
     }
 }
