@@ -47,6 +47,9 @@ interface ImageActionScope {
     fun launch(block: suspend ImageActionScope.() -> Unit)
 
     fun showToast(message: String)
+
+    // --- 【关键修复】暴露 handleEvent，允许事件内部触发其他事件 ---
+    fun handleEvent(event: ImageUiEvent)
 }
 
 /**
@@ -55,12 +58,10 @@ interface ImageActionScope {
  */
 fun ImageActionScope.getPrevStepImage(stepIndex: Int): WorkImage? {
     // 1. 如果是第 0 步 (第一个滤镜)，它的“上一步”就是原图
-    // 原图存在 ProjectState 里
     if (stepIndex == 0) {
         return state.project.currentSourceImage
     }
     // 2. 如果是第 N 步，它的“上一步”就是流水线里的第 N-1 步的结果
-    // 步骤存在 PipelineState 里
     else {
         return state.pipeline.pipelineSteps.getOrNull(stepIndex - 1)
     }

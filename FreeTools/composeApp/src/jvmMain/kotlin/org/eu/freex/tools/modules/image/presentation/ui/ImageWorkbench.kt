@@ -31,11 +31,7 @@ import org.eu.freex.tools.modules.image.presentation.contract.events.ConfirmMapp
 import org.eu.freex.tools.modules.image.presentation.contract.events.ConfirmScreenCrop
 import org.eu.freex.tools.modules.image.presentation.contract.events.DeletePipelineStep
 import org.eu.freex.tools.modules.image.presentation.contract.events.DismissDialogs
-import org.eu.freex.tools.modules.image.presentation.contract.events.LoadFile
-import org.eu.freex.tools.modules.image.presentation.contract.events.RemoveSourceImage
 import org.eu.freex.tools.modules.image.presentation.contract.events.SelectPipelineStep
-import org.eu.freex.tools.modules.image.presentation.contract.events.SelectSourceImage
-import org.eu.freex.tools.modules.image.presentation.contract.events.StartScreenCapture
 import org.eu.freex.tools.modules.image.presentation.ui.components.EditorCanvas
 import org.eu.freex.tools.modules.image.presentation.ui.components.ProcessingPipeline
 import org.eu.freex.tools.modules.image.presentation.ui.components.ProjectExplorer
@@ -53,13 +49,16 @@ fun ImageWorkbench(
     viewModel: ImageViewModel = koinInject()
 ) {
     val fullState by viewModel.uiState.collectAsState()
+
+    // --- 状态切片优化 ---
     val projectState by remember(fullState) { derivedStateOf { fullState.project } }
-    // 1. 创建 State
+    val pipelineState by remember(fullState) { derivedStateOf { fullState.pipeline } } // 【新增】
+    val uiState by remember(fullState) { derivedStateOf { fullState.ui } }
+
     val explorerState = rememberProjectExplorerState(
         projectState = projectState,
-        onEvent = viewModel::handleEvent // 直接传递函数引用
+        onEvent = viewModel::handleEvent
     )
-    val uiState by remember(fullState) { derivedStateOf { fullState.ui } }
 
     val editorState = rememberEditorState()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -72,24 +71,24 @@ fun ImageWorkbench(
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
-        containerColor = MaterialTheme.colorScheme.background // 自动适配深/浅
+        containerColor = MaterialTheme.colorScheme.background
     ) { paddingValues ->
         Box(modifier = Modifier.fillMaxSize().padding(paddingValues)) {
             Row(modifier = Modifier.fillMaxSize()) {
 
-                // --- 左侧 ---
+                // --- 左侧：项目资源 ---
                 ProjectExplorer(
                     modifier = Modifier.width(260.dp).fillMaxHeight(),
                     state = explorerState,
                 )
 
-                // --- 中间 ---
+                // --- 中间：画布与流水线 ---
                 Column(modifier = Modifier.weight(1f).fillMaxHeight()) {
                     Box(
                         modifier = Modifier
                             .weight(1f)
                             .fillMaxWidth()
-                            .background(MaterialTheme.colorScheme.surfaceContainerHigh) // 【修改】稍微深/浅一点的背景以突显画布
+                            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
                     ) {
                         EditorCanvas(
                             modifier = Modifier.fillMaxSize(),
@@ -106,16 +105,15 @@ fun ImageWorkbench(
                     )
                 }
 
-                // --- 右侧 ---
+                // --- 右侧：属性面板 ---
                 CompositionLocalProvider(LocalImageViewModel provides viewModel) {
                     InspectorPanel(
                         modifier = Modifier.width(320.dp).fillMaxHeight(),
                         projectState = projectState,
+                        pipelineState = pipelineState, // 【修复】传入 PipelineState
                         uiState = uiState,
                     )
                 }
-
-
             }
 
             // --- 全局弹窗层 ---
@@ -124,11 +122,7 @@ fun ImageWorkbench(
                     fullScreenImage = uiState.fullScreenCapture!!,
                     onDismiss = { viewModel.handleEvent(DismissDialogs) },
                     onCropConfirm = { cropped ->
-                        viewModel.handleEvent(
-                            ConfirmScreenCrop(
-                                cropped
-                            )
-                        )
+                        viewModel.handleEvent(ConfirmScreenCrop(cropped))
                     }
                 )
             }
@@ -141,23 +135,21 @@ fun ImageWorkbench(
                 )
             }
 
-            // 【关键修复】Loading 指示器 (移除了背景色)
+            // --- Loading 层 ---
             if (uiState.isLoading) {
                 Box(
-                    modifier = Modifier.fillMaxSize(), // 不再设置 background color
+                    modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center
                 ) {
-                    // 为了保证在深色/浅色背景下都可见，可以加一个小圆盘背景，或者直接显示
-                    // 这里选择加一个小的半透明圆盘，比全屏遮罩体验好得多
                     Surface(
                         shape = androidx.compose.foundation.shape.CircleShape,
-                        color = MaterialTheme.colorScheme.surfaceContainerHighest, // 【修改】
-                        tonalElevation = 6.dp, // M3 使用 tonalElevation
+                        color = MaterialTheme.colorScheme.surfaceContainerHighest,
+                        tonalElevation = 6.dp,
                         shadowElevation = 6.dp
                     ) {
                         CircularProgressIndicator(
                             modifier = Modifier.padding(8.dp),
-                            color = MaterialTheme.colorScheme.primary // 【修改】
+                            color = MaterialTheme.colorScheme.primary
                         )
                     }
                 }
@@ -169,6 +161,4 @@ fun ImageWorkbench(
             )
         }
     }
-
-
 }

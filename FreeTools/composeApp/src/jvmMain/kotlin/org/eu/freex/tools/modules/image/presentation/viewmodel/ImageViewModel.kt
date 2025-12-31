@@ -18,9 +18,11 @@ import org.eu.freex.tools.modules.image.domain.usecase.FilterProcessor
 import org.eu.freex.tools.modules.image.domain.usecase.ProjectProcessor
 import org.eu.freex.tools.modules.image.domain.usecase.ResourceProcessor
 import org.eu.freex.tools.modules.image.domain.usecase.SegmentationProcessor
+import org.eu.freex.tools.modules.image.presentation.contract.DraftState
 import org.eu.freex.tools.modules.image.presentation.contract.ImageActionScope
 import org.eu.freex.tools.modules.image.presentation.contract.ImageUiEvent
 import org.eu.freex.tools.modules.image.presentation.contract.ImageUiState
+import org.eu.freex.tools.modules.image.presentation.contract.PipelineState
 
 class ImageViewModel(repository: ImageRepository) : ViewModel(), ImageActionScope {
 
@@ -67,40 +69,31 @@ class ImageViewModel(repository: ImageRepository) : ViewModel(), ImageActionScop
         }
     }
 
-    /**
-     * 执行流水线同步
-     * (对应之前的 SyncPipelineSource 事件逻辑)
-     */
     private suspend fun syncPipeline(source: WorkImage?) {
-        // 1. 重置分割状态 (换图了，旧的框失效)
         setSegmentation { copy(activeRects = emptyList()) }
 
-        // Case A: 没图了 (被删光了)
         if (source == null) {
             setPipeline {
-                copy(pipelineSteps = emptyList(), selectedPipelineIndex = 0, currentImage = null)
+                // 重置所有状态
+                PipelineState()
             }
             return
         }
 
-        // Case B: 有图 -> 拿着图去跑滤镜链
-        // 自动开启 Loading (复用 launch 的逻辑或者手动控制)
         setUi { copy(isLoading = true) }
 
         val filters = state.pipeline.pipelineSteps.mapNotNull { it.appliedFilter }
 
         filterProcessor.processChain(source, filters)
             .onSuccess { newSteps ->
-                // 更新流水线状态 -> 这会自动触发 "工作预览区" 和 "右侧功能区" 的刷新
                 setPipeline {
                     copy(
                         pipelineSteps = newSteps,
                         selectedPipelineIndex = newSteps.size,
-                        currentImage = null
+                        // 同步完成后，Draft 重置为 clean state
+                        draft = DraftState()
                     )
                 }
-                // 【新增】根据你的需求：切换到功能区并回显
-                // 假设 Tab 0 是滤镜调节区，如果有滤镜，我们可能想让用户看到参数
                 setUi { copy(isLoading = false, rightPanelTabIndex = 0) }
             }
             .onFailure {
@@ -135,7 +128,7 @@ class ImageViewModel(repository: ImageRepository) : ViewModel(), ImageActionScop
     }
 
     // 唯一的入口
-    fun handleEvent(event: ImageUiEvent) {
+    override fun handleEvent(event: ImageUiEvent) {
         with(event) {
             execute()
         }

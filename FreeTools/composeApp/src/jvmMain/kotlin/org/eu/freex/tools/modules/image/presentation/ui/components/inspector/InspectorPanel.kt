@@ -20,129 +20,89 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import org.eu.freex.tools.modules.image.domain.model.ViewFilter
+import org.eu.freex.tools.modules.image.domain.model.type
 import org.eu.freex.tools.modules.image.presentation.contract.ProjectState
+import org.eu.freex.tools.modules.image.presentation.contract.PipelineState
 import org.eu.freex.tools.modules.image.presentation.contract.UiInteractionState
-import org.eu.freex.tools.modules.image.presentation.contract.events.ApplyCurrentFilter
+import org.eu.freex.tools.modules.image.presentation.contract.events.ApplyNewStep
 import org.eu.freex.tools.modules.image.presentation.contract.events.ChangePanelTab
-import org.eu.freex.tools.modules.image.presentation.contract.events.ModifyCurrentStep
-import org.eu.freex.tools.modules.image.presentation.contract.events.SelectFilter
+import org.eu.freex.tools.modules.image.presentation.contract.events.UpdateCurrentStep
+import org.eu.freex.tools.modules.image.presentation.contract.events.PreviewFilter
 import org.eu.freex.tools.modules.image.presentation.ui.components.inspector.core.LocalImageViewModel
 
 /**
- * 右侧属性面板 (Inspector) - [Material 3 适配版]
- * * 重构说明：
- * 1. 移除了内部的 collectAsState，改为由父组件传入切分后的状态 (ProjectState, UiInteractionState)。
- * 2. 这样当 CanvasState (画布缩放) 变化时，InspectorPanel 不会发生重组。
+ * 右侧属性面板 (Inspector)
+ * 状态解耦：完全依赖 PipelineState 中的 DraftState
  */
 @Composable
 fun InspectorPanel(
     modifier: Modifier = Modifier,
-    // 【关键修改】只接收需要的状态切片
-    projectState: ProjectState,
+    projectState: ProjectState,   // 仅用于可能的信息展示，核心逻辑不依赖它
+    pipelineState: PipelineState, // 【核心】提供 DraftState
     uiState: UiInteractionState
 ) {
-    // 依然需要 ViewModel 来分发事件，但不监听它的流
     val viewModel = LocalImageViewModel.current
-
-    // 从 uiState 中获取当前 Tab 索引
     val selectedTab = uiState.rightPanelTabIndex
 
-    // 定义区域背景色
-    val panelBackground = MaterialTheme.colorScheme.surface
-    val tabContainerColor = MaterialTheme.colorScheme.surfaceContainer
-    val controlAreaColor = MaterialTheme.colorScheme.surfaceContainer
+    // 从 Pipeline 的草稿状态中获取当前应该显示的滤镜
+    // 无论是“回显旧步骤”还是“点击新滤镜”，数据源都是 draft.activeFilter
+    val currentActiveFilter = pipelineState.draft.activeFilter
 
     Column(
         modifier = modifier
-            .background(panelBackground)
+            .background(MaterialTheme.colorScheme.surface)
             .fillMaxHeight()
     ) {
-        // --- 1. 顶部 Tab 栏 ---
-        TabRow(
-            selectedTabIndex = selectedTab,
-            containerColor = tabContainerColor,
-            contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-            divider = { HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant) },
-            indicator = { tabPositions ->
-                if (selectedTab < tabPositions.size) {
-                    TabRowDefaults.SecondaryIndicator(
-                        modifier = Modifier.tabIndicatorOffset(tabPositions[selectedTab]),
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                }
-            }
-        ) {
-            Tab(
-                selected = selectedTab == 0,
-                // 【关键修改】使用事件来切换 Tab
-                onClick = { viewModel.handleEvent(ChangePanelTab(0)) },
-                text = {
-                    Text(
-                        "滤镜处理",
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Medium
-                    )
-                },
-                selectedContentColor = MaterialTheme.colorScheme.primary,
-                unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Tab(
-                selected = selectedTab == 1,
-                onClick = { viewModel.handleEvent(ChangePanelTab(1)) },
-                text = {
-                    Text(
-                        "字符切割",
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Medium
-                    )
-                },
-                selectedContentColor = MaterialTheme.colorScheme.primary,
-                unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
+        // --- 1. Tab 栏 ---
+        InspectorTabs(selectedTab) { viewModel.handleEvent(ChangePanelTab(it)) }
 
         // --- 2. 内容区域 ---
         Box(modifier = Modifier.weight(1f)) {
             when (selectedTab) {
-                // Case 0: 滤镜处理 Tab
-                0 -> {
+                0 -> { // 滤镜处理 Tab
                     Column(modifier = Modifier.fillMaxSize()) {
                         // A. 滤镜选择列表
+                        // 选择滤镜时，触发 PreviewFilter，forceReloadBaseImage = false (基于当前 Draft 输入)
                         FilterSelectionList(
                             modifier = Modifier.weight(1f),
-                            // 【关键修改】使用 projectState 中的数据
-                            currentFilter = projectState.currentSourceImage?.appliedFilter ?: ViewFilter,
+                            currentFilter = currentActiveFilter,
                             onFilterChange = { newFilter ->
-                                viewModel.handleEvent(SelectFilter(newFilter))
+                                viewModel.handleEvent(PreviewFilter(newFilter, forceReloadBaseImage = false))
                             }
                         )
 
                         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 
-                        // B. 底部参数控制区
+                        // B. 参数控制区
                         Column(
                             modifier = Modifier
-                                .background(controlAreaColor)
+                                .background(MaterialTheme.colorScheme.surfaceContainer)
                                 .padding(12.dp)
                         ) {
                             SectionHeader("参数调节")
-
                             Spacer(Modifier.height(12.dp))
 
-                            // 动态加载具体的滤镜设置 UI
-                            // 使用 remember 缓存 Renderer，只有当 Filter 类型或引用变化时才重新获取
-                            val renderer = remember(projectState.currentSourceImage?.appliedFilter) {
-                                FilterUIRegistry.getRenderer(projectState.currentSourceImage?.appliedFilter?: ViewFilter)
+                            // 动态渲染具体滤镜的 UI
+                            // 所有的滑块变动，都应该触发 PreviewFilter
+                            val renderer = remember(currentActiveFilter.type) {
+                                FilterUIRegistry.getRenderer(currentActiveFilter)
                             }
+
+                            // 注意：Renderer 内部的滑块回调应该调用 viewModel.handleEvent(PreviewFilter(newFilter))
+                            // 这里假设 FilterUIRegistry 的实现已经对接了 ViewModel 或者提供了回调参数
+                            // 如果你的 Renderer 是独立的，你需要确保它们能发送 PreviewFilter 事件
                             renderer.Content()
 
                             Spacer(Modifier.height(16.dp))
 
-                            // --- 通用操作按钮 ---
+                            // --- 操作按钮 ---
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                // 按钮 1: 更新当前步骤
+                                // 按钮 1: 修改当前步骤 (Update)
+                                // 只有当选中的不是原图(Index > 0) 且不是 ViewFilter 时才可用
+                                val canModify = pipelineState.selectedPipelineIndex > 0 && currentActiveFilter !is ViewFilter
                                 Button(
-                                    onClick = { viewModel.handleEvent(ModifyCurrentStep) },
+                                    onClick = { viewModel.handleEvent(UpdateCurrentStep) },
+                                    enabled = canModify,
                                     modifier = Modifier.weight(1f).height(36.dp),
                                     colors = ButtonDefaults.buttonColors(
                                         containerColor = MaterialTheme.colorScheme.secondaryContainer,
@@ -151,12 +111,15 @@ fun InspectorPanel(
                                     contentPadding = PaddingValues(0.dp),
                                     shape = MaterialTheme.shapes.small
                                 ) {
-                                    Text("更新当前步骤", style = MaterialTheme.typography.labelMedium)
+                                    Text("修改当前步骤", style = MaterialTheme.typography.labelMedium)
                                 }
 
-                                // 按钮 2: 添加新步骤
+                                // 按钮 2: 添加新步骤 (Apply)
+                                // 只要选择了有效滤镜即可添加
+                                val canAdd = currentActiveFilter !is ViewFilter
                                 Button(
-                                    onClick = { viewModel.handleEvent(ApplyCurrentFilter) },
+                                    onClick = { viewModel.handleEvent(ApplyNewStep) },
+                                    enabled = canAdd,
                                     modifier = Modifier.weight(1f).height(36.dp),
                                     colors = ButtonDefaults.buttonColors(
                                         containerColor = MaterialTheme.colorScheme.primary,
@@ -165,24 +128,46 @@ fun InspectorPanel(
                                     contentPadding = PaddingValues(0.dp),
                                     shape = MaterialTheme.shapes.small
                                 ) {
-                                    Text("添加新步骤", style = MaterialTheme.typography.labelMedium)
+                                    Text("应用(新增)", style = MaterialTheme.typography.labelMedium)
                                 }
                             }
                         }
                     }
                 }
-
-                // Case 1: 字符切割 Tab
-                1 -> {
+                1 -> { // 字符切割 Tab
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text(
-                            "规则设置功能开发中...",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            style = MaterialTheme.typography.bodyMedium
-                        )
+                        Text("规则设置功能开发中...", style = MaterialTheme.typography.bodyMedium)
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun InspectorTabs(selectedTab: Int, onTabSelected: (Int) -> Unit) {
+    TabRow(
+        selectedTabIndex = selectedTab,
+        containerColor = MaterialTheme.colorScheme.surfaceContainer,
+        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+        divider = { HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant) },
+        indicator = { tabPositions ->
+            if (selectedTab < tabPositions.size) {
+                TabRowDefaults.SecondaryIndicator(
+                    modifier = Modifier.tabIndicatorOffset(tabPositions[selectedTab]),
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+        }
+    ) {
+        listOf("滤镜处理", "字符切割").forEachIndexed { index, title ->
+            Tab(
+                selected = selectedTab == index,
+                onClick = { onTabSelected(index) },
+                text = { Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Medium) },
+                selectedContentColor = MaterialTheme.colorScheme.primary,
+                unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 }
