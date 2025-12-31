@@ -25,12 +25,6 @@ class ImageViewModel(repository: ImageRepository) : ViewModel(), ImageActionScop
     override val state: ImageUiState get() = _uiState.value
     val uiState = _uiState.asStateFlow()
 
-    /*val projectState = _uiState.map { it.project }.stateIn(viewModelScope, SharingStarted.Lazily, _uiState.value.project)
-    val canvasState = _uiState.map { it.canvas }.stateIn(viewModelScope, SharingStarted.Lazily, _uiState.value.canvas)
-    val segmentationState = _uiState.map { it.segmentation }.stateIn(viewModelScope, SharingStarted.Lazily, _uiState.value.segmentation)
-    val uiStateState = _uiState.map { it.ui }.stateIn(viewModelScope, SharingStarted.Lazily, _uiState)
-*/
-
     // 2. 副作用通道 (用于发送 Toast/Snackbar 消息)
     private val _uiEffect = Channel<String>(Channel.BUFFERED)
     val uiEffect = _uiEffect.receiveAsFlow()

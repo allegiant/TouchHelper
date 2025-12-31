@@ -19,7 +19,22 @@ data class ProjectState(
     val pipelineSteps: List<WorkImage> = emptyList(),
     val selectedPipelineIndex: Int = 0,
     val currentFilter: AppFilter = ViewFilter
-)
+) {
+    val currentSourceImage: WorkImage?
+        get() = sourceImages.getOrNull(selectedSourceIndex)
+
+    val activeDisplayImage: WorkImage?
+        get() = if (selectedPipelineIndex == 0) currentSourceImage
+        else pipelineSteps.getOrNull(selectedPipelineIndex - 1)
+
+    val displayChain: List<WorkImage>
+        get() {
+            val list = mutableListOf<WorkImage>()
+            currentSourceImage?.let { list.add(it.copy(label = "原图")) }
+            list.addAll(pipelineSteps)
+            return list
+        }
+}
 
 data class CanvasState(
     val mainScale: Float = 1f,
@@ -50,21 +65,5 @@ data class ImageUiState(
     val canvas: CanvasState = CanvasState(),
     val segmentation: SegmentationState = SegmentationState(),
     val ui: UiInteractionState = UiInteractionState(),
-
-) {
-    val currentSourceImage: WorkImage?
-        get() = project.sourceImages.getOrNull(project.selectedSourceIndex)
-
-    val activeDisplayImage: WorkImage?
-        get() = if (project.selectedPipelineIndex == 0) currentSourceImage
-        else project.pipelineSteps.getOrNull(project.selectedPipelineIndex - 1)
-
-    val displayChain: List<WorkImage>
-        get() {
-            val list = mutableListOf<WorkImage>()
-            currentSourceImage?.let { list.add(it.copy(label = "原图")) }
-            list.addAll(project.pipelineSteps)
-            return list
-        }
-}
+)
 

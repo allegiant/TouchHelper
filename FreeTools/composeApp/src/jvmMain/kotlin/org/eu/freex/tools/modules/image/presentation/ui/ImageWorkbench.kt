@@ -20,6 +20,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -53,7 +54,11 @@ import org.koin.compose.koinInject
 fun ImageWorkbench(
     viewModel: ImageViewModel = koinInject()
 ) {
-    val state by viewModel.uiState.collectAsState()
+    val fullState by viewModel.uiState.collectAsState()
+    val projectState by remember(fullState) { derivedStateOf { fullState.project } }
+    val canvasState by remember(fullState) { derivedStateOf { fullState.canvas } }
+    val uiState by remember(fullState) { derivedStateOf { fullState.ui } }
+
     val snackbarHostState = remember { SnackbarHostState() }
 
     LaunchedEffect(viewModel) {
@@ -72,7 +77,7 @@ fun ImageWorkbench(
                 // --- 左侧 ---
                 ProjectExplorer(
                     modifier = Modifier.width(260.dp).fillMaxHeight(),
-                    projectState = state.project,
+                    projectState =projectState,
                     onSelect = { viewModel.handleEvent(SelectSourceImage(it)) },
                     onImportFile = { file -> viewModel.handleEvent(LoadFile(file)) },
                     onScreenCapture = { viewModel.handleEvent(StartScreenCapture) },
@@ -89,8 +94,8 @@ fun ImageWorkbench(
                     ) {
                         EditorCanvas(
                             modifier = Modifier.fillMaxSize(),
-                            workImage = state.activeDisplayImage,
-                            canvasState = state.canvas,
+                            workImage = projectState.activeDisplayImage,
+                            canvasState = canvasState,
                             onTransformChange = { s, o ->
                                 viewModel.handleEvent(UpdateCanvasTransform(s, o))
                             },
@@ -102,8 +107,8 @@ fun ImageWorkbench(
                     }
                     ProcessingPipeline(
                         modifier = Modifier.fillMaxWidth().height(140.dp),
-                        processChain = state.displayChain,
-                        projectState = state.project,
+                        processChain = projectState.displayChain,
+                        projectState = projectState,
                         onSelect = { viewModel.handleEvent(SelectPipelineStep(it)) },
                         onDelete = { viewModel.handleEvent(DeletePipelineStep(it)) }
                     )
@@ -113,8 +118,8 @@ fun ImageWorkbench(
                 CompositionLocalProvider(LocalImageViewModel provides viewModel) {
                     InspectorPanel(
                         modifier = Modifier.width(320.dp).fillMaxHeight(),
-                        projectState = state.project,
-                        uiState = state.ui,
+                        projectState = projectState,
+                        uiState = uiState,
                     )
                 }
 
@@ -122,9 +127,9 @@ fun ImageWorkbench(
             }
 
             // --- 全局弹窗层 ---
-            if (state.ui.isScreenCropperVisible && state.ui.fullScreenCapture != null) {
+            if (uiState.isScreenCropperVisible && uiState.fullScreenCapture != null) {
                 ScreenCropperDialog(
-                    fullScreenImage = state.ui.fullScreenCapture!!,
+                    fullScreenImage = uiState.fullScreenCapture!!,
                     onDismiss = { viewModel.handleEvent(DismissDialogs) },
                     onCropConfirm = { cropped ->
                         viewModel.handleEvent(
@@ -136,16 +141,16 @@ fun ImageWorkbench(
                 )
             }
 
-            if (state.ui.isMappingDialogVisible && state.ui.mappingBitmap != null) {
+            if (uiState.isMappingDialogVisible && uiState.mappingBitmap != null) {
                 CharMappingDialog(
-                    bitmap = state.ui.mappingBitmap!!.toComposeImageBitmap(),
+                    bitmap = uiState.mappingBitmap!!.toComposeImageBitmap(),
                     onDismiss = { viewModel.handleEvent(DismissDialogs) },
                     onConfirm = { char -> viewModel.handleEvent(ConfirmMapping(char)) }
                 )
             }
 
             // 【关键修复】Loading 指示器 (移除了背景色)
-            if (state.ui.isLoading) {
+            if (uiState.isLoading) {
                 Box(
                     modifier = Modifier.fillMaxSize(), // 不再设置 background color
                     contentAlignment = Alignment.Center
