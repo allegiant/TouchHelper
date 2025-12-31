@@ -19,6 +19,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import org.eu.freex.tools.modules.image.domain.model.ViewFilter
 import org.eu.freex.tools.modules.image.presentation.contract.ProjectState
 import org.eu.freex.tools.modules.image.presentation.contract.UiInteractionState
 import org.eu.freex.tools.modules.image.presentation.contract.events.ApplyCurrentFilter
@@ -110,7 +111,7 @@ fun InspectorPanel(
                         FilterSelectionList(
                             modifier = Modifier.weight(1f),
                             // 【关键修改】使用 projectState 中的数据
-                            currentFilter = projectState.currentSourceImage?.appliedFilter!!,
+                            currentFilter = projectState.currentSourceImage?.appliedFilter ?: ViewFilter,
                             onFilterChange = { newFilter ->
                                 viewModel.handleEvent(SelectFilter(newFilter))
                             }
@@ -130,8 +131,8 @@ fun InspectorPanel(
 
                             // 动态加载具体的滤镜设置 UI
                             // 使用 remember 缓存 Renderer，只有当 Filter 类型或引用变化时才重新获取
-                            val renderer = remember(projectState.currentSourceImage?.appliedFilter!!) {
-                                FilterUIRegistry.getRenderer(projectState.currentSourceImage?.appliedFilter!!)
+                            val renderer = remember(projectState.currentSourceImage?.appliedFilter) {
+                                FilterUIRegistry.getRenderer(projectState.currentSourceImage?.appliedFilter?: ViewFilter)
                             }
                             renderer.Content()
 
