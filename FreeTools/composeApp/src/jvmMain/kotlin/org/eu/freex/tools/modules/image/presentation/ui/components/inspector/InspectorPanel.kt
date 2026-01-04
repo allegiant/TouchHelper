@@ -21,13 +21,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import org.eu.freex.tools.modules.image.domain.model.ViewFilter
 import org.eu.freex.tools.modules.image.domain.model.type
-import org.eu.freex.tools.modules.image.presentation.contract.ProjectState
-import org.eu.freex.tools.modules.image.presentation.contract.PipelineState
-import org.eu.freex.tools.modules.image.presentation.contract.UiInteractionState
 import org.eu.freex.tools.modules.image.presentation.contract.events.ApplyNewStep
 import org.eu.freex.tools.modules.image.presentation.contract.events.ChangePanelTab
 import org.eu.freex.tools.modules.image.presentation.contract.events.UpdateCurrentStep
 import org.eu.freex.tools.modules.image.presentation.contract.events.PreviewFilter
+import org.eu.freex.tools.modules.image.presentation.contract.state.PipelineState
+import org.eu.freex.tools.modules.image.presentation.contract.state.ProjectState
+import org.eu.freex.tools.modules.image.presentation.contract.state.UiInteractionState
 import org.eu.freex.tools.modules.image.presentation.ui.components.inspector.core.LocalImageViewModel
 
 /**

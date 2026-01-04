@@ -20,7 +20,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import org.eu.freex.tools.modules.image.domain.model.WorkImage
-import org.eu.freex.tools.modules.image.presentation.contract.ProjectState
+import org.eu.freex.tools.modules.image.presentation.contract.state.ProjectState
 
 /**
  * 3. 底部流水线 (ProcessingPipeline)

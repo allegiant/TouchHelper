@@ -1,53 +1,11 @@
 package org.eu.freex.tools.modules.image.presentation.contract
 
-import androidx.compose.ui.geometry.Rect
-import org.eu.freex.tools.modules.image.domain.model.AppFilter
-import org.eu.freex.tools.modules.image.domain.model.GridParams
-import org.eu.freex.tools.modules.image.domain.model.ViewFilter
 import org.eu.freex.tools.modules.image.domain.model.WorkImage
-import java.awt.image.BufferedImage
+import org.eu.freex.tools.modules.image.presentation.contract.state.PipelineState
+import org.eu.freex.tools.modules.image.presentation.contract.state.ProjectState
+import org.eu.freex.tools.modules.image.presentation.contract.state.SegmentationState
+import org.eu.freex.tools.modules.image.presentation.contract.state.UiInteractionState
 
-// --- 项目源状态 ---
-data class ProjectState(
-    val sourceImages: List<WorkImage> = emptyList(),
-    val selectedSourceIndex: Int = -1,
-) {
-    val currentSourceImage: WorkImage?
-        get() = sourceImages.getOrNull(selectedSourceIndex)
-}
-
-// --- 【核心重构】编辑草稿状态 ---
-// 这个状态专门用于持有当前正在调整但尚未“应用”或“保存”的参数和预览图
-data class DraftState(
-    val activeFilter: AppFilter = ViewFilter, // 当前属性面板应该显示的滤镜参数
-    val previewImage: WorkImage? = null,      // 经过该滤镜处理后的预览图 (用于画布显示)
-    val baseImage: WorkImage? = null          // 该滤镜是基于哪张图处理的 (用于参数变化时重新计算)
-)
-
-// --- 流水线状态 ---
-data class PipelineState(
-    val pipelineSteps: List<WorkImage> = emptyList(), // 已提交的步骤列表
-    val selectedPipelineIndex: Int = 0,               // 0 代表原图，1..N 代表步骤
-    val draft: DraftState = DraftState()              // 当前的编辑区域状态
-)
-
-// --- 分割/OCR 状态 ---
-data class SegmentationState(
-    val isGridMode: Boolean = true,
-    val gridParams: GridParams = GridParams(0, 0, 100, 100, 0, 0, 1, 1),
-    val activeRects: List<Rect> = emptyList(),
-    val segmentationResults: List<WorkImage> = emptyList()
-)
-
-// --- UI 交互状态 ---
-data class UiInteractionState(
-    val isLoading: Boolean = false,
-    val rightPanelTabIndex: Int = 0,
-    val isScreenCropperVisible: Boolean = false,
-    val fullScreenCapture: BufferedImage? = null,
-    val isMappingDialogVisible: Boolean = false,
-    val mappingBitmap: BufferedImage? = null
-)
 
 // --- 总 UI 状态 ---
 data class ImageUiState(

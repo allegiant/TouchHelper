@@ -18,11 +18,11 @@ import org.eu.freex.tools.modules.image.domain.usecase.FilterProcessor
 import org.eu.freex.tools.modules.image.domain.usecase.ProjectProcessor
 import org.eu.freex.tools.modules.image.domain.usecase.ResourceProcessor
 import org.eu.freex.tools.modules.image.domain.usecase.SegmentationProcessor
-import org.eu.freex.tools.modules.image.presentation.contract.DraftState
 import org.eu.freex.tools.modules.image.presentation.contract.ImageActionScope
 import org.eu.freex.tools.modules.image.presentation.contract.ImageUiEvent
 import org.eu.freex.tools.modules.image.presentation.contract.ImageUiState
-import org.eu.freex.tools.modules.image.presentation.contract.PipelineState
+import org.eu.freex.tools.modules.image.presentation.contract.state.DraftState
+import org.eu.freex.tools.modules.image.presentation.contract.state.PipelineState
 
 class ImageViewModel(repository: ImageRepository) : ViewModel(), ImageActionScope {
 

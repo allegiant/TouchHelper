@@ -10,11 +10,11 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import org.eu.freex.tools.modules.image.domain.model.WorkImage
 import org.eu.freex.tools.modules.image.presentation.contract.ImageUiEvent
-import org.eu.freex.tools.modules.image.presentation.contract.ProjectState
 import org.eu.freex.tools.modules.image.presentation.contract.events.LoadFile
 import org.eu.freex.tools.modules.image.presentation.contract.events.RemoveSourceImage
 import org.eu.freex.tools.modules.image.presentation.contract.events.SelectSourceImage
 import org.eu.freex.tools.modules.image.presentation.contract.events.StartScreenCapture
+import org.eu.freex.tools.modules.image.presentation.contract.state.ProjectState
 import java.io.File
 
 /**

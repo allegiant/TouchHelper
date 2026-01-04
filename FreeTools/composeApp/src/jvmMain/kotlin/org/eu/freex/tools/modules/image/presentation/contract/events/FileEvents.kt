@@ -1,12 +1,10 @@
 // 路径: src/jvmMain/kotlin/org/eu/freex/tools/modules/image/presentation/contract/events/FileEvents.kt
 package org.eu.freex.tools.modules.image.presentation.contract.events
 
-import kotlinx.coroutines.launch
-import org.eu.freex.tools.common.utils.ImageUtils
 import org.eu.freex.tools.modules.image.domain.model.WorkImage
-import org.eu.freex.tools.modules.image.presentation.contract.DraftState
 import org.eu.freex.tools.modules.image.presentation.contract.ImageActionScope
 import org.eu.freex.tools.modules.image.presentation.contract.ImageUiEvent
+import org.eu.freex.tools.modules.image.presentation.contract.state.DraftState
 import java.io.File
 
 // =================================================================================

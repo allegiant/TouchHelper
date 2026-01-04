@@ -7,6 +7,10 @@ import org.eu.freex.tools.modules.image.domain.usecase.FilterProcessor
 import org.eu.freex.tools.modules.image.domain.usecase.ProjectProcessor
 import org.eu.freex.tools.modules.image.domain.usecase.ResourceProcessor
 import org.eu.freex.tools.modules.image.domain.usecase.SegmentationProcessor
+import org.eu.freex.tools.modules.image.presentation.contract.state.PipelineState
+import org.eu.freex.tools.modules.image.presentation.contract.state.ProjectState
+import org.eu.freex.tools.modules.image.presentation.contract.state.SegmentationState
+import org.eu.freex.tools.modules.image.presentation.contract.state.UiInteractionState
 
 /**
  * ViewModel 能力契约
