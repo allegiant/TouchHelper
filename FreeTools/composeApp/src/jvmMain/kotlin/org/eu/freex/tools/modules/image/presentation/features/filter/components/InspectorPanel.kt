@@ -90,7 +90,12 @@ fun InspectorPanel(
                             // 注意：Renderer 内部的滑块回调应该调用 viewModel.handleEvent(PreviewFilter(newFilter))
                             // 这里假设 FilterUIRegistry 的实现已经对接了 ViewModel 或者提供了回调参数
                             // 如果你的 Renderer 是独立的，你需要确保它们能发送 PreviewFilter 事件
-                            renderer.Content()
+                            renderer.Content(
+                                filter = currentActiveFilter,
+                                onFilterChange = { newFilter ->
+                                    viewModel.handleEvent(PreviewFilter(newFilter, forceReloadBaseImage = false))
+                                }
+                            )
 
                             Spacer(Modifier.height(16.dp))
 
@@ -145,18 +150,16 @@ fun InspectorPanel(
 
 @Composable
 private fun InspectorTabs(selectedTab: Int, onTabSelected: (Int) -> Unit) {
-    TabRow(
+    SecondaryTabRow(
         selectedTabIndex = selectedTab,
         containerColor = MaterialTheme.colorScheme.surfaceContainer,
         contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
         divider = { HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant) },
-        indicator = { tabPositions ->
-            if (selectedTab < tabPositions.size) {
-                TabRowDefaults.SecondaryIndicator(
-                    modifier = Modifier.tabIndicatorOffset(tabPositions[selectedTab]),
-                    color = MaterialTheme.colorScheme.primary
-                )
-            }
+        indicator = {
+            TabRowDefaults.SecondaryIndicator(
+                modifier = Modifier.tabIndicatorOffset(selectedTab),
+                color = MaterialTheme.colorScheme.primary
+            )
         }
     ) {
         listOf("滤镜处理", "字符切割").forEachIndexed { index, title ->
