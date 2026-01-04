@@ -41,10 +41,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import org.eu.freex.tools.common.theme.ThemeMode
 import org.eu.freex.tools.modules.image.domain.model.AppModule
-import org.eu.freex.tools.modules.image.presentation.contract.ImageUiEvent
-import org.eu.freex.tools.modules.image.presentation.contract.events.ExportImage
-import org.eu.freex.tools.modules.image.presentation.contract.events.LoadProject
-import org.eu.freex.tools.modules.image.presentation.contract.events.SaveProject
+import org.eu.freex.tools.modules.image.presentation.core.ImageUiEvent
+import org.eu.freex.tools.modules.image.presentation.features.project.ExportImage
+import org.eu.freex.tools.modules.image.presentation.features.project.LoadProject
+import org.eu.freex.tools.modules.image.presentation.features.project.SaveProject
 import java.awt.FileDialog
 import java.awt.Frame
 import java.io.File

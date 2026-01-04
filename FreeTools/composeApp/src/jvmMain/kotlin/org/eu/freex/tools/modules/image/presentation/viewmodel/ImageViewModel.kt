@@ -18,11 +18,11 @@ import org.eu.freex.tools.modules.image.domain.service.FilterService
 import org.eu.freex.tools.modules.image.domain.service.ProjectService
 import org.eu.freex.tools.modules.image.domain.service.ResourceService
 import org.eu.freex.tools.modules.image.domain.service.SegmentationService
-import org.eu.freex.tools.modules.image.presentation.contract.ImageActionScope
-import org.eu.freex.tools.modules.image.presentation.contract.ImageUiEvent
-import org.eu.freex.tools.modules.image.presentation.contract.ImageUiState
-import org.eu.freex.tools.modules.image.presentation.contract.model.DraftState
-import org.eu.freex.tools.modules.image.presentation.contract.model.PipelineState
+import org.eu.freex.tools.modules.image.presentation.core.ImageActionScope
+import org.eu.freex.tools.modules.image.presentation.core.ImageUiEvent
+import org.eu.freex.tools.modules.image.presentation.core.ImageUiState
+import org.eu.freex.tools.modules.image.presentation.features.pipeline.DraftState
+import org.eu.freex.tools.modules.image.presentation.features.pipeline.PipelineState
 
 class ImageViewModel(repository: ImageRepository) : ViewModel(), ImageActionScope {
 
@@ -70,8 +70,6 @@ class ImageViewModel(repository: ImageRepository) : ViewModel(), ImageActionScop
     }
 
     private suspend fun syncPipeline(source: WorkImage?) {
-        setSegmentation { copy(activeRects = emptyList()) }
-
         if (source == null) {
             setPipeline {
                 // 重置所有状态
