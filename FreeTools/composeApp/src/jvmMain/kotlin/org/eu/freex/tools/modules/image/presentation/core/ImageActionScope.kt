@@ -38,6 +38,9 @@ interface ImageActionScope {
         setState { copy(cropperImage = bufferedImage) }
     }
 
+    // 【新增】控制主窗口可见性
+    fun setWindowVisible(visible: Boolean)
+
     // 【优化】新增一个名字更短的方法，且使用带接收者的 Lambda
     fun setState(reducer: ImageUiState.() -> ImageUiState)
 

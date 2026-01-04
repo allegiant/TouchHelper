@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import org.eu.freex.tools.common.AppWindowManager
 import org.eu.freex.tools.modules.image.domain.model.WorkImage
 import org.eu.freex.tools.modules.image.domain.repository.ImageRepository
 import org.eu.freex.tools.modules.image.domain.service.FilterService
@@ -25,7 +26,10 @@ import org.eu.freex.tools.modules.image.domain.model.EditSession
 import org.eu.freex.tools.modules.image.domain.model.Pipeline
 import java.awt.image.BufferedImage
 
-class ImageViewModel(repository: ImageRepository) : ViewModel(), ImageActionScope {
+class ImageViewModel(
+    repository: ImageRepository,
+    private val windowManager: AppWindowManager // 【注入】窗口管理器
+) : ViewModel(), ImageActionScope {
 
     // 1. 状态管理
     private val _uiState = MutableStateFlow(ImageUiState())
@@ -104,6 +108,10 @@ class ImageViewModel(repository: ImageRepository) : ViewModel(), ImageActionScop
     // 实现 setState
     override fun setState(reducer: ImageUiState.() -> ImageUiState) {
         _uiState.update { it.reducer() }
+    }
+
+    override fun setWindowVisible(visible: Boolean) {
+        if (visible) windowManager.showWindow() else windowManager.hideWindow()
     }
 
     override fun showToast(message: String) {

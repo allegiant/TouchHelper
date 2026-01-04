@@ -1,6 +1,7 @@
 // 路径: src/jvmMain/kotlin/org/eu/freex/tools/modules/image/presentation/contract/events/ProjectEvents.kt
 package org.eu.freex.tools.modules.image.presentation.features.project
 
+import kotlinx.coroutines.delay
 import org.eu.freex.tools.modules.image.domain.model.WorkImage
 import org.eu.freex.tools.modules.image.presentation.core.ImageActionScope
 import org.eu.freex.tools.modules.image.presentation.core.ImageUiEvent
@@ -33,29 +34,13 @@ class LoadFile(val file: File) : ImageUiEvent {
 
 data class SelectSourceImage(val index: Int) : ImageUiEvent {
     override fun ImageActionScope.execute() {
-        if (index !in state.project.sourceImages.indices) return
-        setProject { copy(selectedIndex = index) }
+        setProject { selectImage(index) }
     }
 }
 
 data class RemoveSourceImage(val index: Int) : ImageUiEvent {
     override fun ImageActionScope.execute() {
-        val currentImages = state.project.sourceImages
-        if (index !in currentImages.indices) return
-
-        val newImages = currentImages.toMutableList().apply { removeAt(index) }
-        val newIndex = when {
-            newImages.isEmpty() -> -1
-            index >= newImages.size -> newImages.size - 1
-            else -> index
-        }
-
-        setProject {
-            copy(
-                sourceImages = newImages,
-                selectedIndex = newIndex
-            )
-        }
+        setProject { removeSourceImage(index) }
     }
 }
 
@@ -164,11 +149,22 @@ data class LoadProject(val file: File) : ImageUiEvent {
 object StartScreenCapture : ImageUiEvent {
     override fun ImageActionScope.execute() {
         launch {
+            // 1. 隐藏主窗口
+            setWindowVisible(false)
+
+            // 2. 等待窗口动画消失
+            delay(300)
+
+            // 3. 执行截图
             resourceService.captureScreen()
                 .onSuccess { bufferedImage ->
+                    // 4. 设置 CropperImage (Main.kt 会监听到并显示遮罩)
                     setScreenCropper(bufferedImage)
                 }
-                .onFailure { showToast("截图失败: ${it.message}") }
+                .onFailure {
+                    setWindowVisible(true) // 失败要恢复窗口
+                    showToast("截图失败: ${it.message}")
+                }
         }
     }
 }
@@ -180,13 +176,15 @@ data class ConfirmScreenCrop(val image: BufferedImage) : ImageUiEvent {
                 bufferedImage = image,
                 name = "Capture_${System.currentTimeMillis()}"
             )
-            setProject {
-                copy(
-                    sourceImages = sourceImages + newWorkImage,
-                    selectedIndex = sourceImages.size
-                )
-            }
+
+            // 使用 Model 逻辑添加图片
+            setProject { addSourceImage(newWorkImage) }
+
+            // 关闭遮罩
             setScreenCropper(null)
+
+            // 恢复主窗口
+            setWindowVisible(true)
         }
     }
 }
