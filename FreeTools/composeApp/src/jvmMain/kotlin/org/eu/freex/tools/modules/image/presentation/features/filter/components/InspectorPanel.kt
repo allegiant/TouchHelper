@@ -1,4 +1,4 @@
-package org.eu.freex.tools.modules.image.presentation.features.filter.inspector
+package org.eu.freex.tools.modules.image.presentation.features.filter.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -21,14 +21,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import org.eu.freex.tools.modules.image.domain.model.ViewFilter
 import org.eu.freex.tools.modules.image.domain.model.type
+import org.eu.freex.tools.modules.image.presentation.core.LocalImageViewModel
 import org.eu.freex.tools.modules.image.presentation.features.tools.ChangePanelTab
 import org.eu.freex.tools.modules.image.presentation.features.pipeline.PipelineState
-import org.eu.freex.tools.modules.image.presentation.features.project.ProjectState
 import org.eu.freex.tools.modules.image.presentation.features.editor.UiInteractionState
 import org.eu.freex.tools.modules.image.presentation.features.filter.ApplyNewStep
 import org.eu.freex.tools.modules.image.presentation.features.filter.PreviewFilter
 import org.eu.freex.tools.modules.image.presentation.features.filter.UpdateCurrentStep
-import org.eu.freex.tools.modules.image.presentation.features.filter.inspector.core.LocalImageViewModel
+import org.eu.freex.tools.modules.image.presentation.features.filter.components.renderers.FilterUIRegistry
 
 /**
  * 右侧属性面板 (Inspector)
@@ -37,7 +37,6 @@ import org.eu.freex.tools.modules.image.presentation.features.filter.inspector.c
 @Composable
 fun InspectorPanel(
     modifier: Modifier = Modifier,
-    projectState: ProjectState,   // 仅用于可能的信息展示，核心逻辑不依赖它
     pipelineState: PipelineState, // 【核心】提供 DraftState
     uiState: UiInteractionState
 ) {

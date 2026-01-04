@@ -32,8 +32,8 @@ import org.eu.freex.tools.modules.image.presentation.features.project.ConfirmScr
 import org.eu.freex.tools.modules.image.presentation.features.editor.EditorCanvas
 import org.eu.freex.tools.modules.image.presentation.features.pipeline.ProcessingPipeline
 import org.eu.freex.tools.modules.image.presentation.features.project.ProjectExplorer
-import org.eu.freex.tools.modules.image.presentation.features.filter.inspector.InspectorPanel
-import org.eu.freex.tools.modules.image.presentation.features.filter.inspector.core.LocalImageViewModel
+import org.eu.freex.tools.modules.image.presentation.features.filter.components.InspectorPanel
+import org.eu.freex.tools.modules.image.presentation.core.LocalImageViewModel
 import org.eu.freex.tools.modules.image.presentation.features.tools.dialogs.CharMappingDialog
 import org.eu.freex.tools.modules.image.presentation.features.tools.dialogs.ScreenCropperDialog
 import org.eu.freex.tools.modules.image.presentation.features.editor.rememberEditorState
@@ -110,7 +110,6 @@ fun ImageWorkbench(
                 CompositionLocalProvider(LocalImageViewModel provides viewModel) {
                     InspectorPanel(
                         modifier = Modifier.width(320.dp).fillMaxHeight(),
-                        projectState = projectState,
                         pipelineState = pipelineState, // 【修复】传入 PipelineState
                         uiState = uiState,
                     )

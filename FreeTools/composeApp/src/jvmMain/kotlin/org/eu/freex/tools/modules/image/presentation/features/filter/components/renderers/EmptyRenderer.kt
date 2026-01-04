@@ -1,7 +1,6 @@
-package org.eu.freex.tools.modules.image.presentation.features.filter.inspector.impl
+package org.eu.freex.tools.modules.image.presentation.features.filter.components.renderers
 
 import androidx.compose.runtime.Composable
-import org.eu.freex.tools.modules.image.presentation.features.filter.inspector.core.FilterRenderer
 
 object EmptyRenderer : FilterRenderer {
     @Composable

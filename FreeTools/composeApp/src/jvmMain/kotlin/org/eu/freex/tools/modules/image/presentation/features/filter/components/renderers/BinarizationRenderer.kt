@@ -1,4 +1,4 @@
-package org.eu.freex.tools.modules.image.presentation.features.filter.inspector.impl
+package org.eu.freex.tools.modules.image.presentation.features.filter.components.renderers
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -23,8 +23,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import org.eu.freex.tools.modules.image.domain.model.BinarizationFilter
 import org.eu.freex.tools.modules.image.presentation.features.filter.PreviewFilter
-import org.eu.freex.tools.modules.image.presentation.features.filter.inspector.core.FilterRenderer
-import org.eu.freex.tools.modules.image.presentation.features.filter.inspector.core.LocalImageViewModel
+import org.eu.freex.tools.modules.image.presentation.core.LocalImageViewModel
 
 object BinarizationRenderer : FilterRenderer {
 
