@@ -11,19 +11,28 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.*
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SecondaryTabRow
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRowDefaults
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import org.eu.freex.tools.modules.image.domain.model.Pipeline
 import org.eu.freex.tools.modules.image.domain.model.ViewFilter
 import org.eu.freex.tools.modules.image.domain.model.type
 import org.eu.freex.tools.modules.image.presentation.core.LocalImageViewModel
-import org.eu.freex.tools.modules.image.presentation.features.tools.ChangePanelTab
-import org.eu.freex.tools.modules.image.presentation.features.pipeline.PipelineState
-import org.eu.freex.tools.modules.image.presentation.features.tools.UiInteractionState
 import org.eu.freex.tools.modules.image.presentation.features.filter.ApplyNewStep
 import org.eu.freex.tools.modules.image.presentation.features.filter.PreviewFilter
 import org.eu.freex.tools.modules.image.presentation.features.filter.UpdateCurrentStep
@@ -36,15 +45,14 @@ import org.eu.freex.tools.modules.image.presentation.features.filter.components.
 @Composable
 fun InspectorPanel(
     modifier: Modifier = Modifier,
-    pipelineState: PipelineState, // 【核心】提供 DraftState
-    uiState: UiInteractionState
+    pipeline: Pipeline, // 【核心】提供 DraftState
 ) {
     val viewModel = LocalImageViewModel.current
-    val selectedTab = uiState.rightPanelTabIndex
+    var selectedTab by rememberSaveable { mutableStateOf(0) }
 
     // 从 Pipeline 的草稿状态中获取当前应该显示的滤镜
     // 无论是“回显旧步骤”还是“点击新滤镜”，数据源都是 draft.activeFilter
-    val currentActiveFilter = pipelineState.draft.activeFilter
+    val currentActiveFilter = pipeline.draft.activeFilter
 
     Column(
         modifier = modifier
@@ -52,7 +60,7 @@ fun InspectorPanel(
             .fillMaxHeight()
     ) {
         // --- 1. Tab 栏 ---
-        InspectorTabs(selectedTab) { viewModel.handleEvent(ChangePanelTab(it)) }
+        InspectorTabs(selectedTab) { selectedTab = it }
 
         // --- 2. 内容区域 ---
         Box(modifier = Modifier.weight(1f)) {
@@ -102,7 +110,7 @@ fun InspectorPanel(
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 // 按钮 1: 修改当前步骤 (Update)
                                 // 只有当选中的不是原图(Index > 0) 且不是 ViewFilter 时才可用
-                                val canModify = pipelineState.selectedPipelineIndex > 0 && currentActiveFilter !is ViewFilter
+                                val canModify = pipeline.activeIndex > 0 && currentActiveFilter !is ViewFilter
                                 Button(
                                     onClick = { viewModel.handleEvent(UpdateCurrentStep) },
                                     enabled = canModify,

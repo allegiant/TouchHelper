@@ -5,8 +5,8 @@ import org.eu.freex.tools.modules.image.data.local.entities.PipelineStepsTable
 import org.eu.freex.tools.modules.image.data.local.entities.ProjectInfoTable
 import org.eu.freex.tools.modules.image.data.local.entities.SourceImagesTable
 import org.eu.freex.tools.modules.image.domain.model.ImageFilter
+import org.eu.freex.tools.modules.image.domain.model.Project
 import org.eu.freex.tools.modules.image.domain.model.ViewFilter
-import org.eu.freex.tools.modules.image.domain.model.WorkImage
 import org.eu.freex.tools.modules.image.domain.model.type
 import org.jetbrains.exposed.sql.Database
 import org.jetbrains.exposed.sql.SchemaUtils
@@ -28,7 +28,7 @@ object ProjectDatabase {
     // 连接数据库
     private fun connect(dbFile: File): Database {
         // 使用 sqlite-jdbc 连接
-        return Database.Companion.connect("jdbc:sqlite:${dbFile.absolutePath}", "org.sqlite.JDBC")
+        return Database.connect("jdbc:sqlite:${dbFile.absolutePath}", "org.sqlite.JDBC")
     }
 
     /**
@@ -39,7 +39,7 @@ object ProjectDatabase {
      */
     fun saveProject(
         file: File,
-        sourceImages: List<WorkImage>,
+        project: Project,
         currentFilters: List<ImageFilter>?,
     ) {
         val db = connect(file)
@@ -64,7 +64,7 @@ object ProjectDatabase {
             }
 
             // 写入源图片
-            sourceImages.forEachIndexed { index, img ->
+            project.sourceImages.forEachIndexed { index, img ->
                 // 只保存有路径的图片 (从文件加载的)
                 val filePath = img.path ?: return@forEachIndexed
                 SourceImagesTable.insert {

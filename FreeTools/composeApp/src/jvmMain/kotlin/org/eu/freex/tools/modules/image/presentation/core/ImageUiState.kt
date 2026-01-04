@@ -1,16 +1,17 @@
 package org.eu.freex.tools.modules.image.presentation.core
 
+import org.eu.freex.tools.modules.image.domain.model.Pipeline
+import org.eu.freex.tools.modules.image.domain.model.Project
 import org.eu.freex.tools.modules.image.domain.model.WorkImage
-import org.eu.freex.tools.modules.image.presentation.features.pipeline.PipelineState
-import org.eu.freex.tools.modules.image.presentation.features.project.ProjectState
-import org.eu.freex.tools.modules.image.presentation.features.tools.UiInteractionState
+import java.awt.image.BufferedImage
 
 
 // --- 总 UI 状态 ---
 data class ImageUiState(
-    val project: ProjectState = ProjectState(),
-    val pipeline: PipelineState = PipelineState(),
-    val ui: UiInteractionState = UiInteractionState(),
+    val project: Project = Project(),
+    val pipeline: Pipeline = Pipeline(),
+    val isLoading: Boolean = false, // Loading 比较特殊，通常独立于内容
+    val cropperImage: BufferedImage? = null
 ) {
     /**
      * 画布显示逻辑：
@@ -21,24 +22,14 @@ data class ImageUiState(
     val activeDisplayImage: WorkImage?
         get() = when {
             pipeline.draft.previewImage != null -> pipeline.draft.previewImage
-            pipeline.selectedPipelineIndex > 0 -> pipeline.pipelineSteps.getOrNull(pipeline.selectedPipelineIndex - 1)
-            else -> project.currentSourceImage?.copy(label = "原图")
+            pipeline.activeImage != null -> pipeline.activeImage
+            else -> project.activeImage?.copy(label = "原图")
         }
 
     // 底部历史条显示链
     val displayChain: List<WorkImage>
         get() = buildList {
-            project.currentSourceImage?.let { add(it.copy(label = "原图")) }
-            addAll(pipeline.pipelineSteps)
+            project.activeImage?.let { add(it.copy(label = "原图")) }
+            addAll(pipeline.steps)
         }
-}
-
-// 辅助扩展方法：获取当前选中步骤的前一步图像（作为下一次处理的输入）
-fun ImageUiState.getPreviousImageForProcessing(): WorkImage? {
-    val index = pipeline.selectedPipelineIndex
-    return if (index == 0) {
-        project.currentSourceImage
-    } else {
-        pipeline.pipelineSteps.getOrNull(index - 1)
-    }
 }

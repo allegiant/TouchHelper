@@ -26,22 +26,19 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.toComposeImageBitmap
 import androidx.compose.ui.unit.dp
-import org.eu.freex.tools.modules.image.presentation.features.project.ConfirmScreenCrop
-import org.eu.freex.tools.modules.image.presentation.features.editor.EditorCanvas
-import org.eu.freex.tools.modules.image.presentation.features.pipeline.ProcessingPipeline
-import org.eu.freex.tools.modules.image.presentation.features.project.ProjectExplorer
-import org.eu.freex.tools.modules.image.presentation.features.filter.components.InspectorPanel
 import org.eu.freex.tools.modules.image.presentation.core.LocalImageViewModel
-import org.eu.freex.tools.modules.image.presentation.features.tools.dialogs.CharMappingDialog
-import org.eu.freex.tools.modules.image.presentation.features.tools.dialogs.ScreenCropperDialog
+import org.eu.freex.tools.modules.image.presentation.features.editor.EditorCanvas
 import org.eu.freex.tools.modules.image.presentation.features.editor.rememberEditorState
+import org.eu.freex.tools.modules.image.presentation.features.filter.components.InspectorPanel
 import org.eu.freex.tools.modules.image.presentation.features.pipeline.DeletePipelineStep
+import org.eu.freex.tools.modules.image.presentation.features.pipeline.ProcessingPipeline
 import org.eu.freex.tools.modules.image.presentation.features.pipeline.SelectPipelineStep
+import org.eu.freex.tools.modules.image.presentation.features.project.ConfirmScreenCrop
+import org.eu.freex.tools.modules.image.presentation.features.project.ProjectExplorer
 import org.eu.freex.tools.modules.image.presentation.features.project.rememberProjectExplorerState
-import org.eu.freex.tools.modules.image.presentation.features.tools.ConfirmMapping
 import org.eu.freex.tools.modules.image.presentation.features.tools.DismissDialogs
+import org.eu.freex.tools.modules.image.presentation.features.tools.dialogs.ScreenCropperDialog
 import org.eu.freex.tools.modules.image.presentation.viewmodel.ImageViewModel
 import org.koin.compose.koinInject
 
@@ -54,10 +51,9 @@ fun ImageWorkbench(
     // --- 状态切片优化 ---
     val projectState by remember(fullState) { derivedStateOf { fullState.project } }
     val pipelineState by remember(fullState) { derivedStateOf { fullState.pipeline } } // 【新增】
-    val uiState by remember(fullState) { derivedStateOf { fullState.ui } }
 
     val explorerState = rememberProjectExplorerState(
-        projectState = projectState,
+        project = projectState,
         onEvent = viewModel::handleEvent
     )
 
@@ -100,7 +96,7 @@ fun ImageWorkbench(
                     ProcessingPipeline(
                         modifier = Modifier.fillMaxWidth().height(140.dp),
                         processChain = fullState.displayChain,
-                        projectState = projectState,
+                        project = projectState,
                         onSelect = { viewModel.handleEvent(SelectPipelineStep(it)) },
                         onDelete = { viewModel.handleEvent(DeletePipelineStep(it)) }
                     )
@@ -110,33 +106,26 @@ fun ImageWorkbench(
                 CompositionLocalProvider(LocalImageViewModel provides viewModel) {
                     InspectorPanel(
                         modifier = Modifier.width(320.dp).fillMaxHeight(),
-                        pipelineState = pipelineState, // 【修复】传入 PipelineState
-                        uiState = uiState,
+                        pipeline = pipelineState, // 【修复】传入 PipelineState
                     )
                 }
             }
 
-            // --- 全局弹窗层 ---
-            if (uiState.isScreenCropperVisible && uiState.fullScreenCapture != null) {
+            if (fullState.cropperImage != null) {
                 ScreenCropperDialog(
-                    fullScreenImage = uiState.fullScreenCapture!!,
-                    onDismiss = { viewModel.handleEvent(DismissDialogs) },
-                    onCropConfirm = { cropped ->
-                        viewModel.handleEvent(ConfirmScreenCrop(cropped))
+                    // 传入截图能力，但不立即执行，由 Dialog 内部控制时机
+                    image = fullState.cropperImage,
+                    onCropConfirm = { croppedImage ->
+                        viewModel.handleEvent(ConfirmScreenCrop(croppedImage))
+                    },
+                    onDismiss = {
+                        viewModel.handleEvent(DismissDialogs)
                     }
                 )
             }
 
-            if (uiState.isMappingDialogVisible && uiState.mappingBitmap != null) {
-                CharMappingDialog(
-                    bitmap = uiState.mappingBitmap!!.toComposeImageBitmap(),
-                    onDismiss = { viewModel.handleEvent(DismissDialogs) },
-                    onConfirm = { char -> viewModel.handleEvent(ConfirmMapping(char)) }
-                )
-            }
-
             // --- Loading 层 ---
-            if (uiState.isLoading) {
+            if (fullState.isLoading) {
                 Box(
                     modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center

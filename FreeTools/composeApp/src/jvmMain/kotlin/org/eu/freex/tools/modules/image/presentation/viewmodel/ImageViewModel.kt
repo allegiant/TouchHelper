@@ -21,8 +21,9 @@ import org.eu.freex.tools.modules.image.domain.service.SegmentationService
 import org.eu.freex.tools.modules.image.presentation.core.ImageActionScope
 import org.eu.freex.tools.modules.image.presentation.core.ImageUiEvent
 import org.eu.freex.tools.modules.image.presentation.core.ImageUiState
-import org.eu.freex.tools.modules.image.presentation.features.pipeline.DraftState
-import org.eu.freex.tools.modules.image.presentation.features.pipeline.PipelineState
+import org.eu.freex.tools.modules.image.domain.model.EditSession
+import org.eu.freex.tools.modules.image.domain.model.Pipeline
+import java.awt.image.BufferedImage
 
 class ImageViewModel(repository: ImageRepository) : ViewModel(), ImageActionScope {
 
@@ -60,7 +61,7 @@ class ImageViewModel(repository: ImageRepository) : ViewModel(), ImageActionScop
         viewModelScope.launch {
             // 使用 Flow 监听 currentSourceImage 的变化
             // distinctUntilChanged 保证只有真的换图了才触发
-            uiState.map { it.project.currentSourceImage }
+            uiState.map { it.project.activeImage }
                 .distinctUntilChanged()
                 .collectLatest { sourceImage ->
                     // 触发流水线同步逻辑
@@ -73,30 +74,29 @@ class ImageViewModel(repository: ImageRepository) : ViewModel(), ImageActionScop
         if (source == null) {
             setPipeline {
                 // 重置所有状态
-                PipelineState()
+                Pipeline()
             }
             return
         }
+        openLoading()
 
-        setUi { copy(isLoading = true) }
-
-        val filters = state.pipeline.pipelineSteps.mapNotNull { it.appliedFilter }
+        val filters = state.pipeline.steps.mapNotNull { it.appliedFilter }
 
         filterService.processChain(source, filters)
             .onSuccess { newSteps ->
                 setPipeline {
                     copy(
-                        pipelineSteps = newSteps,
-                        selectedPipelineIndex = newSteps.size,
+                        steps = newSteps,
+                        activeIndex = newSteps.size,
                         // 同步完成后，Draft 重置为 clean state
-                        draft = DraftState()
+                        draft = EditSession()
                     )
                 }
-                setUi { copy(isLoading = false, rightPanelTabIndex = 0) }
+                closeLoading()
             }
             .onFailure {
                 it.printStackTrace()
-                setUi { copy(isLoading = false) }
+                closeLoading()
                 showToast("流水线同步失败: ${it.message}")
             }
     }
@@ -113,14 +113,14 @@ class ImageViewModel(repository: ImageRepository) : ViewModel(), ImageActionScop
     // 实现全自动 launch
     override fun launch(block: suspend ImageActionScope.() -> Unit) {
         viewModelScope.launch {
-            setUi { copy(isLoading = true) }
+            openLoading()
             try {
                 block()
             } catch (e: Exception) {
                 e.printStackTrace()
                 showToast("操作失败: ${e.message}")
             } finally {
-                setUi { copy(isLoading = false) }
+                closeLoading()
             }
         }
     }

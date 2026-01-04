@@ -1,8 +1,10 @@
 package org.eu.freex.tools.modules.image.domain.service
 
+import kotlinx.coroutines.delay
 import org.eu.freex.tools.modules.image.domain.model.WorkImage
 import org.eu.freex.tools.modules.image.domain.repository.ImageRepository
 import org.eu.freex.tools.common.utils.ImageUtils
+import java.awt.image.BufferedImage
 import java.io.File
 
 /**
@@ -28,10 +30,21 @@ class ResourceService(
     }
     */
 
-    suspend fun captureScreen(): Result<WorkImage> = runCatching {
-        // 延迟给 UI 隐藏的时间
-        Thread.sleep(300)
-        val image = ImageUtils.captureFullScreen()
-        WorkImage(bufferedImage = image, name = "ScreenCapture_${System.currentTimeMillis()}")
+    /**
+     * 截取全屏
+     * 【重构】现在返回 Result<BufferedImage>，不生成 WorkImage。
+     * 这样 UI 层 (ScreenCropperDialog) 可以暂持这份原始数据用于裁剪，
+     * 只有在确认裁剪后，才由 ViewModel 生成最终的 WorkImage 存入工程。
+     */
+    suspend fun captureScreen(): Result<BufferedImage> {
+        // 使用 try-catch 替代 runCatching 以支持 suspend 函数 (delay)
+        return try {
+            // 给 UI 隐藏窗口的时间 (使用协程挂起，不阻塞线程)
+            delay(300)
+            val image = ImageUtils.captureFullScreen()
+            Result.success(image)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
     }
 }

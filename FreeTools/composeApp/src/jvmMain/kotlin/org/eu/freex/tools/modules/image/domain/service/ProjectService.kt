@@ -4,16 +4,17 @@ import org.eu.freex.tools.modules.image.domain.model.ImageFilter
 import org.eu.freex.tools.modules.image.domain.model.WorkImage
 import org.eu.freex.tools.modules.image.data.local.ProjectDatabase
 import org.eu.freex.tools.common.utils.ImageUtils
+import org.eu.freex.tools.modules.image.domain.model.Project
 import java.io.File
 
 class ProjectService() {
     suspend fun saveProject(
         file: File,
-        sourceImages: List<WorkImage>,
+        project: Project,
         pipelineSteps: List<WorkImage>
     ): Result<Unit> = runCatching {
         val filters = pipelineSteps.mapNotNull { it.appliedFilter }
-        ProjectDatabase.saveProject(file, sourceImages, filters)
+        ProjectDatabase.saveProject(file, project, filters)
     }
 
     data class LoadResult(val sourceImages: List<WorkImage>, val filters: List<ImageFilter>)

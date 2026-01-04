@@ -1,6 +1,7 @@
 package org.eu.freex.tools.modules.image.presentation.features.pipeline
 
 
+import org.eu.freex.tools.modules.image.domain.model.EditSession
 import org.eu.freex.tools.modules.image.domain.model.ViewFilter
 import org.eu.freex.tools.modules.image.presentation.core.ImageActionScope
 import org.eu.freex.tools.modules.image.presentation.core.ImageUiEvent
@@ -20,7 +21,7 @@ data class SelectPipelineStep(val index: Int) : ImageUiEvent {
         val targetFilter = if (index == 0) {
             ViewFilter
         } else {
-            state.pipeline.pipelineSteps.getOrNull(index - 1)?.appliedFilter ?: ViewFilter
+            state.pipeline.steps.getOrNull(index - 1)?.appliedFilter ?: ViewFilter
         }
 
         // 【关键修复】
@@ -31,8 +32,8 @@ data class SelectPipelineStep(val index: Int) : ImageUiEvent {
 
         setPipeline {
             copy(
-                selectedPipelineIndex = index,
-                draft = DraftState(
+                activeIndex = index,
+                draft = EditSession(
                     activeFilter = targetFilter,
                     previewImage = null,
                     baseImage = baseImage // 预加载 BaseImage
@@ -46,14 +47,14 @@ data class DeletePipelineStep(val index: Int) : ImageUiEvent {
     override fun ImageActionScope.execute() {
         if (index <= 0) return
         val stepIndexToRemove = index - 1
-        val currentSteps = state.pipeline.pipelineSteps
+        val currentSteps = state.pipeline.steps
 
         launch {
             val keptSteps = currentSteps.take(stepIndexToRemove)
             val tailSteps = currentSteps.drop(stepIndexToRemove + 1)
             val filtersToReplay = tailSteps.mapNotNull { it.appliedFilter }
 
-            val baseImage = if (keptSteps.isNotEmpty()) keptSteps.last() else state.project.currentSourceImage
+            val baseImage = if (keptSteps.isNotEmpty()) keptSteps.last() else state.project.activeImage
             if (baseImage == null) return@launch
 
             val recalculatedTail = filterService.processChain(baseImage, filtersToReplay).getOrElse { emptyList() }
@@ -62,9 +63,9 @@ data class DeletePipelineStep(val index: Int) : ImageUiEvent {
 
             setPipeline {
                 copy(
-                    pipelineSteps = finalSteps,
-                    selectedPipelineIndex = finalSteps.size,
-                    draft = DraftState()
+                    steps = finalSteps,
+                    activeIndex = finalSteps.size,
+                    draft = EditSession()
                 )
             }
         }

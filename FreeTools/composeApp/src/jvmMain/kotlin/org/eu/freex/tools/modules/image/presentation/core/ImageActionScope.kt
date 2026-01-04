@@ -2,14 +2,14 @@ package org.eu.freex.tools.modules.image.presentation.core
 
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import org.eu.freex.tools.modules.image.domain.model.Pipeline
+import org.eu.freex.tools.modules.image.domain.model.Project
 import org.eu.freex.tools.modules.image.domain.model.WorkImage
 import org.eu.freex.tools.modules.image.domain.service.FilterService
 import org.eu.freex.tools.modules.image.domain.service.ProjectService
 import org.eu.freex.tools.modules.image.domain.service.ResourceService
 import org.eu.freex.tools.modules.image.domain.service.SegmentationService
-import org.eu.freex.tools.modules.image.presentation.features.pipeline.PipelineState
-import org.eu.freex.tools.modules.image.presentation.features.project.ProjectState
-import org.eu.freex.tools.modules.image.presentation.features.tools.UiInteractionState
+import java.awt.image.BufferedImage
 
 /**
  * ViewModel 能力契约
@@ -26,20 +26,28 @@ interface ImageActionScope {
     val projectService: ProjectService
     var filterPreviewJob: Job? // 4. 专用状态 (如防抖 Job)
 
+
+    fun openLoading() {
+        setState { copy(isLoading = true) }
+    }
+
+    fun closeLoading() {
+        setState { copy(isLoading = false)}
+    }
+    fun setScreenCropper(bufferedImage: BufferedImage?) {
+        setState { copy(cropperImage = bufferedImage) }
+    }
+
     // 【优化】新增一个名字更短的方法，且使用带接收者的 Lambda
     fun setState(reducer: ImageUiState.() -> ImageUiState)
 
     // --- 【核心优化 2】子状态更新语法糖 ---
-    fun setProject(reducer: ProjectState.() -> ProjectState) {
+    fun setProject(reducer: Project.() -> Project) {
         setState { copy(project = project.reducer()) }
     }
 
-    fun setPipeline(reducer: PipelineState.() -> PipelineState) {
+    fun setPipeline(reducer: Pipeline.() -> Pipeline) {
         setState { copy(pipeline = pipeline.reducer()) }
-    }
-
-    fun setUi(reducer: UiInteractionState.() -> UiInteractionState) {
-        setState { copy(ui = ui.reducer()) }
     }
 
     // --- 【核心优化 3】全自动 Launch (自动 Loading + 异常捕获) ---
@@ -58,10 +66,10 @@ interface ImageActionScope {
 fun ImageActionScope.getPrevStepImage(stepIndex: Int): WorkImage? {
     // 1. 如果是第 0 步 (第一个滤镜)，它的“上一步”就是原图
     if (stepIndex == 0) {
-        return state.project.currentSourceImage
+        return state.project.activeImage
     }
     // 2. 如果是第 N 步，它的“上一步”就是流水线里的第 N-1 步的结果
     else {
-        return state.pipeline.pipelineSteps.getOrNull(stepIndex - 1)
+        return state.pipeline.steps.getOrNull(stepIndex - 1)
     }
 }

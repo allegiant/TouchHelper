@@ -6,7 +6,7 @@ import org.eu.freex.tools.modules.image.domain.model.ViewFilter
 import org.eu.freex.tools.modules.image.presentation.core.ImageActionScope
 import org.eu.freex.tools.modules.image.presentation.core.ImageUiEvent
 import org.eu.freex.tools.modules.image.presentation.core.getPrevStepImage
-import org.eu.freex.tools.modules.image.presentation.features.pipeline.DraftState
+import org.eu.freex.tools.modules.image.domain.model.EditSession
 
 // 【重要】引入 Pipeline 模块的事件，用于跨模块交互
 import org.eu.freex.tools.modules.image.presentation.features.pipeline.SelectPipelineStep
@@ -32,7 +32,7 @@ data class PreviewFilter(
         // 如果是编辑模式（selectedPipelineIndex > 0），我们想要的是“当前步骤的输入”，也就是“上一步的输出”。
         // 旧逻辑调用 state.getPreviousImageForProcessing() 往往返回的是当前步骤的输出，导致滤镜叠加（如二值化后再次二值化->无效果）。
         val baseImage = if (forceReloadBaseImage || state.pipeline.draft.baseImage == null) {
-            val currentIndex = state.pipeline.selectedPipelineIndex
+            val currentIndex = state.pipeline.activeIndex
             // 计算输入源的索引：
             // 如果在原图(0)，输入源也是原图(0)用于预览第一步。
             // 如果在步骤N(N>0)，输入源是步骤N-1的结果。
@@ -48,7 +48,7 @@ data class PreviewFilter(
             // 如果切回“原图/无滤镜”模式
             if (filter is ViewFilter) {
                 setPipeline {
-                    copy(draft = DraftState(activeFilter = filter, previewImage = null, baseImage = baseImage))
+                    copy(draft = EditSession(activeFilter = filter, previewImage = null, baseImage = baseImage))
                 }
                 return@launch
             }
@@ -57,7 +57,7 @@ data class PreviewFilter(
                 .onSuccess { previewResult ->
                     setPipeline {
                         copy(
-                            draft = DraftState(
+                            draft = EditSession(
                                 activeFilter = filter,
                                 previewImage = previewResult,
                                 baseImage = baseImage
@@ -90,8 +90,8 @@ object ApplyNewStep : ImageUiEvent {
         }
         val resultImage = draft.previewImage ?: return
 
-        val insertIndex = state.pipeline.selectedPipelineIndex
-        val currentSteps = state.pipeline.pipelineSteps
+        val insertIndex = state.pipeline.activeIndex
+        val currentSteps = state.pipeline.steps
 
         // 截断逻辑：保留插入点之前的步骤，追加新步骤
         val newSteps = currentSteps.take(insertIndex).toMutableList()
@@ -99,10 +99,10 @@ object ApplyNewStep : ImageUiEvent {
 
         setPipeline {
             copy(
-                pipelineSteps = newSteps,
-                selectedPipelineIndex = newSteps.size, // 焦点移动到最新步骤
+                steps = newSteps,
+                activeIndex = newSteps.size, // 焦点移动到最新步骤
                 // 提交后重置 Draft
-                draft = DraftState()
+                draft = EditSession()
             )
         }
 
@@ -117,7 +117,7 @@ object ApplyNewStep : ImageUiEvent {
  */
 object UpdateCurrentStep : ImageUiEvent {
     override fun ImageActionScope.execute() {
-        val selectedIndex = state.pipeline.selectedPipelineIndex
+        val selectedIndex = state.pipeline.activeIndex
         // 索引 0 是原图，不能修改
         if (selectedIndex <= 0) {
             showToast("原图无法修改，请使用【应用】新增处理步骤")
@@ -133,7 +133,7 @@ object UpdateCurrentStep : ImageUiEvent {
 
         launch {
             val stepIndexToReplace = selectedIndex - 1
-            val currentSteps = state.pipeline.pipelineSteps
+            val currentSteps = state.pipeline.steps
 
             // 1. 获取被修改步骤之后的链条 (Tail)
             val tailSteps = currentSteps.drop(stepIndexToReplace + 1)
@@ -155,11 +155,11 @@ object UpdateCurrentStep : ImageUiEvent {
 
             setPipeline {
                 copy(
-                    pipelineSteps = newSteps,
-                    selectedPipelineIndex = selectedIndex, // 焦点保持不变
+                    steps = newSteps,
+                    activeIndex = selectedIndex, // 焦点保持不变
                     // 修改完成后，重置 Draft，但为了体验，可以让 Inspector 保持当前参数
                     // 此时 BaseImage 置空，下次动滑块时会自动重新获取
-                    draft = DraftState(
+                    draft = EditSession(
                         activeFilter = newImageResult.appliedFilter ?: ViewFilter,
                         previewImage = null,
                         baseImage = null

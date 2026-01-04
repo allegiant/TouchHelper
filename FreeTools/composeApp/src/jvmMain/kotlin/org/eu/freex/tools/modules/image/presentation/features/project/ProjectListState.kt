@@ -8,6 +8,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
+import org.eu.freex.tools.modules.image.domain.model.Project
 import org.eu.freex.tools.modules.image.domain.model.WorkImage
 import org.eu.freex.tools.modules.image.presentation.core.ImageUiEvent
 import java.io.File
@@ -21,17 +22,17 @@ import java.io.File
  */
 @Stable
 class ProjectExplorerState(
-    private val projectState: ProjectState,
+    private val project: Project,
     private val onEvent: (ImageUiEvent) -> Unit,
     val listState: LazyListState,
     private val scope: CoroutineScope
 ) {
     // --- 数据代理 (Data Proxy) ---
     val images: List<WorkImage>
-        get() = projectState.sourceImages
+        get() = project.sourceImages
 
     val selectedIndex: Int
-        get() = projectState.selectedSourceIndex
+        get() = project.selectedIndex
 
     // --- 行为封装 (Actions) ---
     fun select(index: Int) {
@@ -60,13 +61,13 @@ class ProjectExplorerState(
 
 @Composable
 fun rememberProjectExplorerState(
-    projectState: ProjectState,
+    project: Project,
     onEvent: (ImageUiEvent) -> Unit
 ): ProjectExplorerState {
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
 
-    return remember(projectState, onEvent, listState, scope) {
-        ProjectExplorerState(projectState, onEvent, listState, scope)
+    return remember(project, onEvent, listState, scope) {
+        ProjectExplorerState(project, onEvent, listState, scope)
     }
 }

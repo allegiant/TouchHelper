@@ -4,7 +4,7 @@ package org.eu.freex.tools.modules.image.presentation.features.project
 import org.eu.freex.tools.modules.image.domain.model.WorkImage
 import org.eu.freex.tools.modules.image.presentation.core.ImageActionScope
 import org.eu.freex.tools.modules.image.presentation.core.ImageUiEvent
-import org.eu.freex.tools.modules.image.presentation.features.pipeline.DraftState
+import org.eu.freex.tools.modules.image.domain.model.EditSession
 import java.awt.image.BufferedImage
 import java.io.File
 
@@ -21,7 +21,7 @@ class LoadFile(val file: File) : ImageUiEvent {
                     setProject {
                         copy(
                             sourceImages = sourceImages + newImage,
-                            selectedSourceIndex = sourceImages.size // 选中新图 (旧size即新图index)
+                            selectedIndex = sourceImages.size // 选中新图 (旧size即新图index)
                         )
                     }
                     // ViewModel 监听到 selectedSourceIndex 变化，会自动驱动流水线
@@ -34,7 +34,7 @@ class LoadFile(val file: File) : ImageUiEvent {
 data class SelectSourceImage(val index: Int) : ImageUiEvent {
     override fun ImageActionScope.execute() {
         if (index !in state.project.sourceImages.indices) return
-        setProject { copy(selectedSourceIndex = index) }
+        setProject { copy(selectedIndex = index) }
     }
 }
 
@@ -53,7 +53,7 @@ data class RemoveSourceImage(val index: Int) : ImageUiEvent {
         setProject {
             copy(
                 sourceImages = newImages,
-                selectedSourceIndex = newIndex
+                selectedIndex = newIndex
             )
         }
     }
@@ -85,17 +85,17 @@ data class ExportImage(val file: File) : ImageUiEvent {
 data class SaveProject(val file: File) : ImageUiEvent {
     override fun ImageActionScope.execute() {
         // 获取所有源图和当前流水线步骤
-        val sourceImages = state.project.sourceImages
-        val pipelineSteps = state.pipeline.pipelineSteps
+        val project = state.project
+        val pipelineSteps = state.pipeline.steps
 
-        if (sourceImages.isEmpty()) {
+        if (project.isEmpty) {
             showToast("没有源文件，无法保存工程")
             return
         }
 
         launch {
             // 调用 ProjectProcessor
-            projectService.saveProject(file, sourceImages, pipelineSteps)
+            projectService.saveProject(file, project, pipelineSteps)
                 .onSuccess {
                     showToast("工程保存成功")
                 }
@@ -134,14 +134,14 @@ data class LoadProject(val file: File) : ImageUiEvent {
                         copy(
                             project = project.copy(
                                 sourceImages = result.sourceImages,
-                                selectedSourceIndex = 0 // 默认选中第一张
+                                selectedIndex = 0 // 默认选中第一张
                             ),
                             pipeline = pipeline.copy(
-                                pipelineSteps = restoredSteps,
-                                selectedPipelineIndex = restoredSteps.size,
+                                steps = restoredSteps,
+                                activeIndex = restoredSteps.size,
                                 // 【修复】使用 draft = DraftState() 替代已移除的 currentImage = null
                                 // 确保加载新工程时，右侧编辑面板和预览状态被重置
-                                draft = DraftState()
+                                draft = EditSession()
                             ),
                         )
                     }
@@ -165,13 +165,8 @@ object StartScreenCapture : ImageUiEvent {
     override fun ImageActionScope.execute() {
         launch {
             resourceService.captureScreen()
-                .onSuccess { capture ->
-                    setUi {
-                        copy(
-                            fullScreenCapture = capture.bufferedImage,
-                            isScreenCropperVisible = true
-                        )
-                    }
+                .onSuccess { bufferedImage ->
+                    setScreenCropper(bufferedImage)
                 }
                 .onFailure { showToast("截图失败: ${it.message}") }
         }
@@ -188,10 +183,10 @@ data class ConfirmScreenCrop(val image: BufferedImage) : ImageUiEvent {
             setProject {
                 copy(
                     sourceImages = sourceImages + newWorkImage,
-                    selectedSourceIndex = sourceImages.size
+                    selectedIndex = sourceImages.size
                 )
             }
-            setUi { copy(isScreenCropperVisible = false) }
+            setScreenCropper(null)
         }
     }
 }
