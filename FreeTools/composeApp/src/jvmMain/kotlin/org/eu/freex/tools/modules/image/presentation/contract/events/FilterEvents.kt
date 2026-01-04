@@ -1,6 +1,7 @@
 // 路径: src/jvmMain/kotlin/org/eu/freex/tools/modules/image/presentation/contract/events/FilterEvents.kt
 package org.eu.freex.tools.modules.image.presentation.contract.events
 
+import kotlinx.coroutines.launch
 import org.eu.freex.tools.modules.image.domain.model.AppFilter
 import org.eu.freex.tools.modules.image.domain.model.ViewFilter
 import org.eu.freex.tools.modules.image.presentation.contract.DraftState
@@ -41,7 +42,7 @@ data class PreviewFilter(
         } ?: return
 
         // 2. 异步计算预览
-        launch {
+        scope.launch {
             // 如果切回“原图/无滤镜”模式
             if (filter is ViewFilter) {
                 setPipeline {

@@ -51,8 +51,8 @@ object ViewFilter : AppFilter {
 @SerialName("BINARIZATION")
 data class BinarizationFilter(
     val min: Float = 0f,
-    val max: Float = 255f,
-    val isRgbAvg: Boolean = false
+    val max: Float = 72f,
+    val isRgbAvg: Boolean = true
 ) : AppFilter {
     override val name = "二值化"
 
