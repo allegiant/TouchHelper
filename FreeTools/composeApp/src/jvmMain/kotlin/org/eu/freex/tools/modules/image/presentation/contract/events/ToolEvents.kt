@@ -2,7 +2,7 @@ package org.eu.freex.tools.modules.image.presentation.contract.events
 
 import androidx.compose.ui.geometry.Rect
 import org.eu.freex.tools.common.utils.ImageUtils
-import org.eu.freex.tools.modules.image.domain.model.AppSegmentation
+import org.eu.freex.tools.modules.image.domain.model.Segmentation
 import org.eu.freex.tools.modules.image.domain.model.AutoSegmentation
 import org.eu.freex.tools.modules.image.domain.model.GridParams
 import org.eu.freex.tools.modules.image.domain.model.GridSegmentation
@@ -22,14 +22,14 @@ object PerformSegmentation : ImageUiEvent {
         // 【适配】使用根状态的 activeDisplayImage，确保处理的是当前用户看到的画面（包含滤镜效果）
         val source = state.activeDisplayImage ?: return
 
-        val strategy: AppSegmentation = if (state.segmentation.isGridMode) {
+        val strategy: Segmentation = if (state.segmentation.isGridMode) {
             GridSegmentation(state.segmentation.gridParams)
         } else {
             AutoSegmentation(emptyList()) // 这里可以扩展传入手动指定的 rects
         }
 
         launch {
-            segmentationProcessor.segment(source, strategy)
+            segmentationService.segment(source, strategy)
                 .onSuccess { result ->
                     setSegmentation {
                         copy(

@@ -1,4 +1,4 @@
-package org.eu.freex.tools.modules.image.presentation.contract.state
+package org.eu.freex.tools.modules.image.presentation.contract.model
 
 import java.awt.image.BufferedImage
 

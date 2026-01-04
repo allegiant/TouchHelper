@@ -1,6 +1,6 @@
-package org.eu.freex.tools.modules.image.domain.usecase
+package org.eu.freex.tools.modules.image.domain.service
 
-import org.eu.freex.tools.modules.image.domain.model.AppSegmentation
+import org.eu.freex.tools.modules.image.domain.model.Segmentation
 import org.eu.freex.tools.modules.image.domain.model.WorkImage
 import org.eu.freex.tools.modules.image.domain.repository.ImageRepository
 import androidx.compose.ui.geometry.Rect
@@ -12,7 +12,7 @@ import androidx.compose.ui.geometry.Rect
  * 2. 调用 Repository 执行切割
  * 3. 返回切割区域(Rect)和子图(WorkImage)的组合结果
  */
-class SegmentationProcessor(
+class SegmentationService(
     private val repository: ImageRepository
 ) {
     // 定义一个结果数据类，比 Pair 更清晰 (可选，也可以继续用 Pair)
@@ -26,7 +26,7 @@ class SegmentationProcessor(
      */
     suspend fun segment(
         source: WorkImage,
-        strategy: AppSegmentation
+        strategy: Segmentation
     ): Result<ResultData> = runCatching {
         // 调用 Repository (接口已改为接收 AppSegmentation)
         val (rects, subImages) = repository.segmentImage(source, strategy)

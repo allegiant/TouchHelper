@@ -4,7 +4,7 @@ package org.eu.freex.tools.modules.image.presentation.contract.events
 import org.eu.freex.tools.modules.image.domain.model.WorkImage
 import org.eu.freex.tools.modules.image.presentation.contract.ImageActionScope
 import org.eu.freex.tools.modules.image.presentation.contract.ImageUiEvent
-import org.eu.freex.tools.modules.image.presentation.contract.state.DraftState
+import org.eu.freex.tools.modules.image.presentation.contract.model.DraftState
 import java.io.File
 
 // =================================================================================
@@ -14,7 +14,7 @@ import java.io.File
 class LoadFile(val file: File) : ImageUiEvent {
     override fun ImageActionScope.execute() {
         launch {
-            resourceProcessor.loadFile(file)
+            resourceService.loadFile(file)
                 .onSuccess { newImage ->
                     // 纯 Project 操作
                     setProject {
@@ -94,7 +94,7 @@ data class SaveProject(val file: File) : ImageUiEvent {
 
         launch {
             // 调用 ProjectProcessor
-            projectProcessor.saveProject(file, sourceImages, pipelineSteps)
+            projectService.saveProject(file, sourceImages, pipelineSteps)
                 .onSuccess {
                     showToast("工程保存成功")
                 }
@@ -112,7 +112,7 @@ data class SaveProject(val file: File) : ImageUiEvent {
 data class LoadProject(val file: File) : ImageUiEvent {
     override fun ImageActionScope.execute() {
         launch {
-            projectProcessor.loadProject(file)
+            projectService.loadProject(file)
                 .onSuccess { result ->
                     // 1. 构造“空壳”流水线步骤 (只包含滤镜参数)
                     // 此时还没有运行算法，我们用源图做占位符，打上 Filter 标签
@@ -164,7 +164,7 @@ data class LoadProject(val file: File) : ImageUiEvent {
 object StartScreenCapture : ImageUiEvent {
     override fun ImageActionScope.execute() {
         launch {
-            resourceProcessor.captureScreen()
+            resourceService.captureScreen()
                 .onSuccess { capture ->
                     setUi {
                         copy(

@@ -15,7 +15,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import org.eu.freex.tools.modules.image.domain.model.AppFilter
+import org.eu.freex.tools.modules.image.domain.model.ImageFilter
 import org.eu.freex.tools.modules.image.domain.model.BinarizationFilter
 import org.eu.freex.tools.modules.image.domain.model.BlackWhiteInvertFilter
 import org.eu.freex.tools.modules.image.domain.model.ColorInvertFilter
@@ -27,8 +27,8 @@ import org.eu.freex.tools.modules.image.domain.model.ViewFilter
 @Composable
 fun FilterSelectionList(
     modifier: Modifier = Modifier,
-    currentFilter: AppFilter,
-    onFilterChange: (AppFilter) -> Unit
+    currentFilter: ImageFilter,
+    onFilterChange: (ImageFilter) -> Unit
 ) {
     // 准备数据
     val colorFilters = remember {
@@ -82,9 +82,9 @@ fun FilterSelectionList(
 @Composable
 private fun FilterGroup(
     title: String,
-    filters: List<AppFilter>,
-    currentFilter: AppFilter,
-    onSelect: (AppFilter) -> Unit
+    filters: List<ImageFilter>,
+    currentFilter: ImageFilter,
+    onSelect: (ImageFilter) -> Unit
 ) {
     Column {
         Text(

@@ -2,12 +2,12 @@
 package org.eu.freex.tools.modules.image.presentation.contract.events
 
 import kotlinx.coroutines.launch
-import org.eu.freex.tools.modules.image.domain.model.AppFilter
+import org.eu.freex.tools.modules.image.domain.model.ImageFilter
 import org.eu.freex.tools.modules.image.domain.model.ViewFilter
 import org.eu.freex.tools.modules.image.presentation.contract.ImageActionScope
 import org.eu.freex.tools.modules.image.presentation.contract.ImageUiEvent
 import org.eu.freex.tools.modules.image.presentation.contract.getPrevStepImage
-import org.eu.freex.tools.modules.image.presentation.contract.state.DraftState
+import org.eu.freex.tools.modules.image.presentation.contract.model.DraftState
 import kotlin.math.max
 
 // =================================================================================
@@ -21,7 +21,7 @@ import kotlin.math.max
  * @param forceReloadBaseImage 是否强制重新获取输入图 (例如切换步骤后首次调节)
  */
 data class PreviewFilter(
-    val filter: AppFilter,
+    val filter: ImageFilter,
     val forceReloadBaseImage: Boolean = false
 ) : ImageUiEvent {
     override fun ImageActionScope.execute() {
@@ -51,7 +51,7 @@ data class PreviewFilter(
                 return@launch
             }
 
-            filterProcessor.processSingle(baseImage, filter)
+            filterService.processSingle(baseImage, filter)
                 .onSuccess { previewResult ->
                     setPipeline {
                         copy(
@@ -140,7 +140,7 @@ object UpdateCurrentStep : ImageUiEvent {
             // 2. 级联重算后续步骤
             // 如果没有后续步骤，newImageResult 就是最终结果
             val newTailImages = if (filtersToReplay.isNotEmpty()) {
-                filterProcessor.processChain(newImageResult, filtersToReplay).getOrElse {
+                filterService.processChain(newImageResult, filtersToReplay).getOrElse {
                     showToast("后续步骤重算失败: ${it.message}")
                     return@launch
                 }
@@ -218,7 +218,7 @@ data class DeletePipelineStep(val index: Int) : ImageUiEvent {
             val baseImage = if (keptSteps.isNotEmpty()) keptSteps.last() else state.project.currentSourceImage
             if (baseImage == null) return@launch
 
-            val recalculatedTail = filterProcessor.processChain(baseImage, filtersToReplay).getOrElse { emptyList() }
+            val recalculatedTail = filterService.processChain(baseImage, filtersToReplay).getOrElse { emptyList() }
 
             val finalSteps = keptSteps + recalculatedTail
 

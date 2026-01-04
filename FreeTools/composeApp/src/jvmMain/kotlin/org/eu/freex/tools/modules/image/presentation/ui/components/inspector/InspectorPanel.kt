@@ -25,9 +25,9 @@ import org.eu.freex.tools.modules.image.presentation.contract.events.ApplyNewSte
 import org.eu.freex.tools.modules.image.presentation.contract.events.ChangePanelTab
 import org.eu.freex.tools.modules.image.presentation.contract.events.UpdateCurrentStep
 import org.eu.freex.tools.modules.image.presentation.contract.events.PreviewFilter
-import org.eu.freex.tools.modules.image.presentation.contract.state.PipelineState
-import org.eu.freex.tools.modules.image.presentation.contract.state.ProjectState
-import org.eu.freex.tools.modules.image.presentation.contract.state.UiInteractionState
+import org.eu.freex.tools.modules.image.presentation.contract.model.PipelineState
+import org.eu.freex.tools.modules.image.presentation.contract.model.ProjectSession
+import org.eu.freex.tools.modules.image.presentation.contract.model.UiInteractionState
 import org.eu.freex.tools.modules.image.presentation.ui.components.inspector.core.LocalImageViewModel
 
 /**
@@ -37,7 +37,7 @@ import org.eu.freex.tools.modules.image.presentation.ui.components.inspector.cor
 @Composable
 fun InspectorPanel(
     modifier: Modifier = Modifier,
-    projectState: ProjectState,   // 仅用于可能的信息展示，核心逻辑不依赖它
+    projectSession: ProjectSession,   // 仅用于可能的信息展示，核心逻辑不依赖它
     pipelineState: PipelineState, // 【核心】提供 DraftState
     uiState: UiInteractionState
 ) {

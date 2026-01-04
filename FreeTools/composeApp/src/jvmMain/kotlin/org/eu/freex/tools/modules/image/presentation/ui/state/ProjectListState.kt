@@ -14,7 +14,7 @@ import org.eu.freex.tools.modules.image.presentation.contract.events.LoadFile
 import org.eu.freex.tools.modules.image.presentation.contract.events.RemoveSourceImage
 import org.eu.freex.tools.modules.image.presentation.contract.events.SelectSourceImage
 import org.eu.freex.tools.modules.image.presentation.contract.events.StartScreenCapture
-import org.eu.freex.tools.modules.image.presentation.contract.state.ProjectState
+import org.eu.freex.tools.modules.image.presentation.contract.model.ProjectSession
 import java.io.File
 
 /**
@@ -26,17 +26,17 @@ import java.io.File
  */
 @Stable
 class ProjectExplorerState(
-    private val projectState: ProjectState,
+    private val projectSession: ProjectSession,
     private val onEvent: (ImageUiEvent) -> Unit,
     val listState: LazyListState,
     private val scope: CoroutineScope
 ) {
     // --- 数据代理 (Data Proxy) ---
     val images: List<WorkImage>
-        get() = projectState.sourceImages
+        get() = projectSession.sourceImages
 
     val selectedIndex: Int
-        get() = projectState.selectedSourceIndex
+        get() = projectSession.selectedSourceIndex
 
     // --- 行为封装 (Actions) ---
     fun select(index: Int) {
@@ -65,13 +65,13 @@ class ProjectExplorerState(
 
 @Composable
 fun rememberProjectExplorerState(
-    projectState: ProjectState,
+    projectSession: ProjectSession,
     onEvent: (ImageUiEvent) -> Unit
 ): ProjectExplorerState {
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
 
-    return remember(projectState, onEvent, listState, scope) {
-        ProjectExplorerState(projectState, onEvent, listState, scope)
+    return remember(projectSession, onEvent, listState, scope) {
+        ProjectExplorerState(projectSession, onEvent, listState, scope)
     }
 }

@@ -1,11 +1,10 @@
-package org.eu.freex.tools.modules.image.data.repository
-
+package org.eu.freex.tools.modules.image.data.local
 
 import kotlinx.serialization.json.Json
-import org.eu.freex.tools.modules.image.domain.model.AppFilter
-import org.eu.freex.tools.modules.image.domain.model.PipelineStepsTable
-import org.eu.freex.tools.modules.image.domain.model.ProjectInfoTable
-import org.eu.freex.tools.modules.image.domain.model.SourceImagesTable
+import org.eu.freex.tools.modules.image.data.local.entities.PipelineStepsTable
+import org.eu.freex.tools.modules.image.data.local.entities.ProjectInfoTable
+import org.eu.freex.tools.modules.image.data.local.entities.SourceImagesTable
+import org.eu.freex.tools.modules.image.domain.model.ImageFilter
 import org.eu.freex.tools.modules.image.domain.model.ViewFilter
 import org.eu.freex.tools.modules.image.domain.model.WorkImage
 import org.eu.freex.tools.modules.image.domain.model.type
@@ -29,7 +28,7 @@ object ProjectDatabase {
     // 连接数据库
     private fun connect(dbFile: File): Database {
         // 使用 sqlite-jdbc 连接
-        return Database.connect("jdbc:sqlite:${dbFile.absolutePath}", "org.sqlite.JDBC")
+        return Database.Companion.connect("jdbc:sqlite:${dbFile.absolutePath}", "org.sqlite.JDBC")
     }
 
     /**
@@ -41,7 +40,7 @@ object ProjectDatabase {
     fun saveProject(
         file: File,
         sourceImages: List<WorkImage>,
-        currentFilters: List<AppFilter>?,
+        currentFilters: List<ImageFilter>?,
     ) {
         val db = connect(file)
 
@@ -78,7 +77,7 @@ object ProjectDatabase {
             // 写入滤镜步骤 (示例：将当前配置存为步骤 0)
             currentFilters?.forEach { filter ->
                 if (filter !is ViewFilter) {
-                    val jsonString = json.encodeToString(AppFilter.serializer(), filter)
+                    val jsonString = json.encodeToString(ImageFilter.serializer(), filter)
                     PipelineStepsTable.insert {
                         it[type] = filter.type
                         it[paramsJson] = jsonString
@@ -94,10 +93,10 @@ object ProjectDatabase {
      * 加载工程
      * 返回: (图片路径列表, 步骤列表)
      */
-    fun loadProject(file: File): Pair<List<String>, List<AppFilter>> {
+    fun loadProject(file: File): Pair<List<String>, List<ImageFilter>> {
         val db = connect(file)
         val paths = mutableListOf<String>()
-        val filters = mutableListOf<AppFilter>()
+        val filters = mutableListOf<ImageFilter>()
 
         transaction(db) {
             if (!file.exists()) return@transaction
@@ -110,8 +109,8 @@ object ProjectDatabase {
             // 读取步骤并反序列化为 AppFilter
             PipelineStepsTable.selectAll().orderBy(PipelineStepsTable.orderIndex).forEach {
                 val jsonString = it[PipelineStepsTable.paramsJson]
-                val loadedFilter: AppFilter =
-                    json.decodeFromString(AppFilter.serializer(), jsonString)
+                val loadedFilter: ImageFilter =
+                    json.decodeFromString(ImageFilter.serializer(), jsonString)
                 filters.add(loadedFilter)
             }
         }

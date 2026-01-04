@@ -7,11 +7,19 @@ import kotlinx.serialization.Serializable
 import uniffi.touch_core.Rect
 import uniffi.touch_core.scanComponents as rustScanComponents
 
+
+@Serializable
+data class GridParams(
+    val x: Int, val y: Int, val w: Int, val h: Int,
+    val colGap: Int, val rowGap: Int,
+    val colCount: Int, val rowCount: Int
+)
+
 /**
  * 切割策略的顶层抽象
  */
 @Serializable
-sealed interface AppSegmentation {
+sealed interface Segmentation {
     val name: String
 
     // 核心行为：输入像素，输出切割区域 (Rect)
@@ -25,7 +33,7 @@ sealed interface AppSegmentation {
 @SerialName("GRID")
 data class GridSegmentation(
     val params: GridParams
-) : AppSegmentation {
+) : Segmentation {
     override val name = "网格切割"
 
     override fun segment(pixels: ByteArray, width: Int, height: Int): List<Rect> {
@@ -52,7 +60,7 @@ data class GridSegmentation(
 data class AutoSegmentation(
     // 如果 ColorRule 无法序列化，这里可能需要用 DTO，暂且假设为空列表或可序列化
     val rules: List<String> = emptyList() // 简化演示，实际根据 ColorRule 调整
-) : AppSegmentation {
+) : Segmentation {
     override val name = "自动识别"
 
     override fun segment(pixels: ByteArray, width: Int, height: Int): List<Rect> {

@@ -1,6 +1,6 @@
-package org.eu.freex.tools.modules.image.domain.usecase
+package org.eu.freex.tools.modules.image.domain.service
 
-import org.eu.freex.tools.modules.image.domain.model.AppFilter
+import org.eu.freex.tools.modules.image.domain.model.ImageFilter
 import org.eu.freex.tools.modules.image.domain.model.WorkImage
 import org.eu.freex.tools.modules.image.domain.repository.ImageRepository
 
@@ -11,7 +11,7 @@ import org.eu.freex.tools.modules.image.domain.repository.ImageRepository
  * 2. 处理流水线的级联重算
  * 3. 不持有任何 UI 状态，只返回 Result
  */
-class FilterProcessor(
+class FilterService(
     private val repository: ImageRepository
 ) {
 
@@ -23,7 +23,7 @@ class FilterProcessor(
      */
     suspend fun processSingle(
         source: WorkImage,
-        filter: AppFilter
+        filter: ImageFilter
     ): Result<WorkImage> = runCatching {
         // Repository 内部通常已切换到 Dispatchers.Default，此处直接调用即可
         // 这一步会真正调用 OpenCV 或算法库生成新的 BufferedImage
@@ -38,7 +38,7 @@ class FilterProcessor(
      */
     suspend fun processChain(
         initialSource: WorkImage,
-        filters: List<AppFilter>
+        filters: List<ImageFilter>
     ): Result<List<WorkImage>> = runCatching {
         val results = ArrayList<WorkImage>(filters.size)
         var currentSource = initialSource

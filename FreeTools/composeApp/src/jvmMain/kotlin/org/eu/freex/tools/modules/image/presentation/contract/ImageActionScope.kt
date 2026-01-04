@@ -3,14 +3,14 @@ package org.eu.freex.tools.modules.image.presentation.contract
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import org.eu.freex.tools.modules.image.domain.model.WorkImage
-import org.eu.freex.tools.modules.image.domain.usecase.FilterProcessor
-import org.eu.freex.tools.modules.image.domain.usecase.ProjectProcessor
-import org.eu.freex.tools.modules.image.domain.usecase.ResourceProcessor
-import org.eu.freex.tools.modules.image.domain.usecase.SegmentationProcessor
-import org.eu.freex.tools.modules.image.presentation.contract.state.PipelineState
-import org.eu.freex.tools.modules.image.presentation.contract.state.ProjectState
-import org.eu.freex.tools.modules.image.presentation.contract.state.SegmentationState
-import org.eu.freex.tools.modules.image.presentation.contract.state.UiInteractionState
+import org.eu.freex.tools.modules.image.domain.service.FilterService
+import org.eu.freex.tools.modules.image.domain.service.ProjectService
+import org.eu.freex.tools.modules.image.domain.service.ResourceService
+import org.eu.freex.tools.modules.image.domain.service.SegmentationService
+import org.eu.freex.tools.modules.image.presentation.contract.model.PipelineState
+import org.eu.freex.tools.modules.image.presentation.contract.model.ProjectSession
+import org.eu.freex.tools.modules.image.presentation.contract.model.SegmentationState
+import org.eu.freex.tools.modules.image.presentation.contract.model.UiInteractionState
 
 /**
  * ViewModel 能力契约
@@ -21,17 +21,17 @@ interface ImageActionScope {
     val scope: CoroutineScope // 用于启动协程
 
     // 处理器
-    val filterProcessor: FilterProcessor
-    val resourceProcessor: ResourceProcessor
-    val segmentationProcessor: SegmentationProcessor
-    val projectProcessor: ProjectProcessor
+    val filterService: FilterService
+    val resourceService: ResourceService
+    val segmentationService: SegmentationService
+    val projectService: ProjectService
     var filterPreviewJob: Job? // 4. 专用状态 (如防抖 Job)
 
     // 【优化】新增一个名字更短的方法，且使用带接收者的 Lambda
     fun setState(reducer: ImageUiState.() -> ImageUiState)
 
     // --- 【核心优化 2】子状态更新语法糖 ---
-    fun setProject(reducer: ProjectState.() -> ProjectState) {
+    fun setProject(reducer: ProjectSession.() -> ProjectSession) {
         setState { copy(project = project.reducer()) }
     }
 

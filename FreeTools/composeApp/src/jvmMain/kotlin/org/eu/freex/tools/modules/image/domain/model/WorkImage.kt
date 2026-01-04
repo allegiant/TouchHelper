@@ -13,7 +13,7 @@ data class WorkImage(
     val name: String,
     val bufferedImage: BufferedImage,
     val label: String = "", // 用于流水线显示的步骤名
-    val appliedFilter: AppFilter? = null,
+    val appliedFilter: ImageFilter? = null,
     // --- 【新增】文件路径 ---
     // 如果是导入的图片，存绝对路径；如果是生成的中间图，为 null
     val path: String? = null

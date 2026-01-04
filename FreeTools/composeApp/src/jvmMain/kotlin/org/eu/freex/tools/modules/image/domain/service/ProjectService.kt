@@ -1,12 +1,12 @@
-package org.eu.freex.tools.modules.image.domain.usecase
+package org.eu.freex.tools.modules.image.domain.service
 
-import org.eu.freex.tools.modules.image.domain.model.AppFilter
+import org.eu.freex.tools.modules.image.domain.model.ImageFilter
 import org.eu.freex.tools.modules.image.domain.model.WorkImage
-import org.eu.freex.tools.modules.image.data.repository.ProjectDatabase
+import org.eu.freex.tools.modules.image.data.local.ProjectDatabase
 import org.eu.freex.tools.common.utils.ImageUtils
 import java.io.File
 
-class ProjectProcessor() {
+class ProjectService() {
     suspend fun saveProject(
         file: File,
         sourceImages: List<WorkImage>,
@@ -16,7 +16,7 @@ class ProjectProcessor() {
         ProjectDatabase.saveProject(file, sourceImages, filters)
     }
 
-    data class LoadResult(val sourceImages: List<WorkImage>, val filters: List<AppFilter>)
+    data class LoadResult(val sourceImages: List<WorkImage>, val filters: List<ImageFilter>)
 
     suspend fun loadProject(file: File): Result<LoadResult> = runCatching {
         val (paths, loadedSteps) = ProjectDatabase.loadProject(file)

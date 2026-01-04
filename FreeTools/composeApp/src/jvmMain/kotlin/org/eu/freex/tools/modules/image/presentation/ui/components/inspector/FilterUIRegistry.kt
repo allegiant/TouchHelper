@@ -1,6 +1,6 @@
 package org.eu.freex.tools.modules.image.presentation.ui.components.inspector
 
-import org.eu.freex.tools.modules.image.domain.model.AppFilter
+import org.eu.freex.tools.modules.image.domain.model.ImageFilter
 import org.eu.freex.tools.modules.image.domain.model.BinarizationFilter
 import org.eu.freex.tools.modules.image.domain.model.BlackWhiteInvertFilter
 import org.eu.freex.tools.modules.image.domain.model.ColorInvertFilter
@@ -15,7 +15,7 @@ object FilterUIRegistry {
 
     // 【核心改动 1】 Key 的类型改为 KClass<out AppFilter>
     // 这意味着我们通过“这个对象属于哪个类”来决定“使用哪个渲染器”
-    private val renderers = mapOf<KClass<out AppFilter>, FilterRenderer>(
+    private val renderers = mapOf<KClass<out ImageFilter>, FilterRenderer>(
 
         // 1. 有参数的滤镜：绑定专门的渲染器
         BinarizationFilter::class to BinarizationRenderer,
@@ -32,7 +32,7 @@ object FilterUIRegistry {
     /**
      * 【核心改动 2】 根据传入实例的类型查找
      */
-    fun getRenderer(filter: AppFilter): FilterRenderer {
+    fun getRenderer(filter: ImageFilter): FilterRenderer {
         // filter::class 拿到的是这个实例的具体类型（例如 BinarizationFilter）
         return renderers[filter::class] ?: EmptyRenderer
     }

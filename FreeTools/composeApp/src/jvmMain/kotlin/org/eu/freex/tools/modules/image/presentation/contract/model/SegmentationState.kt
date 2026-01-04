@@ -1,4 +1,4 @@
-package org.eu.freex.tools.modules.image.presentation.contract.state
+package org.eu.freex.tools.modules.image.presentation.contract.model
 
 import androidx.compose.ui.geometry.Rect
 import org.eu.freex.tools.modules.image.domain.model.GridParams

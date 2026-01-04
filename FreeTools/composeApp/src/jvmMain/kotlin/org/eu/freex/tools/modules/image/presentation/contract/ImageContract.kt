@@ -1,15 +1,15 @@
 package org.eu.freex.tools.modules.image.presentation.contract
 
 import org.eu.freex.tools.modules.image.domain.model.WorkImage
-import org.eu.freex.tools.modules.image.presentation.contract.state.PipelineState
-import org.eu.freex.tools.modules.image.presentation.contract.state.ProjectState
-import org.eu.freex.tools.modules.image.presentation.contract.state.SegmentationState
-import org.eu.freex.tools.modules.image.presentation.contract.state.UiInteractionState
+import org.eu.freex.tools.modules.image.presentation.contract.model.PipelineState
+import org.eu.freex.tools.modules.image.presentation.contract.model.ProjectSession
+import org.eu.freex.tools.modules.image.presentation.contract.model.SegmentationState
+import org.eu.freex.tools.modules.image.presentation.contract.model.UiInteractionState
 
 
 // --- 总 UI 状态 ---
 data class ImageUiState(
-    val project: ProjectState = ProjectState(),
+    val project: ProjectSession = ProjectSession(),
     val pipeline: PipelineState = PipelineState(),
     val segmentation: SegmentationState = SegmentationState(),
     val ui: UiInteractionState = UiInteractionState(),

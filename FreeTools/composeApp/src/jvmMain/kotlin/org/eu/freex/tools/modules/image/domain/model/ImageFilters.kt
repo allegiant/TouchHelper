@@ -21,7 +21,7 @@ import uniffi.touch_core.GrayscaleFilter as RustGrayscaleFilter
  * 滤镜能力的顶层抽象
  */
 @Serializable
-sealed interface AppFilter {
+sealed interface ImageFilter {
     val name: String // 用于 UI 显示
 
     // 核心逻辑：执行滤镜
@@ -29,7 +29,7 @@ sealed interface AppFilter {
 }
 
 @OptIn(InternalSerializationApi::class)
-val AppFilter.type: String
+val ImageFilter.type: String
     get() = this::class.serializer().descriptor.serialName
 
 /**
@@ -38,7 +38,7 @@ val AppFilter.type: String
  */
 @Serializable
 @SerialName("ORIGIN")
-object ViewFilter : AppFilter {
+object ViewFilter : ImageFilter {
     override val name = "原图"
     override fun apply(pixels: ByteArray, w: Int, h: Int): ByteArray = pixels
 }
@@ -53,7 +53,7 @@ data class BinarizationFilter(
     val min: Float = 0f,
     val max: Float = 72f,
     val isRgbAvg: Boolean = true
-) : AppFilter {
+) : ImageFilter {
     override val name = "二值化"
 
     override fun apply(pixels: ByteArray, w: Int, h: Int): ByteArray {
@@ -75,7 +75,7 @@ data class BinarizationFilter(
  */
 @Serializable
 @SerialName("GRAYSCALE")
-object GrayscaleFilter : AppFilter {
+object GrayscaleFilter : ImageFilter {
     override val name = "灰度化"
     override fun apply(pixels: ByteArray, w: Int, h: Int): ByteArray {
         val rustOptions = RustGrayscaleFilter()
@@ -88,7 +88,7 @@ object GrayscaleFilter : AppFilter {
  */
 @Serializable
 @SerialName("COLOR_INVERT")
-object ColorInvertFilter : AppFilter {
+object ColorInvertFilter : ImageFilter {
     override val name = "颜色反转"
     override fun apply(pixels: ByteArray, w: Int, h: Int): ByteArray {
         val rustOptions = RustColorInvertFilter()
@@ -103,7 +103,7 @@ object ColorInvertFilter : AppFilter {
 @SerialName("DENOISE")
 data class DenoiseFilter(
     val radius: UInt = 1u,
-) : AppFilter {
+) : ImageFilter {
     override val name = "去噪"
     override fun apply(pixels: ByteArray, w: Int, h: Int): ByteArray {
         val rustOptions = RustDenoiseFilter(radius)
@@ -116,7 +116,7 @@ data class DenoiseFilter(
  */
 @Serializable
 @SerialName("BLACK_WHITE_INVERT")
-object BlackWhiteInvertFilter : AppFilter {
+object BlackWhiteInvertFilter : ImageFilter {
     override val name = "黑白反转"
     override fun apply(pixels: ByteArray, w: Int, h: Int): ByteArray {
         val rustOptions = RustBlackWhiteInvertFilter()

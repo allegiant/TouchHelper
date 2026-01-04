@@ -1,4 +1,4 @@
-package org.eu.freex.tools.modules.image.domain.usecase
+package org.eu.freex.tools.modules.image.domain.service
 
 import org.eu.freex.tools.modules.image.domain.model.WorkImage
 import org.eu.freex.tools.modules.image.domain.repository.ImageRepository
@@ -9,7 +9,7 @@ import java.io.File
  * 资源逻辑处理器 (Pure Use Case)
  * 职责：单纯负责加载和生成 WorkImage 对象
  */
-class ResourceProcessor(
+class ResourceService(
     private val repository: ImageRepository
 ) {
     /**

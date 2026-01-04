@@ -56,7 +56,7 @@ fun ImageWorkbench(
     val uiState by remember(fullState) { derivedStateOf { fullState.ui } }
 
     val explorerState = rememberProjectExplorerState(
-        projectState = projectState,
+        projectSession = projectState,
         onEvent = viewModel::handleEvent
     )
 
@@ -99,7 +99,7 @@ fun ImageWorkbench(
                     ProcessingPipeline(
                         modifier = Modifier.fillMaxWidth().height(140.dp),
                         processChain = fullState.displayChain,
-                        projectState = projectState,
+                        projectSession = projectState,
                         onSelect = { viewModel.handleEvent(SelectPipelineStep(it)) },
                         onDelete = { viewModel.handleEvent(DeletePipelineStep(it)) }
                     )
@@ -109,7 +109,7 @@ fun ImageWorkbench(
                 CompositionLocalProvider(LocalImageViewModel provides viewModel) {
                     InspectorPanel(
                         modifier = Modifier.width(320.dp).fillMaxHeight(),
-                        projectState = projectState,
+                        projectSession = projectState,
                         pipelineState = pipelineState, // 【修复】传入 PipelineState
                         uiState = uiState,
                     )

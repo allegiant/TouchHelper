@@ -2,8 +2,8 @@ package org.eu.freex.tools.modules.image.data.repository
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import org.eu.freex.tools.modules.image.domain.model.AppFilter
-import org.eu.freex.tools.modules.image.domain.model.AppSegmentation
+import org.eu.freex.tools.modules.image.domain.model.ImageFilter
+import org.eu.freex.tools.modules.image.domain.model.Segmentation
 import org.eu.freex.tools.modules.image.domain.model.WorkImage
 import org.eu.freex.tools.modules.image.domain.repository.ImageRepository
 import org.eu.freex.tools.common.utils.ImageUtils
@@ -28,7 +28,7 @@ class ImageRepositoryImpl : ImageRepository {
     // 【修改】移除 params Map，直接使用 filter 对象
     override suspend fun applyFilter(
         source: WorkImage,
-        filter: AppFilter
+        filter: ImageFilter
     ): WorkImage = withContext(Dispatchers.Default) {
         // 1. 获取原始像素
         val pixels = ImageUtils.toRgbaPixels(source.bufferedImage)
@@ -49,7 +49,7 @@ class ImageRepositoryImpl : ImageRepository {
 
     override suspend fun segmentImage(
         source: WorkImage,
-        segmentation: AppSegmentation
+        segmentation: Segmentation
     ): Pair<List<androidx.compose.ui.geometry.Rect>, List<WorkImage>> =
         withContext(Dispatchers.Default) {
             val pixels = ImageUtils.toRgbaPixels(source.bufferedImage)

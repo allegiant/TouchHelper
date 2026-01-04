@@ -14,15 +14,15 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import org.eu.freex.tools.modules.image.domain.model.WorkImage
 import org.eu.freex.tools.modules.image.domain.repository.ImageRepository
-import org.eu.freex.tools.modules.image.domain.usecase.FilterProcessor
-import org.eu.freex.tools.modules.image.domain.usecase.ProjectProcessor
-import org.eu.freex.tools.modules.image.domain.usecase.ResourceProcessor
-import org.eu.freex.tools.modules.image.domain.usecase.SegmentationProcessor
+import org.eu.freex.tools.modules.image.domain.service.FilterService
+import org.eu.freex.tools.modules.image.domain.service.ProjectService
+import org.eu.freex.tools.modules.image.domain.service.ResourceService
+import org.eu.freex.tools.modules.image.domain.service.SegmentationService
 import org.eu.freex.tools.modules.image.presentation.contract.ImageActionScope
 import org.eu.freex.tools.modules.image.presentation.contract.ImageUiEvent
 import org.eu.freex.tools.modules.image.presentation.contract.ImageUiState
-import org.eu.freex.tools.modules.image.presentation.contract.state.DraftState
-import org.eu.freex.tools.modules.image.presentation.contract.state.PipelineState
+import org.eu.freex.tools.modules.image.presentation.contract.model.DraftState
+import org.eu.freex.tools.modules.image.presentation.contract.model.PipelineState
 
 class ImageViewModel(repository: ImageRepository) : ViewModel(), ImageActionScope {
 
@@ -36,10 +36,10 @@ class ImageViewModel(repository: ImageRepository) : ViewModel(), ImageActionScop
     val uiEffect = _uiEffect.receiveAsFlow()
 
     // 3. 依赖注入
-    override val filterProcessor = FilterProcessor(repository)
-    override val resourceProcessor = ResourceProcessor(repository)
-    override val segmentationProcessor = SegmentationProcessor(repository)
-    override val projectProcessor = ProjectProcessor()
+    override val filterService = FilterService(repository)
+    override val resourceService = ResourceService(repository)
+    override val segmentationService = SegmentationService(repository)
+    override val projectService = ProjectService()
 
     override val scope = viewModelScope
     override var filterPreviewJob: Job? = null
@@ -84,7 +84,7 @@ class ImageViewModel(repository: ImageRepository) : ViewModel(), ImageActionScop
 
         val filters = state.pipeline.pipelineSteps.mapNotNull { it.appliedFilter }
 
-        filterProcessor.processChain(source, filters)
+        filterService.processChain(source, filters)
             .onSuccess { newSteps ->
                 setPipeline {
                     copy(

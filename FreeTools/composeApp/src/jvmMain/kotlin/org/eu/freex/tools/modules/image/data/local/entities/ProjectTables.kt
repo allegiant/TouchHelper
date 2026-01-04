@@ -1,4 +1,4 @@
-package org.eu.freex.tools.modules.image.domain.model
+package org.eu.freex.tools.modules.image.data.local.entities
 import org.jetbrains.exposed.sql.Table
 
 // 1. 工程元数据表
