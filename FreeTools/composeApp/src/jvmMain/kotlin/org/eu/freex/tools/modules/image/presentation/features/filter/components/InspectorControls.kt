@@ -36,7 +36,6 @@ import org.eu.freex.tools.modules.image.domain.model.ColorInvertFilter
 import org.eu.freex.tools.modules.image.domain.model.DenoiseFilter
 import org.eu.freex.tools.modules.image.domain.model.GrayscaleFilter
 import org.eu.freex.tools.modules.image.domain.model.ImageFilter
-import org.eu.freex.tools.modules.image.domain.model.ViewFilter
 
 
 @Composable
@@ -48,7 +47,6 @@ fun FilterSelectionList(
     // 准备数据
     val colorFilters = remember {
         listOf(
-            ViewFilter,
             GrayscaleFilter,
             ColorInvertFilter
         )

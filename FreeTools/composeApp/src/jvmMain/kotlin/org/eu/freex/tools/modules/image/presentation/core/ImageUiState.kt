@@ -3,7 +3,7 @@ package org.eu.freex.tools.modules.image.presentation.core
 import org.eu.freex.tools.modules.image.domain.model.WorkImage
 import org.eu.freex.tools.modules.image.presentation.features.pipeline.PipelineState
 import org.eu.freex.tools.modules.image.presentation.features.project.ProjectState
-import org.eu.freex.tools.modules.image.presentation.features.editor.UiInteractionState
+import org.eu.freex.tools.modules.image.presentation.features.tools.UiInteractionState
 
 
 // --- 总 UI 状态 ---

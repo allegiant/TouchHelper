@@ -1,4 +1,4 @@
-package org.eu.freex.tools.modules.image.presentation.features.editor
+package org.eu.freex.tools.modules.image.presentation.features.tools
 
 import java.awt.image.BufferedImage
 

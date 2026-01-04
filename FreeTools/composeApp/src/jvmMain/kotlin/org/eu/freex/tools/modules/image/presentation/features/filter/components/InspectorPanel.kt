@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.*
-import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -24,7 +23,7 @@ import org.eu.freex.tools.modules.image.domain.model.type
 import org.eu.freex.tools.modules.image.presentation.core.LocalImageViewModel
 import org.eu.freex.tools.modules.image.presentation.features.tools.ChangePanelTab
 import org.eu.freex.tools.modules.image.presentation.features.pipeline.PipelineState
-import org.eu.freex.tools.modules.image.presentation.features.editor.UiInteractionState
+import org.eu.freex.tools.modules.image.presentation.features.tools.UiInteractionState
 import org.eu.freex.tools.modules.image.presentation.features.filter.ApplyNewStep
 import org.eu.freex.tools.modules.image.presentation.features.filter.PreviewFilter
 import org.eu.freex.tools.modules.image.presentation.features.filter.UpdateCurrentStep

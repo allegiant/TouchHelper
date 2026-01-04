@@ -9,7 +9,7 @@ import org.eu.freex.tools.modules.image.domain.service.ResourceService
 import org.eu.freex.tools.modules.image.domain.service.SegmentationService
 import org.eu.freex.tools.modules.image.presentation.features.pipeline.PipelineState
 import org.eu.freex.tools.modules.image.presentation.features.project.ProjectState
-import org.eu.freex.tools.modules.image.presentation.features.editor.UiInteractionState
+import org.eu.freex.tools.modules.image.presentation.features.tools.UiInteractionState
 
 /**
  * ViewModel 能力契约
