@@ -1,6 +1,5 @@
 package org.eu.freex.tools.di
 
-import org.eu.freex.tools.common.AppWindowManager
 import org.eu.freex.tools.modules.image.data.repository.ImageRepositoryImpl
 import org.eu.freex.tools.modules.image.domain.repository.ImageRepository
 import org.eu.freex.tools.modules.image.presentation.viewmodel.ImageViewModel
@@ -10,8 +9,6 @@ import org.koin.core.module.dsl.singleOf
 import org.koin.dsl.module
 
 val appDiModule = module {
-    // 1. 全局窗口管理 (单例) 【新增】
-    singleOf(::AppWindowManager)
     // 1. 数据源 (单例)
     //singleOf(::RustDataSource)
 

@@ -18,7 +18,6 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -33,7 +32,6 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.toComposeImageBitmap
 import androidx.compose.ui.input.pointer.PointerInputChange
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
@@ -51,31 +49,24 @@ fun ScreenCropperDialog(
     onCropConfirm: (BufferedImage) -> Unit,
     onDismiss: () -> Unit
 ) {
-    // 1. 【修复】状态管理：根据 image 是否为空初始化 isLoading
-    var isLoading by remember(image) { mutableStateOf(image == null) }
+    // 1. 【核心】全屏底图作为组件内部状态管理
+    var isLoading by remember { mutableStateOf(true) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
-    // 2. 【修复】监听 image 变化，图片加载完成后自动关闭 loading
-    LaunchedEffect(image) {
-        if (image != null) {
-            isLoading = false
-        }
-    }
-
-    // 全屏窗口
+    // 全屏无边框窗口
     Window(
         onCloseRequest = onDismiss,
         title = "Screen Cropper",
         transparent = true,
         undecorated = true,
         alwaysOnTop = true,
-        // 3. 【修复】使用 Fullscreen 强制全屏，解决 Maximized 不显示的问题
-        state = rememberWindowState(placement = WindowPlacement.Fullscreen)
+        state = rememberWindowState(placement = WindowPlacement.Maximized)
     ) {
+        // 3. 根据状态显示不同内容
         Box(modifier = Modifier.fillMaxSize().background(Color.Transparent)) {
             when {
                 isLoading -> {
-                    // 加载中
+                    // 加载中：显示半透明背景和转圈
                     Box(
                         modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.3f)),
                         contentAlignment = Alignment.Center
@@ -95,7 +86,7 @@ fun ScreenCropperDialog(
                     )
                 }
                 image != null -> {
-                    // 显示画布
+                    // 截图成功：显示裁剪画布
                     CropperCanvas(
                         fullScreenImage = image,
                         onCropConfirm = onCropConfirm,
@@ -107,6 +98,9 @@ fun ScreenCropperDialog(
     }
 }
 
+/**
+ * 将裁剪画布逻辑提取出来，保持主流程清晰
+ */
 @Composable
 private fun CropperCanvas(
     fullScreenImage: BufferedImage,
@@ -117,14 +111,7 @@ private fun CropperCanvas(
     var selectionRect by remember { mutableStateOf<Rect?>(null) }
     var dragStart by remember { mutableStateOf(Offset.Zero) }
 
-    // 【修复】记录 Canvas 实际像素尺寸
-    var canvasSize by remember { mutableStateOf(IntSize.Zero) }
-
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .onSizeChanged { canvasSize = it }
-    ) {
+    Box(modifier = Modifier.fillMaxSize()) {
         // 画布区域
         Canvas(
             modifier = Modifier
@@ -148,42 +135,24 @@ private fun CropperCanvas(
                     )
                 }
         ) {
-            val canvasW = size.width
-            val canvasH = size.height
-            if (canvasW <= 0 || canvasH <= 0) return@Canvas
+            // 绘制全屏截图
+            drawImage(displayBitmap)
 
-            // 【修复】计算缩放比例
-            val scaleX = fullScreenImage.width.toFloat() / canvasW
-            val scaleY = fullScreenImage.height.toFloat() / canvasH
-
-            // 1. 绘制全屏截图 (强制拉伸填满)
-            drawImage(
-                image = displayBitmap,
-                dstSize = IntSize(canvasW.toInt(), canvasH.toInt())
-            )
-
-            // 2. 绘制半透明黑色遮罩
+            // 绘制半透明黑色遮罩
             drawRect(Color.Black.copy(alpha = 0.6f))
 
-            // 3. 绘制选区（高亮部分）
+            // 绘制选区
             selectionRect?.let { rect ->
-                // 计算原图坐标
-                val srcLeft = (rect.left * scaleX).coerceAtLeast(0f)
-                val srcTop = (rect.top * scaleY).coerceAtLeast(0f)
-                val srcWidth = (rect.width * scaleX).coerceAtMost(fullScreenImage.width - srcLeft)
-                val srcHeight = (rect.height * scaleY).coerceAtMost(fullScreenImage.height - srcTop)
+                // 重绘选区内的清晰图
+                drawImage(
+                    image = displayBitmap,
+                    srcOffset = IntOffset(rect.left.toInt(), rect.top.toInt()),
+                    srcSize = IntSize(rect.width.toInt(), rect.height.toInt()),
+                    dstOffset = IntOffset(rect.left.toInt(), rect.top.toInt()),
+                    dstSize = IntSize(rect.width.toInt(), rect.height.toInt())
+                )
 
-                if (srcWidth > 0 && srcHeight > 0) {
-                    drawImage(
-                        image = displayBitmap,
-                        srcOffset = IntOffset(srcLeft.toInt(), srcTop.toInt()),
-                        srcSize = IntSize(srcWidth.toInt(), srcHeight.toInt()),
-                        dstOffset = IntOffset(rect.left.toInt(), rect.top.toInt()),
-                        dstSize = IntSize(rect.width.toInt(), rect.height.toInt())
-                    )
-                }
-
-                // 绘制虚线边框
+                // 绘制边框
                 drawRect(
                     color = Color.Red,
                     topLeft = rect.topLeft,
@@ -215,20 +184,8 @@ private fun CropperCanvas(
                 Button(
                     enabled = selectionRect != null && selectionRect!!.width > 5,
                     onClick = {
-                        selectionRect?.let { rect ->
-                            // 【修复】裁剪时映射回原图坐标
-                            if (canvasSize.width > 0 && canvasSize.height > 0) {
-                                val sX = fullScreenImage.width.toFloat() / canvasSize.width
-                                val sY = fullScreenImage.height.toFloat() / canvasSize.height
-
-                                val mappedRect = Rect(
-                                    left = rect.left * sX,
-                                    top = rect.top * sY,
-                                    right = rect.right * sX,
-                                    bottom = rect.bottom * sY
-                                )
-                                onCropConfirm(ImageUtils.cropImage(fullScreenImage, mappedRect))
-                            }
+                        selectionRect?.let {
+                            onCropConfirm(ImageUtils.cropImage(fullScreenImage, it))
                         }
                     }
                 ) {
