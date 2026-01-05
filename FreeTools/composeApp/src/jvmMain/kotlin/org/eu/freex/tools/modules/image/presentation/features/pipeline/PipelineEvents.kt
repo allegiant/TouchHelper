@@ -1,12 +1,8 @@
 package org.eu.freex.tools.modules.image.presentation.features.pipeline
 
-
-import org.eu.freex.tools.modules.image.domain.model.EditSession
 import org.eu.freex.tools.modules.image.domain.model.ViewFilter
 import org.eu.freex.tools.modules.image.presentation.core.ImageActionScope
 import org.eu.freex.tools.modules.image.presentation.core.ImageUiEvent
-import org.eu.freex.tools.modules.image.presentation.core.getPrevStepImage
-import kotlin.math.max
 
 // =================================================================================
 // 3. 导航与管理
@@ -14,60 +10,47 @@ import kotlin.math.max
 
 /**
  * 选中流水线中的某个步骤
- * 动作：除了移动指针，还需要把该步骤的 Filter 加载到 Draft 中，以便 Inspector 回显
+ * 动作：移动指针，并进入"编辑模式"（加载该步骤的参数到面板）
  */
 data class SelectPipelineStep(val index: Int) : ImageUiEvent {
     override fun ImageActionScope.execute() {
+        // 1. 获取目标步骤的滤镜（如果是第0步，则是 ViewFilter/无滤镜）
         val targetFilter = if (index == 0) {
             ViewFilter
         } else {
             state.pipeline.steps.getOrNull(index - 1)?.appliedFilter ?: ViewFilter
         }
 
-        // 【关键修复】
-        // 切换步骤时，立即准备好该步骤的“输入图”作为 baseImage。
-        // 这样当用户拖动滑块时，是基于“输入图”进行计算，而不是基于“当前结果”计算。
-        val inputIndex = max(0, index - 1)
-        val baseImage = getPrevStepImage(inputIndex)
-
+        // 2. 更新 Pipeline 状态
         setPipeline {
-            copy(
-                activeIndex = index,
-                draft = EditSession(
-                    activeFilter = targetFilter,
-                    previewImage = null,
-                    baseImage = baseImage // 预加载 BaseImage
-                )
-            )
+            // copy(activeIndex = index) 先移动指针
+            // startEditing 会自动根据新的 index 找到"上一步"的图片作为 BaseImage
+            copy(activeIndex = index)
+                .startEditing(targetFilter, state.project.activeImage)
         }
     }
 }
 
+/**
+ * 删除步骤
+ * 动作：调用 UseCase 删除指定步骤并重算后续
+ */
 data class DeletePipelineStep(val index: Int) : ImageUiEvent {
     override fun ImageActionScope.execute() {
-        if (index <= 0) return
-        val stepIndexToRemove = index - 1
-        val currentSteps = state.pipeline.steps
+        if (index <= 0) {
+            showToast("无法删除原图")
+            return
+        }
 
         launch {
-            val keptSteps = currentSteps.take(stepIndexToRemove)
-            val tailSteps = currentSteps.drop(stepIndexToRemove + 1)
-            val filtersToReplay = tailSteps.mapNotNull { it.appliedFilter }
-
-            val baseImage = if (keptSteps.isNotEmpty()) keptSteps.last() else state.project.activeImage
-            if (baseImage == null) return@launch
-
-            val recalculatedTail = filterService.processChain(baseImage, filtersToReplay).getOrElse { emptyList() }
-
-            val finalSteps = keptSteps + recalculatedTail
-
-            setPipeline {
-                copy(
-                    steps = finalSteps,
-                    activeIndex = finalSteps.size,
-                    draft = EditSession()
-                )
-            }
+            // 直接调用 UseCase，无需自己在 UI 层处理 List 拼接和重算
+            pipelineUseCase.deleteStep(state.pipeline, state.project, index)
+                .onSuccess { newPipeline ->
+                    setPipeline { newPipeline }
+                }
+                .onFailure {
+                    showToast("删除失败: ${it.message}")
+                }
         }
     }
 }

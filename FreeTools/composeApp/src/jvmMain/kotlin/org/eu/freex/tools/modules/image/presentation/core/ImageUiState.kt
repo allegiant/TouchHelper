@@ -13,17 +13,22 @@ data class ImageUiState(
     val isLoading: Boolean = false, // Loading 比较特殊，通常独立于内容
     val cropperImage: BufferedImage? = null
 ) {
+
     /**
-     * 画布显示逻辑：
-     * 1. 如果有草稿预览图 (Draft Preview)，优先显示草稿（实时反馈调节结果）
-     * 2. 否则显示当前选中的步骤
-     * 3. 最后兜底原图
+     * 【核心逻辑】获取当前画布应该显示的图片
+     * 优先级：滤镜预览图 (Draft) > 流水线当前步骤输出 (Step Output) > 项目原图 (Project Source)
      */
     val activeDisplayImage: WorkImage?
-        get() = when {
-            pipeline.draft.previewImage != null -> pipeline.draft.previewImage
-            pipeline.activeImage != null -> pipeline.activeImage
-            else -> project.activeImage?.copy(label = "原图")
+        get() {
+            // 1. 优先显示正在调节的预览图
+            pipeline.draft.previewImage?.let { return it }
+
+            // 2. 其次显示流水线当前选中的步骤图
+            // (注意：这里使用了重构后的 activeOutputImage)
+            pipeline.activeOutputImage?.let { return it }
+
+            // 3. 最后显示当前选中的源图
+            return project.activeImage
         }
 
     // 底部历史条显示链

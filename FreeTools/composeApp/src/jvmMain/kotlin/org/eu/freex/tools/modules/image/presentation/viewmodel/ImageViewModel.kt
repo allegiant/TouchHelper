@@ -12,96 +12,67 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import org.eu.freex.tools.modules.image.domain.model.WorkImage
+import org.eu.freex.tools.modules.image.application.PipelineUseCase
+import org.eu.freex.tools.modules.image.application.ProjectUseCase
+import org.eu.freex.tools.modules.image.domain.model.EditSession
+import org.eu.freex.tools.modules.image.domain.model.Pipeline
 import org.eu.freex.tools.modules.image.domain.repository.ImageRepository
 import org.eu.freex.tools.modules.image.domain.service.FilterService
 import org.eu.freex.tools.modules.image.domain.service.ProjectService
 import org.eu.freex.tools.modules.image.domain.service.ResourceService
-import org.eu.freex.tools.modules.image.domain.service.SegmentationService
 import org.eu.freex.tools.modules.image.presentation.core.ImageActionScope
 import org.eu.freex.tools.modules.image.presentation.core.ImageUiEvent
 import org.eu.freex.tools.modules.image.presentation.core.ImageUiState
-import org.eu.freex.tools.modules.image.domain.model.EditSession
-import org.eu.freex.tools.modules.image.domain.model.Pipeline
-import java.awt.image.BufferedImage
 
-class ImageViewModel(repository: ImageRepository) : ViewModel(), ImageActionScope {
+class ImageViewModel(
+    repository: ImageRepository
+) : ViewModel(), ImageActionScope {
 
-    // 1. 状态管理
+    // 1. State
     private val _uiState = MutableStateFlow(ImageUiState())
     override val state: ImageUiState get() = _uiState.value
     val uiState = _uiState.asStateFlow()
 
-    // 2. 副作用通道
     private val _uiEffect = Channel<String>(Channel.BUFFERED)
     val uiEffect = _uiEffect.receiveAsFlow()
 
-    // 3. 依赖注入
-    override val filterService = FilterService(repository)
-    override val resourceService = ResourceService(repository)
-    override val segmentationService = SegmentationService(repository)
-    override val projectService = ProjectService()
+    // 2. Services (私有)
+    private val filterService = FilterService(repository)
+    private val projectService = ProjectService()
+    private val resourceService = ResourceService(repository)
+
+    // 3. UseCases (公开)
+    override val pipelineUseCase = PipelineUseCase(filterService)
+    override val projectUseCase = ProjectUseCase(projectService, resourceService)
 
     override val scope = viewModelScope
     override var filterPreviewJob: Job? = null
 
-    // --- 【新增】初始化块：启动状态监听 ---
     init {
         observeProjectChanges()
     }
 
-    /**
-     * 【核心协调逻辑】监听 Project 变化，自动驱动 Pipeline
-     * 这就是你提到的 "第三方处理"：
-     * 1. 监听源图变化
-     * 2. 拿到 BufferImage
-     * 3. 给流水线发送指令 (syncPipeline)
-     */
+    // 监听源图变化，自动触发 UseCase
     private fun observeProjectChanges() {
         viewModelScope.launch {
-            // 使用 Flow 监听 currentSourceImage 的变化
-            // distinctUntilChanged 保证只有真的换图了才触发
             uiState.map { it.project.activeImage }
                 .distinctUntilChanged()
                 .collectLatest { sourceImage ->
-                    // 触发流水线同步逻辑
-                    syncPipeline(sourceImage)
+                    if (sourceImage == null) {
+                        setPipeline { Pipeline() }
+                    } else {
+                        openLoading()
+                        pipelineUseCase.refreshPipeline(sourceImage, state.pipeline)
+                            .onSuccess { newPipeline ->
+                                setPipeline { newPipeline.copy(draft = EditSession()) }
+                            }
+                            .onFailure { showToast("同步失败: ${it.message}") }
+                        closeLoading()
+                    }
                 }
         }
     }
 
-    private suspend fun syncPipeline(source: WorkImage?) {
-        if (source == null) {
-            setPipeline {
-                // 重置所有状态
-                Pipeline()
-            }
-            return
-        }
-        openLoading()
-
-        val filters = state.pipeline.steps.mapNotNull { it.appliedFilter }
-
-        filterService.processChain(source, filters)
-            .onSuccess { newSteps ->
-                setPipeline {
-                    copy(
-                        steps = newSteps,
-                        activeIndex = newSteps.size,
-                        // 同步完成后，Draft 重置为 clean state
-                        draft = EditSession()
-                    )
-                }
-                closeLoading()
-            }
-            .onFailure {
-                it.printStackTrace()
-                closeLoading()
-                showToast("流水线同步失败: ${it.message}")
-            }
-    }
-
-    // 实现 setState
     override fun setState(reducer: ImageUiState.() -> ImageUiState) {
         _uiState.update { it.reducer() }
     }
@@ -110,7 +81,6 @@ class ImageViewModel(repository: ImageRepository) : ViewModel(), ImageActionScop
         viewModelScope.launch { _uiEffect.send(message) }
     }
 
-    // 实现全自动 launch
     override fun launch(block: suspend ImageActionScope.() -> Unit) {
         viewModelScope.launch {
             openLoading()
@@ -118,17 +88,14 @@ class ImageViewModel(repository: ImageRepository) : ViewModel(), ImageActionScop
                 block()
             } catch (e: Exception) {
                 e.printStackTrace()
-                showToast("操作失败: ${e.message}")
+                showToast("Error: ${e.message}")
             } finally {
                 closeLoading()
             }
         }
     }
 
-    // 唯一的入口
     override fun handleEvent(event: ImageUiEvent) {
-        with(event) {
-            execute()
-        }
+        with(event) { execute() }
     }
 }
