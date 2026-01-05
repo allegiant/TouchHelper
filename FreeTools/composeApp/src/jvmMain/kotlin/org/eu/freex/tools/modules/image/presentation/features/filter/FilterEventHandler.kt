@@ -1,7 +1,6 @@
 package org.eu.freex.tools.modules.image.presentation.features.filter
 
 import org.eu.freex.tools.modules.image.application.PipelineUseCase
-import org.eu.freex.tools.modules.image.domain.model.EditSession
 import org.eu.freex.tools.modules.image.domain.model.ViewFilter
 import org.eu.freex.tools.modules.image.presentation.core.FilterEvent
 import org.eu.freex.tools.modules.image.presentation.core.ImageEventHandler
@@ -17,27 +16,33 @@ class FilterEventHandler(
         state: ImageUiState,
         showToast: (String) -> Unit
     ): ImageUiState? {
-        // 【自动过滤】
         if (event !is FilterEvent) return null
 
         return when (event) {
             is PreviewFilter -> {
                 val pipeline = state.pipeline
+                // 逻辑复用：获取 BaseImage
                 val baseImage = if (event.forceReloadBaseImage || pipeline.draft.baseImage == null) {
                     pipeline.getInputImage(pipeline.activeIndex, state.project.activeImage)
                 } else {
                     pipeline.draft.baseImage
                 } ?: return state
 
+                // 情况1：纯查看滤镜 (ViewFilter)，直接进入编辑状态
                 if (event.filter is ViewFilter) {
-                    val newDraft = EditSession(activeFilter = event.filter, baseImage = baseImage)
-                    return state.copy(pipeline = pipeline.copy(draft = newDraft))
+                    return state.mapPipeline {
+                        // 语义化调用：更新草稿的滤镜和底图
+                        updateDraft(activeFilter = event.filter, baseImage = baseImage)
+                    }
                 }
 
+                // 情况2：需要计算的滤镜
                 pipelineUseCase.processSingle(baseImage, event.filter)
                     .map { result ->
-                        val newDraft = EditSession(activeFilter = event.filter, previewImage = result, baseImage = baseImage)
-                        state.copy(pipeline = pipeline.copy(draft = newDraft))
+                        // 语义化调用：只更新预览图和滤镜
+                        state.mapPipeline {
+                            updateDraft(previewImage = result, activeFilter = event.filter, baseImage = baseImage)
+                        }
                     }
                     .getOrElse {
                         showToast("预览失败: ${it.message}")
@@ -47,11 +52,11 @@ class FilterEventHandler(
             is UpdateCurrentStep -> {
                 val newImage = state.pipeline.draft.previewImage
                 if (state.pipeline.activeIndex <= 0 || newImage == null) {
-                    showToast("无法更新")
+                    showToast("无法更新：请先选择一个步骤并调整参数")
                     state
                 } else {
                     pipelineUseCase.updateCurrentStep(state.pipeline, newImage)
-                        .map { state.copy(pipeline = it) }
+                        .map { newPipeline -> state.copy(pipeline = newPipeline) }
                         .getOrElse {
                             showToast("更新失败: ${it.message}")
                             state
@@ -60,11 +65,16 @@ class FilterEventHandler(
             }
             is ApplyNewStep -> {
                 val newImage = state.pipeline.draft.previewImage ?: return state
-                var newPipeline = state.pipeline.appendStep(newImage)
-                val newIndex = newPipeline.steps.size
-                newPipeline = newPipeline.copy(activeIndex = newIndex)
-                    .startEditing(newImage.appliedFilter ?: ViewFilter, state.project.activeImage)
-                state.copy(pipeline = newPipeline)
+                // 语义化调用：追加步骤
+                // 注意：appendStep 内部已经处理了指针移动和草稿重置，
+                // 但为了连续编辑体验，我们可能希望追加后立即进入新步骤的编辑模式：
+                val tempPipeline = state.pipeline.appendStep(newImage)
+
+                state.copy(pipeline = tempPipeline.editStep(
+                    index = tempPipeline.steps.size,
+                    filter = newImage.appliedFilter ?: ViewFilter,
+                    baseImage = state.project.activeImage // 这里简化处理，实际可能需要上一步的图
+                ))
             }
 
             else -> {

@@ -5,7 +5,7 @@ import org.eu.freex.tools.modules.image.presentation.core.ImageEventHandler
 import org.eu.freex.tools.modules.image.presentation.core.ImageUiEvent
 import org.eu.freex.tools.modules.image.presentation.core.ImageUiState
 import org.eu.freex.tools.modules.image.presentation.core.ProjectEvent
-import kotlin.math.exp
+import java.lang.Exception
 
 class ProjectEventHandler(
     private val projectUseCase: ProjectUseCase
@@ -16,7 +16,6 @@ class ProjectEventHandler(
         state: ImageUiState,
         showToast: (String) -> Unit
     ): ImageUiState? {
-        // 【自动过滤】
         if (event !is ProjectEvent) return null
 
         return when (event) {
@@ -28,8 +27,10 @@ class ProjectEventHandler(
                         state
                     }
             }
-            is SelectSourceImage -> state.copy(project = state.project.selectImage(event.index))
-            is RemoveSourceImage -> state.copy(project = state.project.removeSourceImage(event.index))
+            // 语义化调用：使用 mapProject
+            is SelectSourceImage -> state.mapProject { selectImage(event.index) }
+            is RemoveSourceImage -> state.mapProject { removeSourceImage(event.index) }
+
             is SaveProject -> {
                 projectUseCase.saveProject(event.file, state.project, state.pipeline)
                     .onSuccess { showToast("保存成功") }

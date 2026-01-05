@@ -5,33 +5,39 @@ import org.eu.freex.tools.modules.image.domain.model.Project
 import org.eu.freex.tools.modules.image.domain.model.WorkImage
 import java.awt.image.BufferedImage
 
-
-// --- 总 UI 状态 ---
 data class ImageUiState(
     val project: Project = Project(),
     val pipeline: Pipeline = Pipeline(),
-    val isLoading: Boolean = false, // Loading 比较特殊，通常独立于内容
+    val isLoading: Boolean = false,
     val cropperImage: BufferedImage? = null
 ) {
+    /**
+     * DSL 辅助方法：更新 Pipeline
+     * 允许 Handler 写法：state.mapPipeline { updateDraft(...) }
+     */
+    fun mapPipeline(transformer: Pipeline.() -> Pipeline): ImageUiState {
+        return copy(pipeline = pipeline.transformer())
+    }
 
     /**
-     * 【核心逻辑】获取当前画布应该显示的图片
-     * 优先级：滤镜预览图 (Draft) > 流水线当前步骤输出 (Step Output) > 项目原图 (Project Source)
+     * DSL 辅助方法：更新 Project
+     * 允许 Handler 写法：state.mapProject { selectImage(...) }
      */
+    fun mapProject(transformer: Project.() -> Project): ImageUiState {
+        return copy(project = project.transformer())
+    }
+
+    // 画布显示逻辑
     val activeDisplayImage: WorkImage?
         get() {
-            // 1. 优先显示正在调节的预览图
+            // 1. 优先显示草稿
             pipeline.draft.previewImage?.let { return it }
-
-            // 2. 其次显示流水线当前选中的步骤图
-            // (注意：这里使用了重构后的 activeOutputImage)
+            // 2. 其次显示流水线输出
             pipeline.activeOutputImage?.let { return it }
-
-            // 3. 最后显示当前选中的源图
-            return project.activeImage
+            // 3. 最后显示原图
+            return project.activeImage?.copy(label = "原图")
         }
 
-    // 底部历史条显示链
     val displayChain: List<WorkImage>
         get() = buildList {
             project.activeImage?.let { add(it.copy(label = "原图")) }
