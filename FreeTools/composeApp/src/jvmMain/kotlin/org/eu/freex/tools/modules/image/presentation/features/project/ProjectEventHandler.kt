@@ -17,11 +17,13 @@ class ProjectEventHandler(
         showToast: (String) -> Unit
     ): ImageUiState? {
         if (event !is ProjectEvent) return null
-        val project = state.project
+        val workspace = state.workspace
+        val pipeline = workspace.pipeline
+        val project = workspace.project
         return when (event) {
             is LoadFile -> {
-                projectUseCase.importSourceFile(state.project, event.file)
-                    .map { state.copy(project = it) }
+                projectUseCase.importSourceFile(project, event.file)
+                    .map { state.update(it) }
                     .getOrElse {
                         showToast("导入失败: ${it.message}")
                         state
@@ -30,7 +32,7 @@ class ProjectEventHandler(
             is SelectSourceImage -> project.selectImage(event.index) commitTo state
             is RemoveSourceImage -> project.removeSourceImage(event.index) commitTo state
             is SaveProject -> {
-                projectUseCase.saveProject(event.file, state.project, state.pipeline)
+                projectUseCase.saveProject(event.file, project, pipeline)
                     .onSuccess { showToast("保存成功") }
                     .onFailure { showToast("保存失败: ${it.message}") }
                 state
@@ -46,7 +48,7 @@ class ProjectEventHandler(
                     .getOrElse { state }
             }
             is ExportImage -> {
-                val image = state.activeDisplayImage?.bufferedImage
+                val image = workspace.activeDisplayImage?.bufferedImage
                 if (image == null) {
                     showToast("无图片")
                     state
@@ -64,8 +66,11 @@ class ProjectEventHandler(
                     .getOrElse { state }
             }
             is ConfirmScreenCrop -> {
-                projectUseCase.addCapturedImage(state.project, event.image)
-                    .map { state.copy(project = it, cropperImage = null) }
+                projectUseCase.addCapturedImage(project, event.image)
+                    .map {
+                        state.update(it)
+                        state.copy(cropperImage = null)
+                    }
                     .getOrElse { state }
             }
             else -> state

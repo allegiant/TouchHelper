@@ -49,8 +49,8 @@ fun ImageWorkbench(
     val fullState by viewModel.uiState.collectAsState()
 
     // --- 状态切片优化 ---
-    val projectState by remember(fullState) { derivedStateOf { fullState.project } }
-    val pipelineState by remember(fullState) { derivedStateOf { fullState.pipeline } } // 【新增】
+    val projectState by remember(fullState) { derivedStateOf { fullState.workspace.project} }
+    val pipelineState by remember(fullState) { derivedStateOf { fullState.workspace.pipeline} } // 【新增】
 
     val explorerState = rememberProjectExplorerState(
         project = projectState,
@@ -89,13 +89,13 @@ fun ImageWorkbench(
                     ) {
                         EditorCanvas(
                             modifier = Modifier.fillMaxSize(),
-                            workImage = fullState.activeDisplayImage,
+                            workImage = fullState.workspace.activeDisplayImage,
                             state = editorState
                         )
                     }
                     ProcessingPipeline(
                         modifier = Modifier.fillMaxWidth().height(140.dp),
-                        processChain = fullState.displayChain,
+                        processChain = fullState.workspace.displayChain,
                         project = projectState,
                         onSelect = { viewModel.handleEvent(SelectPipelineStep(it)) },
                         onDelete = { viewModel.handleEvent(DeletePipelineStep(it)) }

@@ -3,7 +3,7 @@ package org.eu.freex.tools.modules.image.domain.model
 data class Project(
     val sourceImages: List<WorkImage> = emptyList(),
     val selectedIndex: Int = -1,
-): ImageEntity {
+): BaseImageEntity {
     val activeImage: WorkImage? get() = sourceImages.getOrNull(selectedIndex)
     val isEmpty: Boolean get() = sourceImages.isEmpty()
 

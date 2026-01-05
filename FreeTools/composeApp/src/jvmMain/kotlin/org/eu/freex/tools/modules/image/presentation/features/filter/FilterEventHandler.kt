@@ -18,12 +18,13 @@ class FilterEventHandler(
     ): ImageUiState? {
         if (event !is FilterEvent) return null
 
-        val pipeline = state.pipeline
+        val pipeline = state.workspace.pipeline
+        val project = state.workspace.project
         return when (event) {
             is PreviewFilter -> {
                 // 逻辑复用：获取 BaseImage
                 val baseImage = if (event.forceReloadBaseImage || pipeline.draft.baseImage == null) {
-                    pipeline.getInputImage(pipeline.activeIndex, state.project.activeImage)
+                    pipeline.getInputImage(pipeline.activeIndex, project.activeImage)
                 } else {
                     pipeline.draft.baseImage
                 } ?: return state
@@ -46,12 +47,12 @@ class FilterEventHandler(
                     }
             }
             is UpdateCurrentStep -> {
-                val newImage = state.pipeline.draft.previewImage
-                if (state.pipeline.activeIndex <= 0 || newImage == null) {
+                val newImage = pipeline.draft.previewImage
+                if (pipeline.activeIndex <= 0 || newImage == null) {
                     showToast("无法更新：请先选择一个步骤并调整参数")
                     state
                 } else {
-                    pipelineUseCase.updateCurrentStep(state.pipeline, newImage)
+                    pipelineUseCase.updateCurrentStep(pipeline, newImage)
                         .map { newPipeline ->
                             state.update(newPipeline)
                         }
@@ -62,13 +63,13 @@ class FilterEventHandler(
                 }
             }
             is ApplyNewStep -> {
-                val newImage = state.pipeline.draft.previewImage ?: return state
+                val newImage = pipeline.draft.previewImage ?: return state
 
                 val tempPipeline = pipeline.appendStep(newImage)
                 val editStep = tempPipeline.editStep(
                     index = tempPipeline.steps.size,
                     filter = newImage.appliedFilter ?: ViewFilter,
-                    baseImage = state.project.activeImage // 这里的 state 来自外部闭包，是合法的
+                    baseImage = project.activeImage // 这里的 state 来自外部闭包，是合法的
                 )
                 state.update(editStep)
             }

@@ -19,6 +19,8 @@ class PipelineEventHandler(
         // 自动过滤非流水线事件
         if (event !is PipelineEvent) return null
 
+        val pipeline = state.workspace.pipeline
+        val project = state.workspace.project
         return with(state) {
             when (event) {
                 is SelectPipelineStep -> {

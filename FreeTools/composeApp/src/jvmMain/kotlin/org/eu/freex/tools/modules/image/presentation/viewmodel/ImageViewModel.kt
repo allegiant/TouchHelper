@@ -1,16 +1,12 @@
 package org.eu.freex.tools.modules.image.presentation.viewmodel
 
-import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import org.eu.freex.tools.common.state.BaseViewModel
 import org.eu.freex.tools.modules.image.application.PipelineUseCase
 import org.eu.freex.tools.modules.image.domain.model.EditSession
 import org.eu.freex.tools.modules.image.domain.model.Pipeline
@@ -20,18 +16,12 @@ import org.eu.freex.tools.modules.image.presentation.core.ImageUiState
 
 // 移除 : ImageActionScope
 class ImageViewModel(
-    private val imageEventDispatcher: ImageEventDispatcher,
+    imageEventDispatcher: ImageEventDispatcher,
     private val pipelineUseCase: PipelineUseCase
-) : ViewModel() { // 只继承 ViewModel
-
-    // State
-    private val _uiState = MutableStateFlow(ImageUiState())
-    val state: ImageUiState get() = _uiState.value // 保持 getter 以防 UI 还在用
-    val uiState = _uiState.asStateFlow()
-
-    // Effects
-    private val _uiEffect = Channel<String>(Channel.BUFFERED)
-    val uiEffect = _uiEffect.receiveAsFlow()
+) : BaseViewModel<ImageUiEvent, ImageUiState>(
+    initialState = ImageUiState(),
+    dispatcher = imageEventDispatcher
+) {
 
     init {
         observeProjectChanges()
@@ -39,39 +29,42 @@ class ImageViewModel(
 
     private fun observeProjectChanges() {
         viewModelScope.launch {
-            uiState.map { it.project.activeImage }
+            // 监听 activeImage 变化
+            uiState.map { it.workspace.project.activeImage }
                 .distinctUntilChanged()
                 .collectLatest { sourceImage ->
                     if (sourceImage == null) {
-                        _uiState.update { it.copy(pipeline = Pipeline()) }
+                        // 图片为空，清空流水线
+                        _uiState.update { it.update(Pipeline()) }
                     } else {
-                        _uiState.update { it.copy(isLoading = true) }
-                        pipelineUseCase.refreshPipeline(sourceImage, state.pipeline)
-                            .onSuccess { newPipeline ->
-                                _uiState.update { it.copy(pipeline = newPipeline.copy(draft = EditSession())) }
+                        // 1. 开启 Loading (使用 it)
+                        _uiState.update { it.updateLoading(true) }
+
+                        // 2. 执行业务逻辑
+                        // 注意：这里读取 state.workspace.pipeline 是没问题的，表示基于当前流水线刷新
+                        val result = pipelineUseCase.refreshPipeline(
+                            sourceImage,
+                            state.workspace.pipeline
+                        )
+
+                        // 3. 统一处理结果 (闭环 Loading)
+                        result.fold(
+                            onSuccess = { newPipeline ->
+                                _uiState.update {
+                                    it.update(newPipeline.copy(draft = EditSession())) // 更新数据
+                                        .updateLoading(false) // 链式调用，同时关闭 Loading
+                                }
+                            },
+                            onFailure = { error ->
+                                // 🔥 必须处理失败情况，否则 Loading 关不掉！
+                                _uiState.update { it.updateLoading(false) }
+
+                                // 可选：发送错误提示
+                                sendEffect("刷新失败: ${error.message}")
                             }
-                        _uiState.update { it.copy(isLoading = false) }
+                        )
                     }
                 }
-        }
-    }
-
-    // --- 唯一的公共入口 ---
-    fun handleEvent(event: ImageUiEvent) {
-        viewModelScope.launch {
-            // 统一 Loading
-            _uiState.update { it.copy(isLoading = true) }
-
-            val toast: (String) -> Unit = { msg ->
-                viewModelScope.launch { _uiEffect.send(msg) }
-            }
-
-            // 自动分发
-            val newState = imageEventDispatcher.dispatch(event, state, toast)
-
-            _uiState.update { newState }
-
-            _uiState.update { it.copy(isLoading = false) }
         }
     }
 }
