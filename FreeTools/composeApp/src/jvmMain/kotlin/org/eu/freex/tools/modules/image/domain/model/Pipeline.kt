@@ -11,7 +11,7 @@ data class Pipeline(
     val activeIndex: Int = 0,
     val draft: EditSession = EditSession()
 ) {
-    // 获取当前生效的步骤图
+    // 获取当前生效的步骤图 (UI显示用)
     val activeOutputImage: WorkImage?
         get() = steps.getOrNull(activeIndex - 1)
 
@@ -20,17 +20,43 @@ data class Pipeline(
         return if (stepIndex <= 0) projectSource else steps.getOrNull(stepIndex - 1)
     }
 
+    // 获取指定位置之后的所有滤镜 (用于重算)
     fun getFiltersAfter(index: Int): List<ImageFilter> {
         return steps.drop(index).mapNotNull { it.appliedFilter }
     }
 
     // =========================================================================
-    // 语义化变异方法 (Semantic Mutations) - 解决嵌套 Copy 地狱
+    // 高层业务动作 (High-level Business Actions)
+    // =========================================================================
+
+    /**
+     * 【核心新增】激活/选中指定步骤
+     * 自动计算该步骤对应的滤镜和输入底图，并进入编辑模式。
+     * * @param index 目标步骤索引
+     * @param projectSource 项目源图（用于计算第1步的输入）
+     */
+    fun activateStep(index: Int, projectSource: WorkImage?): Pipeline {
+        // 1. 自动计算目标滤镜 (内聚逻辑)
+        // 如果是第0步(原图)，就是查看模式；否则取出上一步应用的滤镜回显
+        val targetFilter = if (index == 0) ViewFilter else
+            steps.getOrNull(index - 1)?.appliedFilter ?: ViewFilter
+
+        // 2. 自动计算输入底图 (内聚逻辑)
+        val baseImage = getInputImage(index, projectSource)
+
+        // 3. 变更状态
+        return copy(
+            activeIndex = index,
+            draft = EditSession(activeFilter = targetFilter, baseImage = baseImage)
+        )
+    }
+
+    // =========================================================================
+    // 基础变异方法 (Basic Mutations)
     // =========================================================================
 
     /**
      * 更新草稿 (Preview/Draft)
-     * 用于滤镜参数调节时的实时反馈
      */
     fun updateDraft(
         previewImage: WorkImage? = draft.previewImage,
@@ -47,8 +73,7 @@ data class Pipeline(
     }
 
     /**
-     * 进入特定步骤的编辑模式
-     * 移动指针，并初始化草稿
+     * 进入特定步骤的编辑模式 (底层方法，被 activateStep 调用或用于特定场景)
      */
     fun editStep(index: Int, filter: ImageFilter, baseImage: WorkImage?): Pipeline {
         return copy(
@@ -59,7 +84,6 @@ data class Pipeline(
 
     /**
      * 替换步骤链 (用于删除或修改中间步骤后的重算)
-     * 修改后自动清空草稿
      */
     fun replaceSteps(startIndex: Int, newSuffix: List<WorkImage>): Pipeline {
         val prefix = steps.take(startIndex)
@@ -73,7 +97,6 @@ data class Pipeline(
 
     /**
      * 追加新步骤
-     * 追加后自动清空草稿
      */
     fun appendStep(newImage: WorkImage): Pipeline {
         val newSteps = steps.take(activeIndex) + newImage

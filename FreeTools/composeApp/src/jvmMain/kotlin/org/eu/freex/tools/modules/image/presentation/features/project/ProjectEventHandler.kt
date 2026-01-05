@@ -5,7 +5,7 @@ import org.eu.freex.tools.modules.image.presentation.core.ImageEventHandler
 import org.eu.freex.tools.modules.image.presentation.core.ImageUiEvent
 import org.eu.freex.tools.modules.image.presentation.core.ImageUiState
 import org.eu.freex.tools.modules.image.presentation.core.ProjectEvent
-import java.lang.Exception
+import org.eu.freex.tools.modules.image.presentation.core.commitTo
 
 class ProjectEventHandler(
     private val projectUseCase: ProjectUseCase
@@ -17,7 +17,7 @@ class ProjectEventHandler(
         showToast: (String) -> Unit
     ): ImageUiState? {
         if (event !is ProjectEvent) return null
-
+        val project = state.project
         return when (event) {
             is LoadFile -> {
                 projectUseCase.importSourceFile(state.project, event.file)
@@ -27,9 +27,8 @@ class ProjectEventHandler(
                         state
                     }
             }
-            // 语义化调用：使用 mapProject
-            is SelectSourceImage -> state.mapProject { selectImage(event.index) }
-            is RemoveSourceImage -> state.mapProject { removeSourceImage(event.index) }
+            is SelectSourceImage -> project.selectImage(event.index).commitTo(state)
+            is RemoveSourceImage ->  project.removeSourceImage(event.index).commitTo(state)
 
             is SaveProject -> {
                 projectUseCase.saveProject(event.file, state.project, state.pipeline)
@@ -40,7 +39,8 @@ class ProjectEventHandler(
             is LoadProject -> {
                 projectUseCase.loadProject(event.file)
                     .map { (newProject, newPipeline) ->
-                        state.copy(project = newProject, pipeline = newPipeline)
+                        newProject.commitTo(state)
+                        newPipeline.commitTo(state)
                     }
                     .onSuccess { showToast("加载成功") }
                     .onFailure { showToast("加载失败: ${it.message}") }
@@ -69,10 +69,7 @@ class ProjectEventHandler(
                     .map { state.copy(project = it, cropperImage = null) }
                     .getOrElse { state }
             }
-
-            else -> {
-                throw Exception("Unhandled event: $event")
-            }
+            else -> state
         }
     }
 }

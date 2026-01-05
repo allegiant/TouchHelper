@@ -18,9 +18,9 @@ class FilterEventHandler(
     ): ImageUiState? {
         if (event !is FilterEvent) return null
 
+        val pipeline = state.pipeline
         return when (event) {
             is PreviewFilter -> {
-                val pipeline = state.pipeline
                 // 逻辑复用：获取 BaseImage
                 val baseImage = if (event.forceReloadBaseImage || pipeline.draft.baseImage == null) {
                     pipeline.getInputImage(pipeline.activeIndex, state.project.activeImage)
@@ -30,19 +30,15 @@ class FilterEventHandler(
 
                 // 情况1：纯查看滤镜 (ViewFilter)，直接进入编辑状态
                 if (event.filter is ViewFilter) {
-                    return state.mapPipeline {
-                        // 语义化调用：更新草稿的滤镜和底图
-                        updateDraft(activeFilter = event.filter, baseImage = baseImage)
-                    }
+                    val newPipeline = pipeline.updateDraft(activeFilter = event.filter, baseImage = baseImage)
+                    state.update(newPipeline)
                 }
 
                 // 情况2：需要计算的滤镜
                 pipelineUseCase.processSingle(baseImage, event.filter)
                     .map { result ->
-                        // 语义化调用：只更新预览图和滤镜
-                        state.mapPipeline {
-                            updateDraft(previewImage = result, activeFilter = event.filter, baseImage = baseImage)
-                        }
+                        val newPipeline = pipeline.updateDraft(result, event.filter, baseImage)
+                        state.update(newPipeline)
                     }
                     .getOrElse {
                         showToast("预览失败: ${it.message}")
@@ -56,7 +52,9 @@ class FilterEventHandler(
                     state
                 } else {
                     pipelineUseCase.updateCurrentStep(state.pipeline, newImage)
-                        .map { newPipeline -> state.copy(pipeline = newPipeline) }
+                        .map { newPipeline ->
+                            state.update(newPipeline)
+                        }
                         .getOrElse {
                             showToast("更新失败: ${it.message}")
                             state
@@ -65,21 +63,16 @@ class FilterEventHandler(
             }
             is ApplyNewStep -> {
                 val newImage = state.pipeline.draft.previewImage ?: return state
-                // 语义化调用：追加步骤
-                // 注意：appendStep 内部已经处理了指针移动和草稿重置，
-                // 但为了连续编辑体验，我们可能希望追加后立即进入新步骤的编辑模式：
-                val tempPipeline = state.pipeline.appendStep(newImage)
 
-                state.copy(pipeline = tempPipeline.editStep(
+                val tempPipeline = pipeline.appendStep(newImage)
+                val editStep = tempPipeline.editStep(
                     index = tempPipeline.steps.size,
                     filter = newImage.appliedFilter ?: ViewFilter,
-                    baseImage = state.project.activeImage // 这里简化处理，实际可能需要上一步的图
-                ))
+                    baseImage = state.project.activeImage // 这里的 state 来自外部闭包，是合法的
+                )
+                state.update(editStep)
             }
-
-            else -> {
-                throw Exception("Unhandled event: $event")
-            }
+            else -> state
         }
     }
 }

@@ -11,21 +11,11 @@ data class ImageUiState(
     val isLoading: Boolean = false,
     val cropperImage: BufferedImage? = null
 ) {
-    /**
-     * DSL 辅助方法：更新 Pipeline
-     * 允许 Handler 写法：state.mapPipeline { updateDraft(...) }
-     */
-    fun mapPipeline(transformer: Pipeline.() -> Pipeline): ImageUiState {
-        return copy(pipeline = pipeline.transformer())
-    }
 
-    /**
-     * DSL 辅助方法：更新 Project
-     * 允许 Handler 写法：state.mapProject { selectImage(...) }
-     */
-    fun mapProject(transformer: Project.() -> Project): ImageUiState {
-        return copy(project = project.transformer())
-    }
+    fun update(newPipeline: Pipeline) = copy(pipeline = newPipeline)
+
+    // ✅ 极简重载 2：更新 Project
+    fun update(newProject: Project) = copy(project = newProject)
 
     // 画布显示逻辑
     val activeDisplayImage: WorkImage?
@@ -44,3 +34,6 @@ data class ImageUiState(
             addAll(pipeline.steps)
         }
 }
+
+fun Pipeline.commitTo(state: ImageUiState): ImageUiState = state.copy(pipeline = this)
+fun Project.commitTo(state: ImageUiState): ImageUiState = state.copy(project = this)
