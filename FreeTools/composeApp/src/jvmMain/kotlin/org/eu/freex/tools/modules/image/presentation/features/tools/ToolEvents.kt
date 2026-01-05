@@ -1,17 +1,12 @@
 package org.eu.freex.tools.modules.image.presentation.features.tools
 
-import org.eu.freex.tools.modules.image.presentation.core.ImageActionScope
-import org.eu.freex.tools.modules.image.presentation.core.ImageUiEvent
+import org.eu.freex.tools.modules.image.presentation.core.ToolEvent
 
 // =================================================================================
-// 2. 界面交互 (UI Interaction)
+// 工具与交互事件
 // =================================================================================
 
 /**
- * 关闭所有弹窗
+ * 关闭所有弹窗（例如取消截图裁剪）
  */
-object DismissDialogs : ImageUiEvent {
-    override fun ImageActionScope.execute() {
-        setScreenCropper(null)
-    }
-}
+object DismissDialogs : ToolEvent
