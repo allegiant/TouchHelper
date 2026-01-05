@@ -7,7 +7,7 @@ import org.eu.freex.tools.modules.image.domain.repository.ImageRepository
 import org.eu.freex.tools.modules.image.domain.service.FilterService
 import org.eu.freex.tools.modules.image.domain.service.ProjectService
 import org.eu.freex.tools.modules.image.domain.service.ResourceService
-import org.eu.freex.tools.modules.image.presentation.core.EventDispatcher
+import org.eu.freex.tools.modules.image.presentation.core.ImageEventDispatcher
 import org.eu.freex.tools.modules.image.presentation.core.ImageEventHandler
 import org.eu.freex.tools.modules.image.presentation.features.filter.FilterEventHandler
 import org.eu.freex.tools.modules.image.presentation.features.pipeline.PipelineEventHandler
@@ -51,7 +51,7 @@ val appDiModule = module {
     // 5. 表现层 - 分发与状态 (Presentation Core)
     // =========================================================================
     // 分发器：Koin 会自动收集上面所有绑定了 ImageEventHandler 的实例注入到 List 中
-    single { EventDispatcher(getAll()) }
+    single { ImageEventDispatcher(getAll()) }
 
     // ViewModel：自动注入 Dispatcher 和 UseCases
     singleOf(::ImageViewModel)

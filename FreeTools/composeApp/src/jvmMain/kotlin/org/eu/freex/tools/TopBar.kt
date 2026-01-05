@@ -40,7 +40,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import org.eu.freex.tools.common.theme.ThemeMode
-import org.eu.freex.tools.modules.image.domain.model.AppModule
+import org.eu.freex.tools.common.AppModule
 import org.eu.freex.tools.modules.image.presentation.core.ImageUiEvent
 import org.eu.freex.tools.modules.image.presentation.features.project.ExportImage
 import org.eu.freex.tools.modules.image.presentation.features.project.LoadProject

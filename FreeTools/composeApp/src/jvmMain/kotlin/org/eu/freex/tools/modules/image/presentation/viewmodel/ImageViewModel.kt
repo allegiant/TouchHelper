@@ -14,13 +14,13 @@ import kotlinx.coroutines.launch
 import org.eu.freex.tools.modules.image.application.PipelineUseCase
 import org.eu.freex.tools.modules.image.domain.model.EditSession
 import org.eu.freex.tools.modules.image.domain.model.Pipeline
-import org.eu.freex.tools.modules.image.presentation.core.EventDispatcher
+import org.eu.freex.tools.modules.image.presentation.core.ImageEventDispatcher
 import org.eu.freex.tools.modules.image.presentation.core.ImageUiEvent
 import org.eu.freex.tools.modules.image.presentation.core.ImageUiState
 
 // 移除 : ImageActionScope
 class ImageViewModel(
-    private val eventDispatcher: EventDispatcher,
+    private val imageEventDispatcher: ImageEventDispatcher,
     private val pipelineUseCase: PipelineUseCase
 ) : ViewModel() { // 只继承 ViewModel
 
@@ -67,7 +67,7 @@ class ImageViewModel(
             }
 
             // 自动分发
-            val newState = eventDispatcher.dispatch(event, state, toast)
+            val newState = imageEventDispatcher.dispatch(event, state, toast)
 
             _uiState.update { newState }
 

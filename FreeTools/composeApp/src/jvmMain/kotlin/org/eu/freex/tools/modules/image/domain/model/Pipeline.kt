@@ -10,7 +10,7 @@ data class Pipeline(
     val steps: List<WorkImage> = emptyList(),
     val activeIndex: Int = 0,
     val draft: EditSession = EditSession()
-): StateComponent {
+): ImageEntity {
     // 获取当前生效的步骤图 (UI显示用)
     val activeOutputImage: WorkImage?
         get() = steps.getOrNull(activeIndex - 1)

@@ -1,9 +1,9 @@
 package org.eu.freex.tools.modules.image.presentation.core
 
-import org.eu.freex.tools.modules.image.domain.model.EditSession
 import org.eu.freex.tools.modules.image.domain.model.Pipeline
 import org.eu.freex.tools.modules.image.domain.model.Project
-import org.eu.freex.tools.modules.image.domain.model.StateComponent
+import org.eu.freex.tools.modules.image.domain.model.ImageEntity
+import org.eu.freex.tools.common.state.UiState
 import org.eu.freex.tools.modules.image.domain.model.WorkImage
 import java.awt.image.BufferedImage
 
@@ -12,7 +12,7 @@ data class ImageUiState(
     val pipeline: Pipeline = Pipeline(),
     val isLoading: Boolean = false,
     val cropperImage: BufferedImage? = null
-) {
+): UiState<ImageUiState, ImageEntity> {
 
     /**
      * 更新状态组件。
@@ -21,10 +21,10 @@ data class ImageUiState(
      * 2. 这里的 when 语句会立即报错，提示你缺少 is Settings 分支
      * 3. 这就是最强的编译期强制！
      */
-    fun update(component: StateComponent): ImageUiState {
-        return when (component) {
-            is Pipeline -> copy(pipeline = component)
-            is Project -> copy(project = component)
+    override fun update(model: ImageEntity): ImageUiState {
+        return when (model) {
+            is Pipeline -> copy(pipeline = model)
+            is Project -> copy(project = model)
         }
     }
 

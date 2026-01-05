@@ -1,4 +1,4 @@
-package org.eu.freex.tools.modules.image.domain.model
+package org.eu.freex.tools.common
 
 enum class AppModule {
     IMAGE_PROCESSING,
