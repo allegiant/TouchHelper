@@ -22,9 +22,7 @@ class PipelineEventHandler(
         return with(state) {
             when (event) {
                 is SelectPipelineStep -> {
-                    return pipeline
-                        .activateStep(event.index, project.activeImage)
-                        .commitTo(state)
+                    pipeline.activateStep(event.index, project.activeImage) commitTo state
                 }
 
                 is DeletePipelineStep -> {
@@ -34,9 +32,7 @@ class PipelineEventHandler(
                     } else {
                         // 调用 UseCase 处理复杂的删除重算逻辑
                         pipelineUseCase.deleteStep(pipeline, project, event.index)
-                            .map { newPipeline ->
-                                newPipeline.commitTo(state)
-                            }
+                            .map { newPipeline -> newPipeline commitTo state}
                             .getOrElse {
                                 // 失败：报错并保持原状
                                 showToast("删除失败: ${it.message}")

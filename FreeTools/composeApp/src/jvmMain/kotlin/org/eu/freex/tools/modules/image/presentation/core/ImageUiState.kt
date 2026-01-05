@@ -1,7 +1,9 @@
 package org.eu.freex.tools.modules.image.presentation.core
 
+import org.eu.freex.tools.modules.image.domain.model.EditSession
 import org.eu.freex.tools.modules.image.domain.model.Pipeline
 import org.eu.freex.tools.modules.image.domain.model.Project
+import org.eu.freex.tools.modules.image.domain.model.StateComponent
 import org.eu.freex.tools.modules.image.domain.model.WorkImage
 import java.awt.image.BufferedImage
 
@@ -12,10 +14,19 @@ data class ImageUiState(
     val cropperImage: BufferedImage? = null
 ) {
 
-    fun update(newPipeline: Pipeline) = copy(pipeline = newPipeline)
-
-    // ✅ 极简重载 2：更新 Project
-    fun update(newProject: Project) = copy(project = newProject)
+    /**
+     * 更新状态组件。
+     * 由于 StateComponent 是 sealed interface，编译器会强制检查 exhaustiveness (穷举性)。
+     * * 1. 以后如果你新建了 data class Settings : StateComponent
+     * 2. 这里的 when 语句会立即报错，提示你缺少 is Settings 分支
+     * 3. 这就是最强的编译期强制！
+     */
+    fun update(component: StateComponent): ImageUiState {
+        return when (component) {
+            is Pipeline -> copy(pipeline = component)
+            is Project -> copy(project = component)
+        }
+    }
 
     // 画布显示逻辑
     val activeDisplayImage: WorkImage?
@@ -34,6 +45,3 @@ data class ImageUiState(
             addAll(pipeline.steps)
         }
 }
-
-fun Pipeline.commitTo(state: ImageUiState): ImageUiState = state.copy(pipeline = this)
-fun Project.commitTo(state: ImageUiState): ImageUiState = state.copy(project = this)

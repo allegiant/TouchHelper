@@ -27,9 +27,8 @@ class ProjectEventHandler(
                         state
                     }
             }
-            is SelectSourceImage -> project.selectImage(event.index).commitTo(state)
-            is RemoveSourceImage ->  project.removeSourceImage(event.index).commitTo(state)
-
+            is SelectSourceImage -> project.selectImage(event.index) commitTo state
+            is RemoveSourceImage -> project.removeSourceImage(event.index) commitTo state
             is SaveProject -> {
                 projectUseCase.saveProject(event.file, state.project, state.pipeline)
                     .onSuccess { showToast("保存成功") }
@@ -39,8 +38,8 @@ class ProjectEventHandler(
             is LoadProject -> {
                 projectUseCase.loadProject(event.file)
                     .map { (newProject, newPipeline) ->
-                        newProject.commitTo(state)
-                        newPipeline.commitTo(state)
+                        newProject commitTo state
+                        newPipeline commitTo state
                     }
                     .onSuccess { showToast("加载成功") }
                     .onFailure { showToast("加载失败: ${it.message}") }
