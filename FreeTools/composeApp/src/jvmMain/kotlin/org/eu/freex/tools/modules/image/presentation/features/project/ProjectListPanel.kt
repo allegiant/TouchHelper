@@ -40,14 +40,15 @@ import coil3.compose.AsyncImage
 import coil3.compose.LocalPlatformContext
 import coil3.request.ImageRequest
 import coil3.request.crossfade
+import io.github.vinceglb.filekit.compose.rememberFilePickerLauncher
+import io.github.vinceglb.filekit.core.PickerMode
+import io.github.vinceglb.filekit.core.PickerType
 import org.eu.freex.tools.modules.image.domain.model.ImageLayer
 import org.eu.freex.tools.modules.image.domain.model.LayerConfig
 import org.eu.freex.tools.modules.image.presentation.core.ImageUiEvent
 import org.eu.freex.tools.modules.image.presentation.core.LoadFile
 import org.eu.freex.tools.modules.image.presentation.core.RemoveAsset
 import org.eu.freex.tools.modules.image.presentation.core.SelectAsset
-import java.awt.FileDialog
-import java.awt.Frame
 import java.io.File
 
 @Composable
@@ -57,6 +58,19 @@ fun ProjectListPanel(
     activeAssetId: String?,
     onEvent: (ImageUiEvent) -> Unit
 ) {
+    val launcher = rememberFilePickerLauncher(
+        type = PickerType.Image, // 限制只选择图片
+        mode = PickerMode.Single, // 单选模式
+        title = "导入图片素材" // 窗口标题
+    ) { platformFile ->
+        // 【新增 2】回调处理
+        // 这里的 platformFile 是 FileKit 封装的对象
+        // 在 JVM 平台上，platformFile.file 就是 java.io.File
+        val file = platformFile?.file
+        if (file != null) {
+            onEvent(LoadFile(file))
+        }
+    }
     Column(
         modifier = modifier
             .background(MaterialTheme.colorScheme.surface)
@@ -78,8 +92,8 @@ fun ProjectListPanel(
             // 导入按钮
             IconButton(
                 onClick = {
-                    val file = showImageChooser()
-                    if (file != null) onEvent(LoadFile(file))
+                    // 【新增 3】点击按钮时，启动选择器
+                    launcher.launch()
                 },
                 modifier = Modifier.size(28.dp)
             ) {
@@ -227,18 +241,4 @@ private fun ProjectItem(
             }
         }
     }
-}
-
-// 简单的文件选择器工具函数
-private fun showImageChooser(): File? {
-    val dialog = FileDialog(null as Frame?, "选择图片", FileDialog.LOAD)
-    dialog.setFilenameFilter { _, name ->
-        val n = name.lowercase()
-        n.endsWith(".png") || n.endsWith(".jpg") || n.endsWith(".jpeg") || n.endsWith(".bmp") || n.endsWith(".webp")
-    }
-    dialog.isVisible = true
-
-    val fileName = dialog.file
-    val directory = dialog.directory
-    return if (fileName != null && directory != null) File(directory, fileName) else null
 }

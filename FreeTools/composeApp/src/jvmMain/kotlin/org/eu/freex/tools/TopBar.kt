@@ -45,9 +45,10 @@ import org.eu.freex.tools.modules.image.presentation.core.ExportDisplayImage
 import org.eu.freex.tools.modules.image.presentation.core.ImageUiEvent
 import org.eu.freex.tools.modules.image.presentation.core.LoadProject
 import org.eu.freex.tools.modules.image.presentation.core.SaveProject
-import java.awt.FileDialog
-import java.awt.Frame
-import java.io.File
+import io.github.vinceglb.filekit.compose.rememberFilePickerLauncher
+import io.github.vinceglb.filekit.compose.rememberFileSaverLauncher
+import io.github.vinceglb.filekit.core.PickerMode
+import io.github.vinceglb.filekit.core.PickerType
 
 @Composable
 fun TopBar(
@@ -161,8 +162,28 @@ private fun ModuleTab(
 
 @Composable
 private fun FileMenu(onEvent: (ImageUiEvent) -> Unit) {
-    val strings = LocalStrings.current // 获取当前语言包
+    val strings = LocalStrings.current
     var expanded by remember { mutableStateOf(false) }
+
+    // --- 1. 定义加载器 (打开工程) ---
+    val projectLoader = rememberFilePickerLauncher(
+        type = PickerType.File(extensions = listOf("fxproj")), // 限制 .fxproj
+        mode = PickerMode.Single,
+        title = "打开工程文件"
+    ) { platformFile ->
+        // JVM 平台上 platformFile.file 就是 java.io.File
+        platformFile?.file?.let { onEvent(LoadProject(it)) }
+    }
+
+    // --- 2. 定义保存器 (保存工程) ---
+    val projectSaver = rememberFileSaverLauncher { platformFile ->
+        platformFile?.file?.let { onEvent(SaveProject(it)) }
+    }
+
+    // --- 3. 定义保存器 (导出图片) ---
+    val imageExporter = rememberFileSaverLauncher { platformFile ->
+        platformFile?.file?.let { onEvent(ExportDisplayImage(it)) }
+    }
 
     Box {
         TextButton(onClick = { expanded = true }) {
@@ -173,58 +194,40 @@ private fun FileMenu(onEvent: (ImageUiEvent) -> Unit) {
             expanded = expanded,
             onDismissRequest = { expanded = false }
         ) {
+            // 保存工程
             DropdownMenuItem(
                 text = { Text(strings.saveProject) },
                 onClick = {
                     expanded = false
-                    val file = showFileChooser(true, "FreeTools Project", "fxproj")
-                    // 确保这里发送了 SaveProject 事件
-                    if (file != null) onEvent(SaveProject(file))
+                    // 启动保存对话框，默认文件名 project.fxproj
+                    projectSaver.launch(baseName = "project", extension = "fxproj")
                 },
                 leadingIcon = { Icon(Icons.Default.Save, null) }
             )
 
+            // 加载工程
             DropdownMenuItem(
                 text = { Text(strings.loadProject) },
                 onClick = {
                     expanded = false
-                    val file = showFileChooser(false, "FreeTools Project", "fxproj")
-                    // 确保这里发送了 LoadProject 事件
-                    if (file != null) onEvent(LoadProject(file))
+                    // 启动选择对话框
+                    projectLoader.launch()
                 },
                 leadingIcon = { Icon(Icons.Default.FolderOpen, null) }
             )
 
             HorizontalDivider()
 
+            // 导出图片
             DropdownMenuItem(
                 text = { Text("导出当前图片 (.png)") },
                 onClick = {
                     expanded = false
-                    val file = showFileChooser(true, "PNG Image", "png")
-                    // 【修复】使用 ExportDisplayImage，无需传入 layer
-                    if (file != null) onEvent(ExportDisplayImage(file))
+                    // 启动保存对话框，默认文件名 export.png
+                    imageExporter.launch(baseName = "export", extension = "png")
                 },
                 leadingIcon = { Icon(Icons.Default.Image, null) }
             )
         }
     }
-}
-
-private fun showFileChooser(save: Boolean, filterDesc: String, ext: String): File? {
-    val mode = if (save) FileDialog.SAVE else FileDialog.LOAD
-    val dialog = FileDialog(null as Frame?, "$filterDesc (*.$ext)", mode)
-    dialog.file = "*.$ext"
-    dialog.setFilenameFilter { _, name -> name.endsWith(".$ext", ignoreCase = true) }
-    dialog.isVisible = true
-    val fileName = dialog.file
-    val directory = dialog.directory
-    if (fileName != null && directory != null) {
-        var file = File(directory, fileName)
-        if (save && !file.name.lowercase().endsWith(".$ext")) {
-            file = File(file.parent, "${file.name}.$ext")
-        }
-        return file
-    }
-    return null
 }

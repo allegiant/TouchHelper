@@ -30,6 +30,7 @@ kotlin {
             implementation(libs.kotlinx.serialization.json)
 
             implementation(libs.coil.compose)
+            implementation(libs.filekit.compose)
 
         }
         commonTest.dependencies {
