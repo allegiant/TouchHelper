@@ -3,7 +3,7 @@ package org.eu.freex.tools.modules.image.domain.model
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class ProcessingChain(
+data class Pipeline(
     val inputAssetId: String,
     val steps: List<ImageLayer> = emptyList(),
     val activeIndex: Int = -1

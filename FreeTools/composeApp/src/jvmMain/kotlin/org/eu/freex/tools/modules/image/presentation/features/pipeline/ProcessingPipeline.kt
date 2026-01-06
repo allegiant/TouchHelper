@@ -25,7 +25,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.eu.freex.tools.modules.image.domain.model.ImageLayer
-import org.eu.freex.tools.modules.image.domain.model.ProcessingChain
+import org.eu.freex.tools.modules.image.domain.model.Pipeline
 import org.eu.freex.tools.modules.image.presentation.core.ImageUiEvent
 import org.eu.freex.tools.modules.image.presentation.core.SelectStep
 import java.awt.image.BufferedImage
@@ -33,7 +33,7 @@ import java.awt.image.BufferedImage
 @Composable
 fun ProcessingPipeline(
     modifier: Modifier = Modifier,
-    chain: ProcessingChain?,
+    chain: Pipeline?,
     assets: List<ImageLayer>,
     onEvent: (ImageUiEvent) -> Unit
 ) {

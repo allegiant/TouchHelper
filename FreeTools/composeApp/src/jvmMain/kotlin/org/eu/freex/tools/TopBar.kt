@@ -176,16 +176,18 @@ private fun FileMenu(onEvent: (ImageUiEvent) -> Unit) {
                 onClick = {
                     expanded = false
                     val file = showFileChooser(true, "FreeTools Project", "fxproj")
+                    // 确保这里发送了 SaveProject 事件
                     if (file != null) onEvent(SaveProject(file))
                 },
                 leadingIcon = { Icon(Icons.Default.Save, null) }
             )
 
             DropdownMenuItem(
-                text = { Text("打开工程") },
+                text = { Text("载入工程 (.fxproj)") },
                 onClick = {
                     expanded = false
                     val file = showFileChooser(false, "FreeTools Project", "fxproj")
+                    // 确保这里发送了 LoadProject 事件
                     if (file != null) onEvent(LoadProject(file))
                 },
                 leadingIcon = { Icon(Icons.Default.FolderOpen, null) }

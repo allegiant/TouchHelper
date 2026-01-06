@@ -49,7 +49,8 @@ class ImageViewModel(
                             val currentFilter = currentPreview.activeFilter
 
                             if (resultFilter != null && currentFilter != null &&
-                                resultFilter::class == currentFilter::class) {
+                                resultFilter::class == currentFilter::class
+                            ) {
 
                                 // 关键点：我们使用【计算出的新图片】，但保留【当前最新的参数配置】。
                                 // 这样即使 resultLayer 是 100ms 前的旧参数请求产生的，
@@ -79,39 +80,80 @@ class ImageViewModel(
                 when (event) {
                     is LoadFile -> {
                         useCase.importAsset(event.file).onSuccess { layer ->
-                            workspace = workspace.copy(assets = workspace.assets + layer)
-                            workspace = useCase.activateAsset(workspace, layer.id)
-                            _uiState.update { s -> s.copy(previewLayer = null) }
+                            // 1. 先把新图加入资源列表
+                            var newWorkspace = workspace.copy(assets = workspace.assets + layer)
+                            // 2. 然后激活它 (会自动应用当前的滤镜链)
+                            useCase.activateAsset(newWorkspace, layer.id)
+                                .onSuccess { finalWorkspace ->
+                                    workspace = finalWorkspace
+                                    _uiState.update { s -> s.copy(previewLayer = null) }
+                                }
+                                .onFailure {
+                                    // 如果激活失败（比如滤镜出错），至少保留资源列表的更新
+                                    workspace = newWorkspace
+                                    it.printStackTrace()
+                                }
                         }
                     }
+
                     is SelectAsset -> {
-                        workspace = useCase.activateAsset(workspace, event.assetId)
-                        _uiState.update { s -> s.copy(previewLayer = null) }
+                        // 修改：处理 suspend 结果
+                        useCase.activateAsset(workspace, event.assetId)
+                            .onSuccess {
+                                workspace = it
+                                _uiState.update { s -> s.copy(previewLayer = null) }
+                            }
+                            .onFailure { it.printStackTrace() }
                     }
+
                     is RemoveAsset -> {
                         workspace = useCase.removeAsset(workspace, event.assetId)
                         _uiState.update { s -> s.copy(previewLayer = null) }
                     }
-                    is SaveProject -> useCase.saveWorkspace(event.file, workspace)
-                    is LoadProject -> useCase.loadWorkspace(event.file).onSuccess {
-                        workspace = it
-                        _uiState.update { s -> s.copy(previewLayer = null) }
+
+                    is SaveProject -> {
+                        useCase.saveWorkspace(event.file, workspace).onFailure {
+                            it.printStackTrace() // 如果这里打印了错误，说明保存过程中崩了
+                        }
+                    }
+                    is LoadProject -> {
+                        useCase.loadWorkspace(event.file).onSuccess { loadedWorkspace ->
+                            workspace = loadedWorkspace
+                            _uiState.update { s -> s.copy(previewLayer = null) }
+                            refreshUiState() // 必须调用，触发 UI 重绘列表和画布
+                        }.onFailure { it.printStackTrace() }
                     }
 
                     is ExportDisplayImage -> {
                         _uiState.value.displayImage?.let { useCase.exportImage(it, event.file) }
                     }
+
                     is ExportImage -> useCase.exportImage(event.layer, event.file)
 
                     is StartScreenCapture -> useCase.captureScreen().onSuccess {
                         _uiState.update { s -> s.copy(cropperLayer = it, isLoading = false) }
                         return@launch
                     }
-                    is ConfirmCrop -> useCase.cropImage(event.sourceLayer, event.rect).onSuccess {
-                        workspace = workspace.copy(assets = workspace.assets + it)
-                        workspace = useCase.activateAsset(workspace, it.id)
-                        _uiState.update { s -> s.copy(cropperLayer = null) }
+
+                    is ConfirmCrop -> useCase.cropImage(event.sourceLayer, event.rect).onSuccess { croppedLayer ->
+                        // 1. 先把裁剪出来的新图加入到 workspace 的资源列表中
+                        val workspaceWithAsset = workspace.copy(assets = workspace.assets + croppedLayer)
+
+                        // 2. 尝试激活这张新图 (复用当前的滤镜链重新计算)
+                        useCase.activateAsset(workspaceWithAsset, croppedLayer.id)
+                            .onSuccess { finalWorkspace ->
+                                // 成功：更新整个工作区，并关闭裁剪框
+                                workspace = finalWorkspace
+                                _uiState.update { s -> s.copy(cropperLayer = null) }
+                            }
+                            .onFailure { e ->
+                                // 失败：打印错误，但至少保留新图在列表中，并关闭裁剪框
+                                e.printStackTrace()
+                                workspace = workspaceWithAsset
+                                _uiState.update { s -> s.copy(cropperLayer = null) }
+                            }
                     }
+
                     is DismissCropper -> {
                         _uiState.update { s -> s.copy(cropperLayer = null) }
                         return@launch
@@ -119,7 +161,7 @@ class ImageViewModel(
 
                     // --- 预览逻辑 ---
                     is PreviewFilter -> {
-                        val chain = workspace.activeChain
+                        val chain = workspace.pipeline
                         if (chain != null) {
                             val idx = chain.activeIndex
 
@@ -181,8 +223,8 @@ class ImageViewModel(
                     }
 
                     is SelectStep -> {
-                        workspace.activeChain?.let {
-                            workspace = workspace.copy(activeChain = it.copy(activeIndex = event.index))
+                        workspace.pipeline?.let {
+                            workspace = workspace.copy(pipeline = it.copy(activeIndex = event.index))
                         }
                         _uiState.update { s -> s.copy(previewLayer = null) }
                     }
@@ -200,7 +242,7 @@ class ImageViewModel(
             it.copy(
                 isLoading = false,
                 assets = workspace.assets,
-                activeChain = workspace.activeChain,
+                activeChain = workspace.pipeline,
                 fontGenerator = workspace.fontGenerator
             )
         }

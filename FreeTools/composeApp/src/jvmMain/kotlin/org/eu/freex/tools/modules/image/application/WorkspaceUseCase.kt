@@ -3,7 +3,6 @@ package org.eu.freex.tools.modules.image.application
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
-import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import org.eu.freex.tools.modules.image.domain.model.*
 import org.eu.freex.tools.modules.image.domain.model.font.FontGenerator
@@ -16,7 +15,6 @@ import java.awt.Robot
 import java.awt.Window
 import java.io.File
 import java.util.UUID
-import kotlin.math.roundToInt
 
 class WorkspaceUseCase(
     private val repository: LayerRepository
@@ -40,19 +38,19 @@ class WorkspaceUseCase(
 
     fun removeAsset(workspace: ImageWorkspace, assetId: String): ImageWorkspace {
         val newAssets = workspace.assets.filter { it.id != assetId }
-        var newChain = workspace.activeChain
+        var newChain = workspace.pipeline
         if (newChain?.inputAssetId == assetId) {
             val nextAsset = newAssets.firstOrNull()
             newChain = if (nextAsset != null) {
-                ProcessingChain(inputAssetId = nextAsset.id, activeIndex = -1)
+                Pipeline(inputAssetId = nextAsset.id, activeIndex = -1)
             } else {
                 null
             }
         }
         return workspace.copy(
             assets = newAssets,
-            activeChain = newChain,
-            fontGenerator = if (workspace.activeChain?.inputAssetId == assetId) null else workspace.fontGenerator
+            pipeline = newChain,
+            fontGenerator = if (workspace.pipeline?.inputAssetId == assetId) null else workspace.fontGenerator
         )
     }
 
@@ -118,44 +116,18 @@ class WorkspaceUseCase(
         }
     }
 
-    // --- 裁剪 (核心修复：逻辑坐标 -> 物理坐标映射) ---
+    // --- 裁剪 (逻辑简化：直接信任传入的物理坐标) ---
     suspend fun cropImage(sourceLayer: ImageLayer, cropRect: Rectangle): Result<ImageLayer> = runCatching {
         val source = sourceLayer.image ?: throw IllegalStateException("No source image")
 
-        var realRect = cropRect
+        // 移除之前的 GraphicsEnvironment/Scale 计算逻辑
+        // 因为 ScreenCropperDialog 现在已经根据 View/Bitmap 比例计算好了真实的物理坐标
 
-        // 如果是屏幕截图，需要处理 DPI 坐标转换
-        if (sourceLayer.config is LayerConfig.Origin && sourceLayer.config.sourcePath == "mem") {
-            val ge = GraphicsEnvironment.getLocalGraphicsEnvironment()
-            var logicalTotalWidth = 0.0
-
-            // 计算逻辑屏幕总宽度
-            for (screen in ge.screenDevices) {
-                logicalTotalWidth += screen.defaultConfiguration.bounds.width
-            }
-
-            // 计算缩放比例：物理图片宽度 / 逻辑屏幕宽度
-            // 如果 captureScreen 修复成功，source.width 应该是物理宽度 (如 3840)，而 logicalTotalWidth 是逻辑宽度 (如 1920)
-            // scaleX 约为 2.0
-            val scaleX = source.width.toDouble() / logicalTotalWidth
-
-            // 安全检查：如果比例接近 1.0，说明可能是低分屏或截图未生效，不做处理
-            // 如果比例明显大于 1 (如 > 1.05)，说明是高分屏，需要放大 CropRect
-            if (scaleX > 1.05) {
-                realRect = Rectangle(
-                    (cropRect.x * scaleX).roundToInt(),
-                    (cropRect.y * scaleX).roundToInt(), // 注意：这里通常也用 scaleX，除非是异形屏
-                    (cropRect.width * scaleX).roundToInt(),
-                    (cropRect.height * scaleX).roundToInt()
-                )
-            }
-        }
-
-        // 增加越界保护，防止 crash
-        val safeX = realRect.x.coerceIn(0, source.width - 1)
-        val safeY = realRect.y.coerceIn(0, source.height - 1)
-        val safeW = realRect.width.coerceAtMost(source.width - safeX)
-        val safeH = realRect.height.coerceAtMost(source.height - safeY)
+        // 唯一的保护是防止越界 (例如 1px 的误差)
+        val safeX = cropRect.x.coerceIn(0, source.width - 1)
+        val safeY = cropRect.y.coerceIn(0, source.height - 1)
+        val safeW = cropRect.width.coerceAtMost(source.width - safeX)
+        val safeH = cropRect.height.coerceAtMost(source.height - safeY)
         val safeRect = Rectangle(safeX, safeY, safeW, safeH)
 
         if (safeRect.width <= 0 || safeRect.height <= 0) {
@@ -170,17 +142,59 @@ class WorkspaceUseCase(
         )
     }
 
-    // --- 流程管理 (保持不变) ---
-    fun activateAsset(workspace: ImageWorkspace, assetId: String): ImageWorkspace {
-        if (workspace.activeChain?.inputAssetId == assetId) return workspace
-        return workspace.copy(
-            activeChain = ProcessingChain(inputAssetId = assetId, activeIndex = -1),
-            fontGenerator = null
+    // 修改：改为 suspend，因为需要重新跑滤镜
+    // 逻辑：保留当前滤镜链的 Config，只替换 Input Source，并重新计算所有步骤
+    suspend fun activateAsset(workspace: ImageWorkspace, assetId: String): Result<ImageWorkspace> = runCatching {
+        // 1. 如果切的是同一张图，直接返回
+        if (workspace.pipeline?.inputAssetId == assetId) return@runCatching workspace
+
+        // 2. 找到新的底图
+        val newBaseLayer = workspace.assets.find { it.id == assetId }
+            ?: throw IllegalStateException("Asset not found")
+
+        var currentImage = newBaseLayer.image
+            ?: throw IllegalStateException("Base image is empty")
+
+        // 3. 获取旧的滤镜链配置
+        val oldSteps = workspace.pipeline?.steps ?: emptyList()
+        val newSteps = mutableListOf<ImageLayer>()
+
+        // 4. 在 IO 线程中重新计算流水线
+        withContext(Dispatchers.Default) {
+            for (step in oldSteps) {
+                // 只迁移滤镜类型的步骤
+                if (step.config is LayerConfig.Filter) {
+                    val filter = step.config.filter
+                    // 对新图应用滤镜
+                    val resultImage = repository.applyFilter(currentImage, filter)
+
+                    // 生成新层（保留原有配置）
+                    newSteps.add(
+                        step.copy(
+                            image = resultImage,
+                            config = LayerConfig.Filter(filter)
+                        )
+                    )
+                    // 传递给下一步
+                    currentImage = resultImage
+                }
+            }
+        }
+
+        // 5. 构建新的 Chain
+        val newChain = Pipeline(
+            inputAssetId = assetId,
+            steps = newSteps,
+            // 保持选中最后一步，或者如果原来就在中间，这里简化为选中最后一步
+            activeIndex = if (newSteps.isNotEmpty()) newSteps.lastIndex else -1
         )
+
+        workspace.copy(pipeline = newChain)
     }
 
+
     suspend fun addFilterStep(workspace: ImageWorkspace, filter: ImageFilter): Result<ImageWorkspace> = runCatching {
-        val chain = workspace.activeChain ?: throw IllegalStateException("No active image")
+        val chain = workspace.pipeline ?: throw IllegalStateException("No active image")
         val inputLayer = chain.getActiveLayer(workspace.assets) ?: throw IllegalStateException("No input")
         val inputImage = inputLayer.image ?: throw IllegalStateException("No data")
 
@@ -193,11 +207,11 @@ class WorkspaceUseCase(
 
         val currentSteps = if (chain.activeIndex == -1) emptyList() else chain.steps.take(chain.activeIndex + 1)
         val newSteps = currentSteps + newLayer
-        workspace.copy(activeChain = chain.copy(steps = newSteps, activeIndex = newSteps.lastIndex))
+        workspace.copy(pipeline = chain.copy(steps = newSteps, activeIndex = newSteps.lastIndex))
     }
 
     suspend fun updateFilterStep(workspace: ImageWorkspace, filter: ImageFilter): Result<ImageWorkspace> = runCatching {
-        val chain = workspace.activeChain ?: throw IllegalStateException("No active chain")
+        val chain = workspace.pipeline ?: throw IllegalStateException("No active chain")
         val activeIndex = chain.activeIndex
 
         if (activeIndex == -1) throw IllegalStateException("Cannot modify origin layer")
@@ -227,7 +241,7 @@ class WorkspaceUseCase(
             newSteps[i] = updatedLayer
             currentImage = resultImage
         }
-        workspace.copy(activeChain = chain.copy(steps = newSteps))
+        workspace.copy(pipeline = chain.copy(steps = newSteps))
     }
 
     suspend fun calculatePreview(inputLayer: ImageLayer, filter: ImageFilter): ImageLayer? {
@@ -242,7 +256,7 @@ class WorkspaceUseCase(
 
     // --- 字库 ---
     suspend fun startFontGeneration(workspace: ImageWorkspace): Result<ImageWorkspace> = runCatching {
-        val chain = workspace.activeChain ?: throw IllegalStateException("No chain")
+        val chain = workspace.pipeline ?: throw IllegalStateException("No chain")
         val finalLayer = chain.getFinalLayer(workspace.assets) ?: throw IllegalStateException("No layer")
         val finalImage = finalLayer.image ?: throw IllegalStateException("No data")
 
@@ -264,19 +278,78 @@ class WorkspaceUseCase(
         workspace.copy(fontGenerator = FontGenerator(finalLayer, seg, glyphs))
     }
 
-    // --- 持久化 ---
+    // --- 持久化 (修复：确保恢复所有 Asset 的图片数据) ---
     suspend fun saveWorkspace(file: File, workspace: ImageWorkspace): Result<Unit> = runCatching {
+        // 在保存前可以做一些清理，比如只保存有路径的资源
         val data = json.encodeToString(workspace)
-        file.writeText(data)
+        withContext(Dispatchers.IO) {
+            file.writeText(data)
+        }
     }
 
+    // WorkspaceUseCase.kt
+
+    // --- 载入工程 (针对单流水线设计的恢复逻辑) ---
     suspend fun loadWorkspace(file: File): Result<ImageWorkspace> = runCatching {
-        val workspace = json.decodeFromString<ImageWorkspace>(file.readText())
+        val jsonText = withContext(Dispatchers.IO) { file.readText() }
+        val workspace = json.decodeFromString<ImageWorkspace>(jsonText)
+
+        // 1. 恢复所有资源图
         val restoredAssets = workspace.assets.map { layer ->
-            if (layer.config is LayerConfig.Origin && File(layer.config.sourcePath).exists()) {
-                layer.copy(image = repository.loadFromFile(File(layer.config.sourcePath)))
+            val config = layer.config
+            if (config is LayerConfig.Origin && config.sourcePath != "mem") {
+                val imgFile = File(config.sourcePath)
+                if (imgFile.exists()) {
+                    layer.copy(image = repository.loadFromFile(imgFile))
+                } else layer
             } else layer
         }
-        workspace.copy(assets = restoredAssets)
+
+        // 2. 恢复唯一的流水线图片数据
+        val oldChain = workspace.pipeline
+        val restoredActiveChain = if (oldChain != null) {
+            // 找到流水线指定的输入源图片
+            val baseLayer = restoredAssets.find { it.id == oldChain.inputAssetId }
+            var currentImage = baseLayer?.image
+
+            if (currentImage != null) {
+                // 拿着这套滤镜参数，重新生成每一步的预览图
+                val restoredSteps = oldChain.steps.map { step ->
+                    if (step.config is LayerConfig.Filter) {
+                        val resultImage = repository.applyFilter(currentImage!!, step.config.filter)
+                        currentImage = resultImage
+                        step.copy(image = resultImage)
+                    } else step
+                }
+                oldChain.copy(steps = restoredSteps)
+            } else oldChain
+        } else null
+
+        workspace.copy(
+            assets = restoredAssets,
+            pipeline = restoredActiveChain
+        )
+    }
+
+    /**
+     * 辅助函数：根据滤镜配置重新计算流水线中每一步的图片
+     */
+    private suspend fun restoreChainImages(assets: List<ImageLayer>, chain: Pipeline): Pipeline {
+        val baseLayer = assets.find { it.id == chain.inputAssetId } ?: return chain
+        var currentImage = baseLayer.image ?: return chain
+
+        val restoredSteps = chain.steps.map { step ->
+            if (step.config is LayerConfig.Filter) {
+                val filter = step.config.filter
+                // 重新执行滤镜计算
+                val resultImage = repository.applyFilter(currentImage, filter)
+                currentImage = resultImage
+                step.copy(image = resultImage)
+            } else {
+                step
+            }
+        }
+
+        return chain.copy(steps = restoredSteps)
     }
 }
