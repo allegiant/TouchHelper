@@ -39,6 +39,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import org.eu.freex.tools.common.AppModule
+import org.eu.freex.tools.common.i18n.LocalStrings
 import org.eu.freex.tools.common.theme.ThemeMode
 import org.eu.freex.tools.modules.image.presentation.core.ExportDisplayImage
 import org.eu.freex.tools.modules.image.presentation.core.ImageUiEvent
@@ -160,11 +161,12 @@ private fun ModuleTab(
 
 @Composable
 private fun FileMenu(onEvent: (ImageUiEvent) -> Unit) {
+    val strings = LocalStrings.current // 获取当前语言包
     var expanded by remember { mutableStateOf(false) }
 
     Box {
         TextButton(onClick = { expanded = true }) {
-            Text("文件", color = MaterialTheme.colorScheme.onSurface)
+            Text(strings.file, color = MaterialTheme.colorScheme.onSurface)
         }
 
         DropdownMenu(
@@ -172,7 +174,7 @@ private fun FileMenu(onEvent: (ImageUiEvent) -> Unit) {
             onDismissRequest = { expanded = false }
         ) {
             DropdownMenuItem(
-                text = { Text("保存工程 (.fxproj)") },
+                text = { Text(strings.saveProject) },
                 onClick = {
                     expanded = false
                     val file = showFileChooser(true, "FreeTools Project", "fxproj")
@@ -183,7 +185,7 @@ private fun FileMenu(onEvent: (ImageUiEvent) -> Unit) {
             )
 
             DropdownMenuItem(
-                text = { Text("载入工程 (.fxproj)") },
+                text = { Text(strings.loadProject) },
                 onClick = {
                     expanded = false
                     val file = showFileChooser(false, "FreeTools Project", "fxproj")

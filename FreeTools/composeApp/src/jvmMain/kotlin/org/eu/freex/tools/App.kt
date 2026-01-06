@@ -10,6 +10,9 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import org.eu.freex.tools.common.AppModule
+import org.eu.freex.tools.common.EnStrings
+import org.eu.freex.tools.common.ZhStrings
+import org.eu.freex.tools.common.i18n.ProvideAppStrings
 import org.eu.freex.tools.modules.image.presentation.viewmodel.ImageViewModel // 假设路径正确
 import org.eu.freex.tools.modules.image.presentation.ImageWorkbench
 import org.eu.freex.tools.common.theme.AppTheme
@@ -24,6 +27,8 @@ import java.io.File
 
 @Composable
 fun App(window: androidx.compose.ui.awt.ComposeWindow?) {
+    val systemLocale = java.util.Locale.getDefault().language
+    val strings = if (systemLocale == "zh") ZhStrings else EnStrings
     var currentModule by remember { mutableStateOf(AppModule.IMAGE_PROCESSING) }
 
     // 【新增】主题状态管理
@@ -65,33 +70,35 @@ fun App(window: androidx.compose.ui.awt.ComposeWindow?) {
         }
     }
 
-    // 【关键】使用 AppTheme 包裹
-    AppTheme(themeMode = themeMode) {
-        // 使用 M3 Surface 确保背景色正确应用 (colorScheme.background)
-        Surface(
-            modifier = Modifier.fillMaxSize(),
-            color = MaterialTheme.colorScheme.background
-        ) {
-            Column(Modifier.fillMaxSize()) {
-                TopBar(
-                    currentModule = currentModule,
-                    themeMode = themeMode,
-                    onEvent = imageViewModel::handleEvent,
-                    onThemeChange = { themeMode = it },
-                    onModuleChange = { currentModule = it }
-                )
+    ProvideAppStrings(strings) {
+        // 【关键】使用 AppTheme 包裹
+        AppTheme(themeMode = themeMode) {
+            // 使用 M3 Surface 确保背景色正确应用 (colorScheme.background)
+            Surface(
+                modifier = Modifier.fillMaxSize(),
+                color = MaterialTheme.colorScheme.background
+            ) {
+                Column(Modifier.fillMaxSize()) {
+                    TopBar(
+                        currentModule = currentModule,
+                        themeMode = themeMode,
+                        onEvent = imageViewModel::handleEvent,
+                        onThemeChange = { themeMode = it },
+                        onModuleChange = { currentModule = it }
+                    )
 
-                Box(Modifier.weight(1f)) {
-                    when (currentModule) {
-                        AppModule.IMAGE_PROCESSING -> {
-                            ImageWorkbench(viewModel = imageViewModel)
-                        }
-                        AppModule.FONT_MANAGER -> {
-                            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                Text(
-                                    "字库管理模块 - 开发中...",
-                                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)
-                                )
+                    Box(Modifier.weight(1f)) {
+                        when (currentModule) {
+                            AppModule.IMAGE_PROCESSING -> {
+                                ImageWorkbench(viewModel = imageViewModel)
+                            }
+                            AppModule.FONT_MANAGER -> {
+                                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                    Text(
+                                        "字库管理模块 - 开发中...",
+                                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)
+                                    )
+                                }
                             }
                         }
                     }
@@ -99,4 +106,5 @@ fun App(window: androidx.compose.ui.awt.ComposeWindow?) {
             }
         }
     }
+
 }
