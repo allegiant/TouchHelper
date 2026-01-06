@@ -1,29 +1,36 @@
 package org.eu.freex.tools.modules.image.presentation.core
 
+import org.eu.freex.tools.modules.image.domain.model.ImageFilter
+import org.eu.freex.tools.modules.image.domain.model.ImageLayer
+import java.awt.Rectangle
+import java.io.File
 
-/**
- * 基础事件接口 (纯标记)
- */
 sealed interface ImageUiEvent
 
-// --- 事件分类标记 (Handler 路由依据) ---
+// --- 文件与资源 ---
+data class LoadFile(val file: File) : ImageUiEvent
+data class SaveProject(val file: File) : ImageUiEvent
+data class LoadProject(val file: File) : ImageUiEvent
 
-/**
- * 流水线事件 (由 PipelineEventHandler 处理)
- */
-interface PipelineEvent : ImageUiEvent
+// 导出
+data class ExportDisplayImage(val file: File) : ImageUiEvent
+data class ExportImage(val layer: ImageLayer, val file: File) : ImageUiEvent
 
-/**
- * 工程/文件事件 (由 ProjectEventHandler 处理)
- */
-interface ProjectEvent : ImageUiEvent
+// 资源管理
+data class SelectAsset(val assetId: String) : ImageUiEvent
+// 【新增】删除资源事件
+data class RemoveAsset(val assetId: String) : ImageUiEvent
 
-/**
- * 滤镜/参数调节事件 (由 FilterEventHandler 处理)
- */
-interface FilterEvent : ImageUiEvent
+// --- 截图与裁剪 ---
+object StartScreenCapture : ImageUiEvent
+data class ConfirmCrop(val sourceLayer: ImageLayer, val rect: Rectangle) : ImageUiEvent
+object DismissCropper : ImageUiEvent
 
-/**
- * 工具/通用UI事件 (由 ToolEventHandler 处理)
- */
-interface ToolEvent : ImageUiEvent
+// --- 流水线 ---
+data class SelectStep(val index: Int) : ImageUiEvent
+data class PreviewFilter(val filter: ImageFilter) : ImageUiEvent
+object ApplyNewStep : ImageUiEvent
+object UpdateCurrentStep : ImageUiEvent
+
+// --- 字库 ---
+object StartFontMaker : ImageUiEvent

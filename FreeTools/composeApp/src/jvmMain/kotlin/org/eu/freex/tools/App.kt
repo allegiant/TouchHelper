@@ -10,12 +10,11 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import org.eu.freex.tools.common.AppModule
-// ... 其他 import (ImageUiEvent, ImageWorkbench, Swing 拖拽相关) 保持不变 ...
 import org.eu.freex.tools.modules.image.presentation.viewmodel.ImageViewModel // 假设路径正确
 import org.eu.freex.tools.modules.image.presentation.ImageWorkbench
-import org.eu.freex.tools.modules.image.presentation.features.project.LoadFile
 import org.eu.freex.tools.common.theme.AppTheme
 import org.eu.freex.tools.common.theme.ThemeMode
+import org.eu.freex.tools.modules.image.presentation.core.LoadFile
 import org.koin.compose.koinInject
 import java.awt.Component
 import java.awt.Container

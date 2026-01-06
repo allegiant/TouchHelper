@@ -1,177 +1,140 @@
 package org.eu.freex.tools.modules.image.presentation.features.pipeline
 
-import androidx.compose.foundation.*
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.material.Icon
-import androidx.compose.material.Text
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toComposeImageBitmap
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import org.eu.freex.tools.modules.image.domain.model.WorkImage
-import org.eu.freex.tools.modules.image.domain.model.Project
+import androidx.compose.ui.unit.sp
+import org.eu.freex.tools.modules.image.domain.model.ImageLayer
+import org.eu.freex.tools.modules.image.domain.model.ProcessingChain
+import org.eu.freex.tools.modules.image.presentation.core.ImageUiEvent
+import org.eu.freex.tools.modules.image.presentation.core.SelectStep
+import java.awt.image.BufferedImage
 
-/**
- * 3. 底部流水线 (ProcessingPipeline)
- * 显示处理步骤链条，横向滚动列表。
- */
 @Composable
 fun ProcessingPipeline(
     modifier: Modifier = Modifier,
-    processChain: List<WorkImage>, // 包含原图+所有步骤
-    project: Project,
-    onSelect: (Int) -> Unit,
-    onDelete: (Int) -> Unit
+    chain: ProcessingChain?,
+    assets: List<ImageLayer>,
+    onEvent: (ImageUiEvent) -> Unit
 ) {
-    // 【修改】容器背景色
+    if (chain == null) return
+
+    val inputAsset = remember(chain.inputAssetId, assets) {
+        assets.find { it.id == chain.inputAssetId }
+    }
+
+    // 容器背景色稍微亮一点，区分于画布
     val containerColor = MaterialTheme.colorScheme.surfaceContainer
-    val titleBarColor = MaterialTheme.colorScheme.surface // 稍微深/浅一点以区分标题
-    Column(
-        modifier = modifier.background(containerColor)
+
+    LazyRow(
+        modifier = modifier
+            .fillMaxWidth()
+            .background(containerColor)
+            .padding(horizontal = 16.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp), // 减小间距
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        // 标题栏
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(28.dp)
-                .background(titleBarColor)
-                .padding(horizontal = 8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                "PIPELINE (处理流水线)",
-                color = MaterialTheme.colorScheme.onSurfaceVariant, // 【修改】
-                style = MaterialTheme.typography.labelSmall,
-                fontWeight = FontWeight.Bold
+        // 1. 原图节点
+        item {
+            PipelineNode(
+                name = "原图",
+                image = inputAsset?.image,
+                isSelected = chain.activeIndex == -1,
+                onClick = { onEvent(SelectStep(-1)) }
             )
         }
 
-        Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
-            val listState = rememberLazyListState()
+        // 2. 步骤节点 (带箭头)
+        itemsIndexed(chain.steps) { index, layer ->
+            // 简单的箭头连接符
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                modifier = Modifier.size(16.dp)
+            )
 
-            LazyRow(
-                state = listState,
-                contentPadding = PaddingValues(8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.fillMaxSize()
-            ) {
-                itemsIndexed(processChain) { index, item ->
-                    PipelineStepItem(
-                        item = item,
-                        index = index,
-                        isSelected = (index == project.selectedIndex),
-                        // 第一步(原图)通常不允许删除
-                        isDeletable = index > 0,
-                        onClick = { onSelect(index) },
-                        onDelete = { onDelete(index) }
-                    )
-                }
-            }
+            Spacer(Modifier.width(8.dp))
 
-            // 滚动条
-            HorizontalScrollbar(
-                modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth(),
-                adapter = rememberScrollbarAdapter(listState)
+            PipelineNode(
+                name = layer.name, // 去掉序号，更简洁
+                image = layer.image,
+                isSelected = chain.activeIndex == index,
+                onClick = { onEvent(SelectStep(index)) }
             )
         }
     }
 }
 
 @Composable
-private fun PipelineStepItem(
-    item: WorkImage,
-    index: Int,
+private fun PipelineNode(
+    name: String,
+    image: BufferedImage?,
     isSelected: Boolean,
-    isDeletable: Boolean,
-    onClick: () -> Unit,
-    onDelete: () -> Unit
+    onClick: () -> Unit
 ) {
+    // 选中时使用 Primary 色高亮，未选中透明
     val borderColor = if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent
-    val backgroundColor = MaterialTheme.colorScheme.surfaceVariant // 卡片背景
+    val nameStyle = if (isSelected)
+        MaterialTheme.typography.labelMedium.copy(color = MaterialTheme.colorScheme.primary)
+    else
+        MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurface)
+
+    val shape = RoundedCornerShape(6.dp)
 
     Column(
-        modifier = Modifier
-            .width(100.dp)
-            .fillMaxHeight()
-            .background(backgroundColor)
-            .border(width = if (isSelected) 2.dp else 0.dp, color = borderColor)
-            .clickable(onClick = onClick)
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier.width(100.dp) // 【优化】宽度从 120 -> 100
     ) {
-        // 【优化】缩略图懒加载
-        val thumbBitmap = remember(item) {
-            item.bufferedImage.toComposeImageBitmap()
-        }
-        // 图片区域
-        Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
-            Image(
-                bitmap = thumbBitmap,
-                contentDescription = null,
-                contentScale = ContentScale.Fit,
-                modifier = Modifier.fillMaxSize().background(Color.Black) // 图片预览背景保持黑
-            )
-
-            // 步骤序号
-            Box(
-                modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.7f))
-                    .padding(2.dp)
-            ) {
-                Text(
-                    "$index",
-                    color = MaterialTheme.colorScheme.onSurface,
-                    style = MaterialTheme.typography.labelSmall
-                )
-            }
-
-            // 删除按钮
-            if (isDeletable) {
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .size(20.dp)
-                        .background(MaterialTheme.colorScheme.error.copy(alpha = 0.8f)) // 【修改】语义错误色
-                        .clickable(onClick = onDelete),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        Icons.Default.Close,
-                        contentDescription = "Delete",
-                        tint = MaterialTheme.colorScheme.onError,
-                        modifier = Modifier.size(14.dp)
-                    )
-                }
-            }
-        }
-
-        // 标签区域
-        val labelBg = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant
-        val labelColor = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
-
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(24.dp)
-                .background(labelBg),
+                .height(72.dp) // 【优化】高度从 90 -> 72
+                .border(2.dp, borderColor, shape)
+                .clip(shape)
+                .background(Color.Black) // 图片未加载时黑底
+                .clickable(onClick = onClick),
             contentAlignment = Alignment.Center
         ) {
-            Text(
-                item.label,
-                color = labelColor,
-                style = MaterialTheme.typography.labelSmall,
-                maxLines = 1
-            )
+            if (image != null) {
+                Image(
+                    bitmap = image.toComposeImageBitmap(),
+                    contentDescription = null,
+                    contentScale = ContentScale.Fit, // 完整显示
+                    modifier = Modifier.fillMaxSize()
+                )
+            } else {
+                Text("No Data", color = Color.Gray, fontSize = 9.sp)
+            }
         }
+
+        Spacer(Modifier.height(4.dp))
+
+        Text(
+            text = name,
+            style = nameStyle,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
     }
 }

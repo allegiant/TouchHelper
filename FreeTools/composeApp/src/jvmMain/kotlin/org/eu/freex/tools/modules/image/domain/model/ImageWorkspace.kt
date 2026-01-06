@@ -1,32 +1,18 @@
 package org.eu.freex.tools.modules.image.domain.model
 
-/**
- * 核心聚合根 (Aggregate Root)
- * 职责：
- * 1. 持有 Project 和 Pipeline
- * 2. 负责计算"当前显示什么" (业务逻辑下沉)
- * 3. 负责处理局部组件的更新 (Update 逻辑下沉)
- */
+import kotlinx.serialization.Serializable
+import org.eu.freex.tools.modules.image.domain.model.font.FontGenerator
+
+@Serializable
 data class ImageWorkspace(
-    val project: Project = Project(),
-    val pipeline: Pipeline = Pipeline()
+    val assets: List<ImageLayer> = emptyList(),
+    val activeChain: ProcessingChain? = null,
+    val fontGenerator: FontGenerator? = null
 ) {
-
-    // ✅ 逻辑完美移入实体：这里是计算业务数据的最佳场所
-    val activeDisplayImage: WorkImage?
+    val displayImage: ImageLayer?
         get() {
-            // 1. 优先显示草稿
-            pipeline.draft.previewImage?.let { return it }
-            // 2. 其次显示流水线输出
-            pipeline.activeOutputImage?.let { return it }
-            // 3. 最后显示原图
-            return project.activeImage?.copy(label = "原图")
-        }
-
-    // ✅ 逻辑完美移入实体
-    val displayChain: List<WorkImage>
-        get() = buildList {
-            project.activeImage?.let { add(it.copy(label = "原图")) }
-            addAll(pipeline.steps)
+            if (fontGenerator != null) return fontGenerator.inputLayer
+            if (activeChain != null) return activeChain.getActiveLayer(assets)
+            return assets.firstOrNull()
         }
 }

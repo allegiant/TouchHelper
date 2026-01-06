@@ -9,5 +9,5 @@ import org.eu.freex.tools.modules.image.presentation.viewmodel.ImageViewModel
  * 如果它意外改变，我们希望整个 UI 树重组以确保状态一致。
  */
 val LocalImageViewModel = staticCompositionLocalOf<ImageViewModel> {
-    error("LocalImageViewModel 未提供! 请在 ImageWorkbench 或上层组件中使用 CompositionLocalProvider 提供它。")
+    error("No ViewModel provided")
 }

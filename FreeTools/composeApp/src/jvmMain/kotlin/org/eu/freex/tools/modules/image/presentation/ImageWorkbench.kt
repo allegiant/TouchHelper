@@ -1,43 +1,25 @@
 package org.eu.freex.tools.modules.image.presentation
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.CircularProgressIndicator
-import androidx.compose.material.SnackbarHost
-import androidx.compose.material.SnackbarHostState
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
+import androidx.compose.material3.Button
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import org.eu.freex.tools.modules.image.presentation.core.LocalImageViewModel
-import org.eu.freex.tools.modules.image.presentation.features.editor.EditorCanvas
-import org.eu.freex.tools.modules.image.presentation.features.editor.rememberEditorState
+import org.eu.freex.tools.modules.image.presentation.core.*
+import org.eu.freex.tools.modules.image.presentation.features.editor.EditorCanvasPanel
 import org.eu.freex.tools.modules.image.presentation.features.filter.components.InspectorPanel
-import org.eu.freex.tools.modules.image.presentation.features.pipeline.DeletePipelineStep
 import org.eu.freex.tools.modules.image.presentation.features.pipeline.ProcessingPipeline
-import org.eu.freex.tools.modules.image.presentation.features.pipeline.SelectPipelineStep
-import org.eu.freex.tools.modules.image.presentation.features.project.ConfirmScreenCrop
-import org.eu.freex.tools.modules.image.presentation.features.project.ProjectExplorer
-import org.eu.freex.tools.modules.image.presentation.features.project.rememberProjectExplorerState
-import org.eu.freex.tools.modules.image.presentation.features.tools.DismissDialogs
+import org.eu.freex.tools.modules.image.presentation.features.project.ProjectListPanel
 import org.eu.freex.tools.modules.image.presentation.features.tools.dialogs.ScreenCropperDialog
 import org.eu.freex.tools.modules.image.presentation.viewmodel.ImageViewModel
 import org.koin.compose.koinInject
@@ -46,107 +28,58 @@ import org.koin.compose.koinInject
 fun ImageWorkbench(
     viewModel: ImageViewModel = koinInject()
 ) {
-    val fullState by viewModel.uiState.collectAsState()
+    val state by viewModel.uiState.collectAsState()
 
-    // --- 状态切片优化 ---
-    val projectState by remember(fullState) { derivedStateOf { fullState.workspace.project} }
-    val pipelineState by remember(fullState) { derivedStateOf { fullState.workspace.pipeline} } // 【新增】
+    CompositionLocalProvider(LocalImageViewModel provides viewModel) {
 
-    val explorerState = rememberProjectExplorerState(
-        project = projectState,
-        onEvent = viewModel::handleEvent
-    )
-
-    val editorState = rememberEditorState()
-    val snackbarHostState = remember { SnackbarHostState() }
-
-    LaunchedEffect(viewModel) {
-        viewModel.uiEffect.collect { message ->
-            snackbarHostState.showSnackbar(message)
+        state.cropperLayer?.let { layer ->
+            ScreenCropperDialog(
+                imageLayer = layer,
+                onConfirm = { rect -> viewModel.handleEvent(ConfirmCrop(layer, rect)) },
+                onDismiss = { viewModel.handleEvent(DismissCropper) }
+            )
         }
-    }
 
-    Scaffold(
-        snackbarHost = { SnackbarHost(snackbarHostState) },
-        containerColor = MaterialTheme.colorScheme.background
-    ) { paddingValues ->
-        Box(modifier = Modifier.fillMaxSize().padding(paddingValues)) {
-            Row(modifier = Modifier.fillMaxSize()) {
+        Row(modifier = Modifier.fillMaxSize()) {
 
-                // --- 左侧：项目资源 ---
-                ProjectExplorer(
-                    modifier = Modifier.width(260.dp).fillMaxHeight(),
-                    state = explorerState,
-                )
-
-                // --- 中间：画布与流水线 ---
-                Column(modifier = Modifier.weight(1f).fillMaxHeight()) {
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxWidth()
-                            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-                    ) {
-                        EditorCanvas(
-                            modifier = Modifier.fillMaxSize(),
-                            workImage = fullState.workspace.activeDisplayImage,
-                            state = editorState
-                        )
-                    }
-                    ProcessingPipeline(
-                        modifier = Modifier.fillMaxWidth().height(140.dp),
-                        processChain = fullState.workspace.displayChain,
-                        project = projectState,
-                        onSelect = { viewModel.handleEvent(SelectPipelineStep(it)) },
-                        onDelete = { viewModel.handleEvent(DeletePipelineStep(it)) }
-                    )
-                }
-
-                // --- 右侧：属性面板 ---
-                CompositionLocalProvider(LocalImageViewModel provides viewModel) {
-                    InspectorPanel(
-                        modifier = Modifier.width(320.dp).fillMaxHeight(),
-                        pipeline = pipelineState, // 【修复】传入 PipelineState
-                    )
-                }
-            }
-
-            if (fullState.cropperImage != null) {
-                ScreenCropperDialog(
-                    // 传入截图能力，但不立即执行，由 Dialog 内部控制时机
-                    image = fullState.cropperImage,
-                    onCropConfirm = { croppedImage ->
-                        viewModel.handleEvent(ConfirmScreenCrop(croppedImage))
-                    },
-                    onDismiss = {
-                        viewModel.handleEvent(DismissDialogs)
-                    }
-                )
-            }
-
-            // --- Loading 层 ---
-            if (fullState.isLoading) {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
+            // 左侧
+            Column(modifier = Modifier.width(260.dp).fillMaxHeight()) {
+                Button(
+                    onClick = { viewModel.handleEvent(StartScreenCapture) },
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    Surface(
-                        shape = CircleShape,
-                        color = MaterialTheme.colorScheme.surfaceContainerHighest,
-                        tonalElevation = 6.dp,
-                        shadowElevation = 6.dp
-                    ) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.padding(8.dp),
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    }
+                    Text("屏幕截图")
                 }
+
+                ProjectListPanel(
+                    modifier = Modifier.weight(1f),
+                    assets = state.assets,
+                    activeAssetId = state.activeChain?.inputAssetId,
+                    onEvent = viewModel::handleEvent
+                )
             }
 
-            SnackbarHost(
-                hostState = snackbarHostState,
-                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 16.dp)
+            // 中间：画布与流水线
+            Column(modifier = Modifier.weight(1f).fillMaxHeight()) {
+                // 1. 画布：占据绝大部分空间
+                EditorCanvasPanel(
+                    modifier = Modifier.weight(1f),
+                    displayLayer = state.displayImage
+                )
+
+                // 2. 流水线：固定高度，不再抢占空间
+                ProcessingPipeline(
+                    modifier = Modifier.fillMaxWidth().height(112.dp),
+                    chain = state.activeChain,
+                    assets = state.assets,
+                    onEvent = viewModel::handleEvent
+                )
+            }
+
+            // 右侧
+            InspectorPanel(
+                modifier = Modifier.width(320.dp).fillMaxHeight(),
+                uiState = state
             )
         }
     }

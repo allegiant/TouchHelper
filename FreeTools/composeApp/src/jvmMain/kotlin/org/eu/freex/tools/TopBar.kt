@@ -1,4 +1,3 @@
-// 文件: composeApp/src/jvmMain/kotlin/org/eu/freex/tools/TopBar.kt
 package org.eu.freex.tools
 
 import androidx.compose.foundation.background
@@ -39,26 +38,24 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import org.eu.freex.tools.common.theme.ThemeMode
 import org.eu.freex.tools.common.AppModule
+import org.eu.freex.tools.common.theme.ThemeMode
+import org.eu.freex.tools.modules.image.presentation.core.ExportDisplayImage
 import org.eu.freex.tools.modules.image.presentation.core.ImageUiEvent
-import org.eu.freex.tools.modules.image.presentation.features.project.ExportImage
-import org.eu.freex.tools.modules.image.presentation.features.project.LoadProject
-import org.eu.freex.tools.modules.image.presentation.features.project.SaveProject
+import org.eu.freex.tools.modules.image.presentation.core.LoadProject
+import org.eu.freex.tools.modules.image.presentation.core.SaveProject
 import java.awt.FileDialog
 import java.awt.Frame
 import java.io.File
 
 @Composable
 fun TopBar(
-    currentModule: AppModule,
+    currentModule: AppModule, // 【修复】使用 ToolModule
     themeMode: ThemeMode,
-    // 【重构】不再传递 ViewModel，而是传递通用的事件回调，解耦 UI 与 VM
     onEvent: (ImageUiEvent) -> Unit,
     onThemeChange: (ThemeMode) -> Unit,
     onModuleChange: (AppModule) -> Unit
 ) {
-    // M3 中通常使用 SurfaceContainer 或 Surface 作为顶栏背景
     val backgroundColor = MaterialTheme.colorScheme.surface
     val contentColor = MaterialTheme.colorScheme.onSurface
 
@@ -178,13 +175,7 @@ private fun FileMenu(onEvent: (ImageUiEvent) -> Unit) {
                 text = { Text("保存工程 (.fxproj)") },
                 onClick = {
                     expanded = false
-                    // 【重构】移除了多余的 ImageUtils.pickFile()
-                    // 直接调用 AWT 文件选择器
-                    val file = showFileChooser(
-                        save = true,
-                        filterDesc = "FreeTools Project",
-                        ext = "fxproj"
-                    )
+                    val file = showFileChooser(true, "FreeTools Project", "fxproj")
                     if (file != null) onEvent(SaveProject(file))
                 },
                 leadingIcon = { Icon(Icons.Default.Save, null) }
@@ -194,11 +185,7 @@ private fun FileMenu(onEvent: (ImageUiEvent) -> Unit) {
                 text = { Text("打开工程") },
                 onClick = {
                     expanded = false
-                    val file = showFileChooser(
-                        save = false,
-                        filterDesc = "FreeTools Project",
-                        ext = "fxproj"
-                    )
+                    val file = showFileChooser(false, "FreeTools Project", "fxproj")
                     if (file != null) onEvent(LoadProject(file))
                 },
                 leadingIcon = { Icon(Icons.Default.FolderOpen, null) }
@@ -210,35 +197,26 @@ private fun FileMenu(onEvent: (ImageUiEvent) -> Unit) {
                 text = { Text("导出当前图片 (.png)") },
                 onClick = {
                     expanded = false
-                    val file = showFileChooser(save = true, filterDesc = "PNG Image", ext = "png")
-                    if (file != null) onEvent(ExportImage(file))
-                }
+                    val file = showFileChooser(true, "PNG Image", "png")
+                    // 【修复】使用 ExportDisplayImage，无需传入 layer
+                    if (file != null) onEvent(ExportDisplayImage(file))
+                },
+                leadingIcon = { Icon(Icons.Default.Image, null) }
             )
         }
     }
 }
 
-/**
- * 桌面端原生文件选择器 (基于 AWT)
- * 注意：这是阻塞式调用，但在 Desktop Compose 点击回调中是安全的。
- */
 private fun showFileChooser(save: Boolean, filterDesc: String, ext: String): File? {
     val mode = if (save) FileDialog.SAVE else FileDialog.LOAD
-
-    // parent 设为 null 会创建一个默认的隐藏 Frame 作为父窗口
     val dialog = FileDialog(null as Frame?, "$filterDesc (*.$ext)", mode)
-
-    dialog.file = "*.$ext" // Windows 文件名过滤
-    dialog.setFilenameFilter { _, name -> name.endsWith(".$ext", ignoreCase = true) } // Mac/Linux 逻辑过滤
-
-    dialog.isVisible = true // 阻塞直到关闭
-
+    dialog.file = "*.$ext"
+    dialog.setFilenameFilter { _, name -> name.endsWith(".$ext", ignoreCase = true) }
+    dialog.isVisible = true
     val fileName = dialog.file
     val directory = dialog.directory
-
     if (fileName != null && directory != null) {
         var file = File(directory, fileName)
-        // 保存模式下自动补全后缀
         if (save && !file.name.lowercase().endsWith(".$ext")) {
             file = File(file.parent, "${file.name}.$ext")
         }

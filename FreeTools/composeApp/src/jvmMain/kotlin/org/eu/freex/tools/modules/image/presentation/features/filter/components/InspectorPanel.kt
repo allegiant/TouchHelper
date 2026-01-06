@@ -1,153 +1,130 @@
 package org.eu.freex.tools.modules.image.presentation.features.filter.components
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.SecondaryTabRow
-import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRowDefaults
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
+import androidx.compose.foundation.layout.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import org.eu.freex.tools.modules.image.domain.model.Pipeline
 import org.eu.freex.tools.modules.image.domain.model.ViewFilter
-import org.eu.freex.tools.modules.image.domain.model.type
-import org.eu.freex.tools.modules.image.presentation.core.LocalImageViewModel
-import org.eu.freex.tools.modules.image.presentation.features.filter.ApplyNewStep
-import org.eu.freex.tools.modules.image.presentation.features.filter.PreviewFilter
-import org.eu.freex.tools.modules.image.presentation.features.filter.UpdateCurrentStep
+import org.eu.freex.tools.modules.image.presentation.core.*
 import org.eu.freex.tools.modules.image.presentation.features.filter.components.renderers.FilterUIRegistry
 
-/**
- * 右侧属性面板 (Inspector)
- * 状态解耦：完全依赖 PipelineState 中的 DraftState
- */
 @Composable
 fun InspectorPanel(
     modifier: Modifier = Modifier,
-    pipeline: Pipeline, // 【核心】提供 DraftState
+    uiState: ImageUiState,
 ) {
     val viewModel = LocalImageViewModel.current
     var selectedTab by rememberSaveable { mutableStateOf(0) }
 
-    // 从 Pipeline 的草稿状态中获取当前应该显示的滤镜
-    // 无论是“回显旧步骤”还是“点击新滤镜”，数据源都是 draft.activeFilter
-    val currentActiveFilter = pipeline.draft.activeFilter
+    // 计算当前激活的滤镜对象：优先显示预览 -> 其次显示当前步骤 -> 最后默认原图
+    val activeLayer = uiState.previewLayer ?: uiState.activeChain?.getActiveLayer(uiState.assets)
+    val activeFilter = activeLayer?.activeFilter ?: ViewFilter
 
     Column(
         modifier = modifier
             .background(MaterialTheme.colorScheme.surface)
             .fillMaxHeight()
     ) {
-        // --- 1. Tab 栏 ---
+        // 1. 顶部 Tab 栏
         InspectorTabs(selectedTab) { selectedTab = it }
 
-        // --- 2. 内容区域 ---
+        // 2. 内容区
         Box(modifier = Modifier.weight(1f)) {
             when (selectedTab) {
-                0 -> { // 滤镜处理 Tab
+                0 -> { // --- 滤镜处理 Tab ---
                     Column(modifier = Modifier.fillMaxSize()) {
+
                         // A. 滤镜选择列表
-                        // 选择滤镜时，触发 PreviewFilter，forceReloadBaseImage = false (基于当前 Draft 输入)
                         FilterSelectionList(
                             modifier = Modifier.weight(1f),
-                            currentFilter = currentActiveFilter,
+                            currentFilter = activeFilter,
                             onFilterChange = { newFilter ->
-                                viewModel.handleEvent(PreviewFilter(newFilter, forceReloadBaseImage = false))
+                                viewModel.handleEvent(PreviewFilter(newFilter))
                             }
                         )
 
                         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 
-                        // B. 参数控制区
+                        // B. 底部参数与按钮区
                         Column(
                             modifier = Modifier
                                 .background(MaterialTheme.colorScheme.surfaceContainer)
                                 .padding(12.dp)
                         ) {
-                            SectionHeader("参数调节")
-                            Spacer(Modifier.height(12.dp))
+                            Text(
+                                "参数调节",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(bottom = 8.dp)
+                            )
 
-                            // 动态渲染具体滤镜的 UI
-                            // 所有的滑块变动，都应该触发 PreviewFilter
-                            val renderer = remember(currentActiveFilter.type) {
-                                FilterUIRegistry.getRenderer(currentActiveFilter)
+                            // 动态渲染参数 UI
+                            val renderer = remember(activeFilter::class) {
+                                FilterUIRegistry.getRenderer(activeFilter)
                             }
 
-                            // 注意：Renderer 内部的滑块回调应该调用 viewModel.handleEvent(PreviewFilter(newFilter))
-                            // 这里假设 FilterUIRegistry 的实现已经对接了 ViewModel 或者提供了回调参数
-                            // 如果你的 Renderer 是独立的，你需要确保它们能发送 PreviewFilter 事件
                             renderer.Content(
-                                filter = currentActiveFilter,
+                                filter = activeFilter,
                                 onFilterChange = { newFilter ->
-                                    viewModel.handleEvent(PreviewFilter(newFilter, forceReloadBaseImage = false))
+                                    viewModel.handleEvent(PreviewFilter(newFilter))
                                 }
                             )
 
                             Spacer(Modifier.height(16.dp))
 
-                            // --- 操作按钮 ---
+                            // --- 双按钮区域 ---
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                // 按钮 1: 修改当前步骤 (Update)
-                                // 只有当选中的不是原图(Index > 0) 且不是 ViewFilter 时才可用
-                                val canModify = pipeline.activeIndex > 0 && currentActiveFilter !is ViewFilter
+                                val isOrigin = uiState.activeChain?.activeIndex == -1
+                                val isPreviewing = uiState.previewLayer != null
+
+                                // 1. 修改按钮 (Modify)
+                                // 只有当前选中的不是原图，且正在调节参数时才可用
                                 Button(
                                     onClick = { viewModel.handleEvent(UpdateCurrentStep) },
-                                    enabled = canModify,
-                                    modifier = Modifier.weight(1f).height(36.dp),
+                                    enabled = !isOrigin && isPreviewing,
+                                    modifier = Modifier.weight(1f).height(40.dp),
                                     colors = ButtonDefaults.buttonColors(
                                         containerColor = MaterialTheme.colorScheme.secondaryContainer,
                                         contentColor = MaterialTheme.colorScheme.onSecondaryContainer
                                     ),
-                                    contentPadding = PaddingValues(0.dp),
-                                    shape = MaterialTheme.shapes.small
+                                    shape = MaterialTheme.shapes.small,
+                                    contentPadding = PaddingValues(0.dp)
                                 ) {
-                                    Text("修改当前步骤", style = MaterialTheme.typography.labelMedium)
+                                    Text("修改步骤", style = MaterialTheme.typography.labelMedium)
                                 }
 
-                                // 按钮 2: 添加新步骤 (Apply)
-                                // 只要选择了有效滤镜即可添加
-                                val canAdd = currentActiveFilter !is ViewFilter
+                                // 2. 应用按钮 (Apply/Add)
+                                // 只要在预览，就可以作为新步骤添加
                                 Button(
                                     onClick = { viewModel.handleEvent(ApplyNewStep) },
-                                    enabled = canAdd,
-                                    modifier = Modifier.weight(1f).height(36.dp),
+                                    enabled = isPreviewing,
+                                    modifier = Modifier.weight(1f).height(40.dp),
                                     colors = ButtonDefaults.buttonColors(
-                                        containerColor = MaterialTheme.colorScheme.primary,
-                                        contentColor = MaterialTheme.colorScheme.onPrimary
+                                        containerColor = MaterialTheme.colorScheme.primary
                                     ),
-                                    contentPadding = PaddingValues(0.dp),
-                                    shape = MaterialTheme.shapes.small
+                                    shape = MaterialTheme.shapes.small,
+                                    contentPadding = PaddingValues(0.dp)
                                 ) {
-                                    Text("应用(新增)", style = MaterialTheme.typography.labelMedium)
+                                    Text("添加步骤", style = MaterialTheme.typography.labelMedium)
                                 }
                             }
                         }
                     }
                 }
-                1 -> { // 字符切割 Tab
+
+                1 -> { // --- 切割识别 Tab ---
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text("规则设置功能开发中...", style = MaterialTheme.typography.bodyMedium)
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text("自动识别与切割", style = MaterialTheme.typography.titleMedium)
+                            Spacer(Modifier.height(8.dp))
+                            Text("功能开发中...", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            // 这里未来可以放 Segmentation 相关的参数调节
+                        }
                     }
                 }
             }
@@ -160,22 +137,13 @@ private fun InspectorTabs(selectedTab: Int, onTabSelected: (Int) -> Unit) {
     SecondaryTabRow(
         selectedTabIndex = selectedTab,
         containerColor = MaterialTheme.colorScheme.surfaceContainer,
-        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-        divider = { HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant) },
-        indicator = {
-            TabRowDefaults.SecondaryIndicator(
-                modifier = Modifier.tabIndicatorOffset(selectedTab),
-                color = MaterialTheme.colorScheme.primary
-            )
-        }
+        divider = { HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant) }
     ) {
-        listOf("滤镜处理", "字符切割").forEachIndexed { index, title ->
+        listOf("滤镜处理", "切割识别").forEachIndexed { index, title ->
             Tab(
                 selected = selectedTab == index,
                 onClick = { onTabSelected(index) },
-                text = { Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Medium) },
-                selectedContentColor = MaterialTheme.colorScheme.primary,
-                unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                text = { Text(title, style = MaterialTheme.typography.titleSmall) }
             )
         }
     }
