@@ -32,10 +32,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toComposeImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import coil3.compose.AsyncImage
+import coil3.compose.LocalPlatformContext
+import coil3.request.ImageRequest
+import coil3.request.crossfade
 import org.eu.freex.tools.modules.image.domain.model.ImageLayer
+import org.eu.freex.tools.modules.image.domain.model.LayerConfig
 import org.eu.freex.tools.modules.image.presentation.core.ImageUiEvent
 import org.eu.freex.tools.modules.image.presentation.core.LoadFile
 import org.eu.freex.tools.modules.image.presentation.core.RemoveAsset
@@ -157,14 +163,40 @@ private fun ProjectItem(
                     .background(MaterialTheme.colorScheme.surfaceContainerHighest),
                 contentAlignment = Alignment.Center
             ) {
-                if (layer.image != null) {
+                // 判断逻辑：优先使用文件路径加载（Coil），否则使用内存对象（原生 Image）
+                val config = layer.config
+                // 尝试获取源文件路径
+                val sourcePath = (config as? LayerConfig.Origin)?.sourcePath
+                val file = if (sourcePath != null && sourcePath != "mem") File(sourcePath) else null
+
+                if (file != null && file.exists()) {
+                    // 【分支 A】本地文件：使用 Coil
+                    // Coil 会在后台线程读取文件并缩放到 48dp，极大节省内存
+                    AsyncImage(
+                        model = ImageRequest.Builder(LocalPlatformContext.current)
+                            .data(file)
+                            .crossfade(true) // 淡入效果
+                            .build(),
+                        contentDescription = "File Thumbnail",
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                } else if (layer.image != null) {
+                    // 【分支 B】内存图片（截图/滤镜结果）：使用原生 Image
+                    // 此时 image 是 BufferedImage，直接转 ComposeBitmap
                     Image(
                         bitmap = layer.image.toComposeImageBitmap(),
-                        contentDescription = null,
+                        contentDescription = "Memory Thumbnail",
+                        contentScale = ContentScale.Crop,
                         modifier = Modifier.fillMaxSize()
                     )
                 } else {
-                    Icon(Icons.Default.Image, null, tint = Color.Gray)
+                    // 【分支 C】空状态
+                    Icon(
+                        Icons.Default.Image,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.outline
+                    )
                 }
             }
 

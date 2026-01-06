@@ -4,6 +4,9 @@ import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
 import androidx.compose.ui.unit.dp
+import coil3.ImageLoader
+import coil3.compose.setSingletonImageLoaderFactory
+import coil3.request.crossfade
 import org.eu.freex.tools.di.appDiModule
 import org.koin.core.context.startKoin
 import uniffi.touch_core.initDesktop
@@ -15,6 +18,12 @@ fun main() = application {
         printLogger()
         // 加载模块
         modules(appDiModule)
+    }
+
+    setSingletonImageLoaderFactory { context ->
+        ImageLoader.Builder(context)
+            .crossfade(true) // 开启图片加载完成后的淡入效果
+            .build()
     }
     Window(
         onCloseRequest = ::exitApplication,

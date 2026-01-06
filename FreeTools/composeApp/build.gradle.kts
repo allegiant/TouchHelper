@@ -23,16 +23,13 @@ kotlin {
             implementation(libs.androidx.lifecycle.viewmodelCompose)
             implementation(libs.androidx.lifecycle.runtimeCompose)
             implementation(compose.materialIconsExtended)
-            implementation("org.xerial:sqlite-jdbc:3.51.1.0")
-            val exposedVersion = "0.61.0"
-            implementation("org.jetbrains.exposed:exposed-core:$exposedVersion")
-            implementation("org.jetbrains.exposed:exposed-jdbc:$exposedVersion")
-            implementation("org.jetbrains.exposed:exposed-dao:$exposedVersion") // 可选，如果用 DAO 模式
             implementation(libs.koin.core)
             implementation(libs.koin.compose)
 
             // 用于序列化滤镜参数 (Map -> JSON String)
             implementation(libs.kotlinx.serialization.json)
+
+            implementation(libs.coil.compose)
 
         }
         commonTest.dependencies {
