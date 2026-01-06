@@ -56,8 +56,9 @@ class WorkspaceUseCase(
         )
     }
 
-    // --- 截图 ---
+    // --- 截图 (终极修复：使用 MultiResolution API) ---
     suspend fun captureScreen(): Result<ImageLayer> = runCatching {
+        // 1. 隐藏窗口 (保持不变)
         val visibleWindows = withContext(Dispatchers.Main) {
             val windows = Window.getWindows().filter { it.isVisible }
             windows.forEach { it.isVisible = false }
@@ -70,25 +71,44 @@ class WorkspaceUseCase(
             withContext(Dispatchers.IO) {
                 val ge = GraphicsEnvironment.getLocalGraphicsEnvironment()
                 val screens = ge.screenDevices
-                var allScreenBounds = Rectangle()
+                var logicalBounds = Rectangle()
 
+                // 2. 计算所有屏幕的【逻辑】边界总和
+                // 注意：这里不要手动乘缩放比例了，直接用 bounds
                 for (screen in screens) {
-                    val bounds = screen.defaultConfiguration.bounds
-                    allScreenBounds = allScreenBounds.union(bounds)
+                    logicalBounds = logicalBounds.union(screen.defaultConfiguration.bounds)
                 }
 
                 val robot = Robot()
-                // 这里 allScreenBounds 是逻辑坐标，但 createScreenCapture 在高分屏下会返回物理像素大图
-                val screenCapture = robot.createScreenCapture(allScreenBounds)
+
+                // 3. 核心修改：使用 createMultiResolutionScreenCapture
+                // 这个 API 会自动处理高分屏，返回多个分辨率的截图版本
+                val finalImage = try {
+                    val mri = robot.createMultiResolutionScreenCapture(logicalBounds)
+                    // 从变体中找到分辨率最高的那张图 (即物理像素图)
+                    val variants = mri.resolutionVariants
+                    val bestVariant = variants.maxByOrNull { it.getWidth(null) }
+
+                    // 确保是 BufferedImage
+                    if (bestVariant is java.awt.image.BufferedImage) {
+                        bestVariant
+                    } else {
+                        // 如果类型不对（极少见），回退到普通截图
+                        robot.createScreenCapture(logicalBounds)
+                    }
+                } catch (e: NoSuchMethodError) {
+                    // 兼容旧版 JDK (虽然 Compose Desktop 通常自带 JDK 11+)
+                    robot.createScreenCapture(logicalBounds)
+                }
 
                 ImageLayer(
                     name = "Capture_${System.currentTimeMillis()}",
-                    image = screenCapture,
-                    // 标记这是内存中的截图
+                    image = finalImage,
                     config = LayerConfig.Origin("mem")
                 )
             }
         } finally {
+            // 4. 恢复窗口 (保持不变)
             withContext(Dispatchers.Main) {
                 visibleWindows.forEach {
                     it.isVisible = true
@@ -98,40 +118,51 @@ class WorkspaceUseCase(
         }
     }
 
-    // --- 裁剪 (核心修复：DPI 缩放处理) ---
+    // --- 裁剪 (核心修复：逻辑坐标 -> 物理坐标映射) ---
     suspend fun cropImage(sourceLayer: ImageLayer, cropRect: Rectangle): Result<ImageLayer> = runCatching {
         val source = sourceLayer.image ?: throw IllegalStateException("No source image")
 
-        // 1. 默认使用传入的 rect (适用于普通图片编辑)
         var realRect = cropRect
 
-        // 2. 如果是屏幕截图，需要进行 DPI 坐标转换
-        // 判断依据：config 是 Origin("mem")，且图片尺寸可能大于逻辑屏幕尺寸
+        // 如果是屏幕截图，需要处理 DPI 坐标转换
         if (sourceLayer.config is LayerConfig.Origin && sourceLayer.config.sourcePath == "mem") {
             val ge = GraphicsEnvironment.getLocalGraphicsEnvironment()
-            var logicalBounds = Rectangle()
+            var logicalTotalWidth = 0.0
+
+            // 计算逻辑屏幕总宽度
             for (screen in ge.screenDevices) {
-                logicalBounds = logicalBounds.union(screen.defaultConfiguration.bounds)
+                logicalTotalWidth += screen.defaultConfiguration.bounds.width
             }
 
-            // 计算缩放比例 (物理宽 / 逻辑宽)
-            // 例如：屏幕逻辑宽 1920，截图出来是 3840 (200% 缩放)
-            // scale = 2.0
-            val scaleX = source.width.toDouble() / logicalBounds.width.toDouble()
-            val scaleY = source.height.toDouble() / logicalBounds.height.toDouble()
+            // 计算缩放比例：物理图片宽度 / 逻辑屏幕宽度
+            // 如果 captureScreen 修复成功，source.width 应该是物理宽度 (如 3840)，而 logicalTotalWidth 是逻辑宽度 (如 1920)
+            // scaleX 约为 2.0
+            val scaleX = source.width.toDouble() / logicalTotalWidth
 
-            // 如果比例偏差较大(说明有缩放)，则修正裁剪区域
-            if (scaleX > 1.05 || scaleY > 1.05) {
+            // 安全检查：如果比例接近 1.0，说明可能是低分屏或截图未生效，不做处理
+            // 如果比例明显大于 1 (如 > 1.05)，说明是高分屏，需要放大 CropRect
+            if (scaleX > 1.05) {
                 realRect = Rectangle(
                     (cropRect.x * scaleX).roundToInt(),
-                    (cropRect.y * scaleY).roundToInt(),
+                    (cropRect.y * scaleX).roundToInt(), // 注意：这里通常也用 scaleX，除非是异形屏
                     (cropRect.width * scaleX).roundToInt(),
-                    (cropRect.height * scaleY).roundToInt()
+                    (cropRect.height * scaleX).roundToInt()
                 )
             }
         }
 
-        val cropped = repository.crop(source, realRect)
+        // 增加越界保护，防止 crash
+        val safeX = realRect.x.coerceIn(0, source.width - 1)
+        val safeY = realRect.y.coerceIn(0, source.height - 1)
+        val safeW = realRect.width.coerceAtMost(source.width - safeX)
+        val safeH = realRect.height.coerceAtMost(source.height - safeY)
+        val safeRect = Rectangle(safeX, safeY, safeW, safeH)
+
+        if (safeRect.width <= 0 || safeRect.height <= 0) {
+            throw IllegalStateException("Invalid crop area: $safeRect")
+        }
+
+        val cropped = repository.crop(source, safeRect)
         ImageLayer(
             name = "Crop_${sourceLayer.name}",
             image = cropped,
@@ -139,8 +170,7 @@ class WorkspaceUseCase(
         )
     }
 
-    // --- 流程管理 ---
-
+    // --- 流程管理 (保持不变) ---
     fun activateAsset(workspace: ImageWorkspace, assetId: String): ImageWorkspace {
         if (workspace.activeChain?.inputAssetId == assetId) return workspace
         return workspace.copy(
