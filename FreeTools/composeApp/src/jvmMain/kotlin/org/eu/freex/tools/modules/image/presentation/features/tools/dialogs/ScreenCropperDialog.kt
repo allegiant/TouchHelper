@@ -11,6 +11,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toComposeImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
@@ -22,12 +23,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import org.eu.freex.tools.modules.image.domain.model.ImageLayer
-import java.awt.Rectangle
 
 @Composable
 fun ScreenCropperDialog(
     imageLayer: ImageLayer,
-    onConfirm: (Rectangle) -> Unit, // 这里传出的将是最终的物理像素坐标
+    onConfirm: (Rect) -> Unit, // 这里传出的将是最终的物理像素坐标
     onDismiss: () -> Unit
 ) {
     val bitmap = remember(imageLayer) { imageLayer.image?.toComposeImageBitmap() } ?: return
@@ -38,7 +38,7 @@ fun ScreenCropperDialog(
 
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Box(Modifier.fillMaxSize().background(Color.Black)) {
-            var cropRect by remember { mutableStateOf(androidx.compose.ui.geometry.Rect.Zero) }
+            var cropRect by remember { mutableStateOf(Rect.Zero) }
             var startPoint by remember { mutableStateOf(Offset.Zero) }
 
             Image(
@@ -56,7 +56,7 @@ fun ScreenCropperDialog(
                                 val top = minOf(startPoint.y, cur.y)
                                 val right = maxOf(startPoint.x, cur.x)
                                 val bottom = maxOf(startPoint.y, cur.y)
-                                cropRect = androidx.compose.ui.geometry.Rect(left, top, right, bottom)
+                                cropRect = Rect(left, top, right, bottom)
                             }
                         )
                     }
@@ -90,11 +90,12 @@ fun ScreenCropperDialog(
                             val scaleX = bitmap.width.toDouble() / viewSize.width.toDouble()
                             val scaleY = bitmap.height.toDouble() / viewSize.height.toDouble()
 
-                            val finalRect = Rectangle(
-                                (cropRect.left * scaleX).toInt(),
-                                (cropRect.top * scaleY).toInt(),
-                                (cropRect.width * scaleX).toInt(),
-                                (cropRect.height * scaleY).toInt()
+                            // 计算最终坐标 (使用 Float)
+                            val finalRect = Rect(
+                                left = (cropRect.left * scaleX).toFloat(),
+                                top = (cropRect.top * scaleY).toFloat(),
+                                right = (cropRect.right * scaleX).toFloat(),
+                                bottom = (cropRect.bottom * scaleY).toFloat()
                             )
                             onConfirm(finalRect)
                         }

@@ -1,18 +1,19 @@
 package org.eu.freex.tools.modules.image.application
 
+import androidx.compose.ui.geometry.Rect
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
-import org.eu.freex.tools.modules.image.domain.model.*
+import org.eu.freex.tools.modules.image.domain.model.GridSegmentation
+import org.eu.freex.tools.modules.image.domain.model.ImageFilter
+import org.eu.freex.tools.modules.image.domain.model.ImageLayer
+import org.eu.freex.tools.modules.image.domain.model.ImageWorkspace
+import org.eu.freex.tools.modules.image.domain.model.LayerConfig
+import org.eu.freex.tools.modules.image.domain.model.Pipeline
 import org.eu.freex.tools.modules.image.domain.model.font.FontGenerator
 import org.eu.freex.tools.modules.image.domain.model.font.FontRect
 import org.eu.freex.tools.modules.image.domain.model.font.Glyph
 import org.eu.freex.tools.modules.image.domain.repository.LayerRepository
-import java.awt.GraphicsEnvironment
-import java.awt.Rectangle
-import java.awt.Robot
-import java.awt.Window
 import java.io.File
 import java.util.UUID
 
@@ -54,83 +55,32 @@ class WorkspaceUseCase(
         )
     }
 
-    // --- 截图 (终极修复：使用 MultiResolution API) ---
+    // --- 截图 (修改后：逻辑下沉，只负责调用) ---
     suspend fun captureScreen(): Result<ImageLayer> = runCatching {
-        // 1. 隐藏窗口 (保持不变)
-        val visibleWindows = withContext(Dispatchers.Main) {
-            val windows = Window.getWindows().filter { it.isVisible }
-            windows.forEach { it.isVisible = false }
-            windows
-        }
+        // 调用 Repository 的截图方法
+        // 具体的“隐藏窗口”、“计算多屏幕”、“Robot调用”全部在 RepositoryImpl 里实现
+        val image = repository.captureScreen()
 
-        try {
-            delay(300)
-
-            withContext(Dispatchers.IO) {
-                val ge = GraphicsEnvironment.getLocalGraphicsEnvironment()
-                val screens = ge.screenDevices
-                var logicalBounds = Rectangle()
-
-                // 2. 计算所有屏幕的【逻辑】边界总和
-                // 注意：这里不要手动乘缩放比例了，直接用 bounds
-                for (screen in screens) {
-                    logicalBounds = logicalBounds.union(screen.defaultConfiguration.bounds)
-                }
-
-                val robot = Robot()
-
-                // 3. 核心修改：使用 createMultiResolutionScreenCapture
-                // 这个 API 会自动处理高分屏，返回多个分辨率的截图版本
-                val finalImage = try {
-                    val mri = robot.createMultiResolutionScreenCapture(logicalBounds)
-                    // 从变体中找到分辨率最高的那张图 (即物理像素图)
-                    val variants = mri.resolutionVariants
-                    val bestVariant = variants.maxByOrNull { it.getWidth(null) }
-
-                    // 确保是 BufferedImage
-                    if (bestVariant is java.awt.image.BufferedImage) {
-                        bestVariant
-                    } else {
-                        // 如果类型不对（极少见），回退到普通截图
-                        robot.createScreenCapture(logicalBounds)
-                    }
-                } catch (e: NoSuchMethodError) {
-                    // 兼容旧版 JDK (虽然 Compose Desktop 通常自带 JDK 11+)
-                    robot.createScreenCapture(logicalBounds)
-                }
-
-                ImageLayer(
-                    name = "Capture_${System.currentTimeMillis()}",
-                    image = finalImage,
-                    config = LayerConfig.Origin("mem")
-                )
-            }
-        } finally {
-            // 4. 恢复窗口 (保持不变)
-            withContext(Dispatchers.Main) {
-                visibleWindows.forEach {
-                    it.isVisible = true
-                    it.toFront()
-                }
-            }
-        }
+        ImageLayer(
+            name = "Capture_${System.currentTimeMillis()}",
+            image = image, // 这里的 image 在 Desktop 上是 BufferedImage，在 Android 上是 Bitmap
+            config = LayerConfig.Origin("mem")
+        )
     }
 
     // --- 裁剪 (逻辑简化：直接信任传入的物理坐标) ---
-    suspend fun cropImage(sourceLayer: ImageLayer, cropRect: Rectangle): Result<ImageLayer> = runCatching {
+    suspend fun cropImage(sourceLayer: ImageLayer, cropRect: Rect): Result<ImageLayer> = runCatching {
         val source = sourceLayer.image ?: throw IllegalStateException("No source image")
 
         // 移除之前的 GraphicsEnvironment/Scale 计算逻辑
         // 因为 ScreenCropperDialog 现在已经根据 View/Bitmap 比例计算好了真实的物理坐标
 
-        // 唯一的保护是防止越界 (例如 1px 的误差)
-        val safeX = cropRect.x.coerceIn(0, source.width - 1)
-        val safeY = cropRect.y.coerceIn(0, source.height - 1)
-        val safeW = cropRect.width.coerceAtMost(source.width - safeX)
-        val safeH = cropRect.height.coerceAtMost(source.height - safeY)
-        val safeRect = Rectangle(safeX, safeY, safeW, safeH)
+        // 越界检查 (使用 Rect 的 intersect 方法来确保安全区域)
+        val imageBounds = Rect(0f, 0f, source.width.toFloat(), source.height.toFloat())
+        // 取交集，确保 cropRect 不超出图片范围
+        val safeRect = cropRect.intersect(imageBounds)
 
-        if (safeRect.width <= 0 || safeRect.height <= 0) {
+        if (safeRect.isEmpty) {
             throw IllegalStateException("Invalid crop area: $safeRect")
         }
 
@@ -272,7 +222,7 @@ class WorkspaceUseCase(
                     image = sub,
                     config = LayerConfig.Origin("sub")
                 ),
-                bounds = FontRect(r.x, r.y, r.width, r.height)
+                bounds = FontRect(r.left.toInt(), r.top.toInt(), r.width.toInt(), r.height.toInt())
             )
         }
         workspace.copy(fontGenerator = FontGenerator(finalLayer, seg, glyphs))

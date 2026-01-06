@@ -1,8 +1,8 @@
 package org.eu.freex.tools.modules.image.presentation.core
 
+import androidx.compose.ui.geometry.Rect
 import org.eu.freex.tools.modules.image.domain.model.ImageFilter
 import org.eu.freex.tools.modules.image.domain.model.ImageLayer
-import java.awt.Rectangle
 import java.io.File
 
 sealed interface ImageUiEvent
@@ -23,7 +23,7 @@ data class RemoveAsset(val assetId: String) : ImageUiEvent
 
 // --- 截图与裁剪 ---
 object StartScreenCapture : ImageUiEvent
-data class ConfirmCrop(val sourceLayer: ImageLayer, val rect: Rectangle) : ImageUiEvent
+data class ConfirmCrop(val sourceLayer: ImageLayer, val rect: Rect) : ImageUiEvent
 object DismissCropper : ImageUiEvent
 
 // --- 流水线 ---
