@@ -1,5 +1,9 @@
 package org.eu.freex.tools.modules.image.presentation.viewmodel
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.graphics.Color
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.channels.Channel
@@ -27,6 +31,9 @@ class ImageViewModel(
 
     // 使用 CONFLATED 通道解决积压
     private val previewChannel = Channel<PreviewRequest>(Channel.CONFLATED)
+
+    // 内部暂存回调函数 (不暴露给 UI)
+    private var pendingColorCallback: ((Color) -> Unit)? = null
 
     init {
         viewModelScope.launch {
@@ -247,4 +254,35 @@ class ImageViewModel(
             )
         }
     }
+
+    // --- 动作 ---
+
+    /**
+     * 开始取色
+     */
+    fun startColorPick(callback: (Color) -> Unit) {
+        // 1. 存下回调
+        pendingColorCallback = callback
+        // 2. 更新 State 通知 UI 切换模式
+        _uiState.update { it.copy(isColorPicking = true) }
+    }
+
+    /**
+     * 确认取色 (由 Canvas 调用)
+     */
+    fun onColorPicked(color: Color) {
+        // 1. 执行回调
+        pendingColorCallback?.invoke(color)
+        // 2. 清理现场
+        cancelColorPick()
+    }
+
+    /**
+     * 取消取色
+     */
+    fun cancelColorPick() {
+        pendingColorCallback = null
+        _uiState.update { it.copy(isColorPicking = false) }
+    }
+
 }

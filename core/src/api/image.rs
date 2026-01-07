@@ -2,7 +2,7 @@ use image::{DynamicImage, ImageBuffer, Rgba};
 
 use crate::vision::types::{
     BinarizationFilter, BinarizationMode, BlackWhiteInvertFilter, ColorInvertFilter, ColorRule,
-    DenoiseFilter, GrayscaleFilter, Rect, VisionError,
+    DenoiseFilter, GrayscaleFilter, MultiColorFilter, Rect, VisionError,
 };
 use crate::vision::{analysis, filters};
 
@@ -85,6 +85,26 @@ pub fn apply_binarization(
                 filters::binarize(img, threshold_min_u8)
             }
         }
+    })
+}
+
+/// 应用多点找色滤镜
+#[uniffi::export]
+pub fn apply_multi_color_filter(
+    pixels: Vec<u8>,
+    width: i32,
+    height: i32,
+    filter: MultiColorFilter,
+) -> Result<Vec<u8>, VisionError> {
+    log::info!(
+        "Executing MultiColor Filter: rules={}, invert={}, original={}",
+        filter.rules.len(),
+        filter.is_invert,
+        filter.keep_original
+    );
+
+    process_image_wrapper(pixels, width, height, |img| {
+        filters::keep_multi_colors(img, &filter.rules, filter.is_invert, filter.keep_original)
     })
 }
 

@@ -64,7 +64,10 @@ fun ImageWorkbench(
                 // 1. 画布：占据绝大部分空间
                 EditorCanvasPanel(
                     modifier = Modifier.weight(1f),
-                    displayLayer = state.displayImage
+                    displayLayer = state.displayImage,
+                    isPicking = state.isColorPicking,
+                    onPick = viewModel::onColorPicked,
+                    onCancel = viewModel::cancelColorPick
                 )
 
                 // 2. 流水线：固定高度，不再抢占空间

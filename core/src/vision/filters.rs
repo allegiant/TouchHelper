@@ -1,10 +1,11 @@
-use image::{DynamicImage, GrayImage, Luma};
+use image::{DynamicImage, GrayImage, Luma, Rgba, RgbaImage};
 use imageproc::contrast::{adaptive_threshold, otsu_level, threshold};
 use imageproc::distance_transform::Norm;
 use imageproc::filter::median_filter;
 use imageproc::morphology::{dilate, erode};
 
-use super::skeleton;
+use super::types::ColorRule;
+use super::{colors, skeleton};
 
 /// 1. 二值化 (固定阈值)
 /// 将图片转为灰度，然后根据阈值转为纯黑白
@@ -183,25 +184,83 @@ pub fn resize(img: &DynamicImage, width: u32, height: u32) -> DynamicImage {
     img.resize_exact(width, height, image::imageops::FilterType::Lanczos3)
 }
 
-/// 10. 颜色选取 (保留指定颜色，其他变黑)
-/// 这是 "ColorPick" 功能
-pub fn keep_color(img: &DynamicImage, target_hex: &str, bias_hex: &str) -> DynamicImage {
-    // 解析 hex 颜色 (这里简化处理，实际可以使用 lazy_static 或 regex)
-    let target = parse_hex(target_hex);
-    let bias = parse_hex(bias_hex);
+/// 多点颜色选取 (支持反色、保留原色)
+pub fn keep_multi_colors(
+    img: &DynamicImage,
+    rules: &[ColorRule],
+    is_invert: bool,
+    keep_original: bool,
+) -> DynamicImage {
+    // 1. 预解析 Hex 颜色，避免在像素循环中重复解析字符串
+    let parsed_rules: Vec<([u8; 3], [u8; 3])> = rules
+        .iter()
+        .filter(|r| r.is_enabled) // 只处理启用的规则
+        .map(|r| {
+            (
+                colors::parse_hex(&r.target_hex),
+                colors::parse_hex(&r.bias_hex),
+            )
+        })
+        .collect();
 
+    // 2. 准备
     let rgb = img.to_rgb8();
     let (w, h) = rgb.dimensions();
-    let mut out = GrayImage::new(w, h);
 
-    for (x, y, pixel) in rgb.enumerate_pixels() {
-        if is_color_match(pixel.0, target, bias) {
-            out.put_pixel(x, y, Luma([255]));
-        } else {
-            out.put_pixel(x, y, Luma([0]));
+    // 3. 根据是否保留原色，决定输出格式
+    if keep_original {
+        // --- 模式 A: 保留原色 (输出彩色图) ---
+        let mut out = RgbaImage::new(w, h);
+
+        for (x, y, pixel) in rgb.enumerate_pixels() {
+            let p = pixel.0;
+
+            // 检查匹配
+            let mut matched = false;
+            for (target, bias) in &parsed_rules {
+                if colors::is_match(p, *target, *bias) {
+                    matched = true;
+                    break;
+                }
+            }
+
+            // 反色逻辑：invert=true 时，不匹配的才是我们要留下的
+            let should_keep = if is_invert { !matched } else { matched };
+
+            if should_keep {
+                // 保留原色 (补上 Alpha=255)
+                out.put_pixel(x, y, Rgba([p[0], p[1], p[2], 255]));
+            } else {
+                // 背景涂黑
+                out.put_pixel(x, y, Rgba([0, 0, 0, 255]));
+            }
         }
+        DynamicImage::ImageRgba8(out)
+    } else {
+        // --- 模式 B: 二值化 (输出黑白图) ---
+        let mut out = GrayImage::new(w, h);
+
+        for (x, y, pixel) in rgb.enumerate_pixels() {
+            let p = pixel.0;
+
+            let mut matched = false;
+            for (target, bias) in &parsed_rules {
+                if colors::is_match(p, *target, *bias) {
+                    matched = true;
+                    break;
+                }
+            }
+
+            let should_keep = if is_invert { !matched } else { matched };
+
+            if should_keep {
+                out.put_pixel(x, y, Luma([255])); // 白
+            } else {
+                out.put_pixel(x, y, Luma([0])); // 黑
+            }
+        }
+        DynamicImage::ImageLuma8(out)
     }
-    DynamicImage::ImageLuma8(out)
 }
 
 // --- 辅助函数 ---

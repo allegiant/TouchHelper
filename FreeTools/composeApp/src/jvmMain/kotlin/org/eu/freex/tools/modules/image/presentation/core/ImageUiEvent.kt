@@ -1,6 +1,7 @@
 package org.eu.freex.tools.modules.image.presentation.core
 
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.Color
 import org.eu.freex.tools.modules.image.domain.model.ImageFilter
 import org.eu.freex.tools.modules.image.domain.model.ImageLayer
 import java.io.File

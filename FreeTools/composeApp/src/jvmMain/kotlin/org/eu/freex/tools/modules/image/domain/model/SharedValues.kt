@@ -2,6 +2,7 @@ package org.eu.freex.tools.modules.image.domain.model
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import org.eu.freex.tools.common.ColorRule
 
 // --- 滤镜 ---
 @Serializable
@@ -33,6 +34,17 @@ data class BinarizationFilter(
     val windowSize: Float = 15f,
 ) : ImageFilter {
     override val name = "二值化"
+}
+
+
+@Serializable
+@SerialName("KEEPCOLORS")
+data class MultiColorFilter(
+    val rules: List<ColorRule> = emptyList(),
+    val isInvert: Boolean = false,
+    val keepOriginal: Boolean = false
+) : ImageFilter {
+    override val name = "颜色选取"
 }
 
 @Serializable

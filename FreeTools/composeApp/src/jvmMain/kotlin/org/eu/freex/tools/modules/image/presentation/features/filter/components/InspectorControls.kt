@@ -52,6 +52,7 @@ import org.eu.freex.tools.modules.image.domain.model.ColorInvertFilter
 import org.eu.freex.tools.modules.image.domain.model.DenoiseFilter
 import org.eu.freex.tools.modules.image.domain.model.GrayscaleFilter
 import org.eu.freex.tools.modules.image.domain.model.ImageFilter
+import org.eu.freex.tools.modules.image.domain.model.MultiColorFilter
 
 
 @Composable
@@ -70,6 +71,7 @@ fun FilterSelectionList(
     val bwFilters = remember {
         listOf(
             BinarizationFilter(),
+            MultiColorFilter(),
             BlackWhiteInvertFilter
         )
     }

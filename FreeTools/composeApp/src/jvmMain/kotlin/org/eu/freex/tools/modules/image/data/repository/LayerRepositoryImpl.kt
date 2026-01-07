@@ -17,12 +17,15 @@ import uniffi.touch_core.applyBlackwhiteInvert
 import uniffi.touch_core.applyColorInvert
 import uniffi.touch_core.applyDenoise
 import uniffi.touch_core.applyGrayscale
+import uniffi.touch_core.applyMultiColorFilter
 import java.awt.GraphicsEnvironment
 import java.awt.Rectangle
 import java.awt.Robot
 import java.awt.Window
 import uniffi.touch_core.BinarizationMode as RustBinarizationMode
 import uniffi.touch_core.BinarizationFilter as RustBinarizationFilter
+import uniffi.touch_core.MultiColorFilter as RustMultiColorFilter
+import uniffi.touch_core.ColorRule as RustColorRule
 import uniffi.touch_core.BlackWhiteInvertFilter as RustBlackWhiteInvertFilter
 import uniffi.touch_core.ColorInvertFilter as RustColorInvertFilter
 import uniffi.touch_core.DenoiseFilter as RustDenoiseFilter
@@ -110,6 +113,23 @@ class LayerRepositoryImpl : LayerRepository {
                             filter.windowSize.toInt()
                         )
                         applyBinarization(pixels, w, h, rustFilter)
+                    }
+
+                    is MultiColorFilter -> {
+                        val rustRules = filter.rules.map { rule ->
+                            RustColorRule(
+                                rule.id,
+                                rule.targetHex,
+                                rule.biasHex,
+                                rule.isEnabled
+                            )
+                        }
+                        val rustFilter = RustMultiColorFilter(
+                            rustRules,
+                            filter.isInvert,
+                            filter.keepOriginal
+                        )
+                        applyMultiColorFilter(pixels, w, h, rustFilter)
                     }
 
                     is GrayscaleFilter -> applyGrayscale(pixels, w, h, RustGrayscaleFilter())

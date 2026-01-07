@@ -14,17 +14,21 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clipToBounds // 【关键导入】
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.drawscope.scale
-import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.toComposeImageBitmap
 import androidx.compose.ui.input.pointer.PointerEventType
@@ -40,9 +44,12 @@ import java.awt.Color as AwtColor
 @Composable
 fun EditorCanvasPanel(
     modifier: Modifier = Modifier,
-    displayLayer: ImageLayer?
+    displayLayer: ImageLayer?,
+    // 【修改点 1】新增三个参数，用于控制取色逻辑
+    isPicking: Boolean,             // 当前是否处于取色模式
+    onPick: (Color) -> Unit,        // 确认取色回调
+    onCancel: () -> Unit            // 取消取色回调
 ) {
-    // 获取主题颜色
     val backgroundColor = MaterialTheme.colorScheme.surfaceContainerLow
     val gridColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
     val highlightColor = MaterialTheme.colorScheme.error
@@ -52,7 +59,7 @@ fun EditorCanvasPanel(
         modifier = modifier
             .fillMaxSize()
             .background(backgroundColor)
-            .clipToBounds(), // 【关键修复】防止绘图溢出到其他 UI 区域
+            .clipToBounds(),
         contentAlignment = Alignment.Center
     ) {
         if (displayLayer?.image == null) {
@@ -63,12 +70,12 @@ fun EditorCanvasPanel(
         val bufferedImage = displayLayer.image
         val bitmap = remember(bufferedImage) { bufferedImage.toComposeImageBitmap() }
 
-        // --- 状态管理 ---
         var scale by remember { mutableStateOf(1f) }
         var offset by remember { mutableStateOf(Offset.Zero) }
         var hoverPixel by remember { mutableStateOf<IntOffset?>(null) }
         var hoverColor by remember { mutableStateOf<AwtColor?>(null) }
 
+        // 当切图层时重置
         LaunchedEffect(displayLayer.id) {
             scale = 1f
             offset = Offset.Zero
@@ -78,7 +85,7 @@ fun EditorCanvasPanel(
         Canvas(
             modifier = Modifier
                 .fillMaxSize()
-                // 1. 鼠标移动与滚轮
+                // 1. 鼠标移动与滚轮 (保持原有逻辑不变)
                 .pointerInput(Unit) {
                     awaitPointerEventScope {
                         while (true) {
@@ -111,7 +118,6 @@ fun EditorCanvasPanel(
                                 val newScale = if (scrollDelta < 0) scale * zoomFactor else scale / zoomFactor
                                 val clampedScale = newScale.coerceIn(0.1f, 50f)
 
-                                // 以鼠标为中心的缩放补偿
                                 val pLocal = (pointerPos - canvasCenter - offset) / scale
                                 val newOffset = offset + pLocal * (scale - clampedScale)
 
@@ -122,16 +128,47 @@ fun EditorCanvasPanel(
                         }
                     }
                 }
-                // 2. 触摸板手势
+                // 2. 触摸板手势 (保持原有逻辑不变)
                 .pointerInput(Unit) {
                     detectTransformGestures { _, pan, zoom, _ ->
                         scale = (scale * zoom).coerceIn(0.1f, 50f)
                         offset += pan
                     }
                 }
-                // 3. 双击复位
-                .pointerInput(Unit) {
-                    detectTapGestures(onDoubleTap = { scale = 1f; offset = Offset.Zero })
+                // 3. 点击事件 (【修改点 2】根据 isPicking 状态切换逻辑)
+                .pointerInput(isPicking) { // 依赖 key 设为 isPicking，当状态改变时重新绑定手势
+                    if (isPicking) {
+                        // === 取色模式 ===
+                        detectTapGestures(
+                            onTap = { tapOffset ->
+                                val canvasCenter = Offset(size.width / 2f, size.height / 2f)
+                                val imgWidth = bitmap.width
+                                val imgHeight = bitmap.height
+
+                                // 坐标计算 (复用上面的逻辑)
+                                val relativeToCenter = tapOffset - canvasCenter - offset
+                                val unscaledRelative = relativeToCenter / scale
+                                val pixelX = (unscaledRelative.x + imgWidth / 2f).toInt()
+                                val pixelY = (unscaledRelative.y + imgHeight / 2f).toInt()
+
+                                // 边界检查
+                                if (pixelX in 0 until imgWidth && pixelY in 0 until imgHeight) {
+                                    val rgb = bufferedImage.getRGB(pixelX, pixelY)
+                                    // 触发确认回调
+                                    onPick(Color(rgb))
+                                }
+                            },
+                            onLongPress = {
+                                // 右键或长按取消
+                                onCancel()
+                            }
+                        )
+                    } else {
+                        // === 普通模式 (双击复位) ===
+                        detectTapGestures(
+                            onDoubleTap = { scale = 1f; offset = Offset.Zero }
+                        )
+                    }
                 }
         ) {
             val canvasWidth = size.width
@@ -146,17 +183,9 @@ fun EditorCanvasPanel(
                 val dstLeft = (canvasWidth - imgWidth) / 2
                 val dstTop = (canvasHeight - imgHeight) / 2
 
-                // 1. 绘制棋盘格背景 (需要裁剪到图片范围内)
-                clipRect(
-                    left = dstLeft,
-                    top = dstTop,
-                    right = dstLeft + imgWidth,
-                    bottom = dstTop + imgHeight
-                ) {
-                    // 底层白底
+                clipRect(left = dstLeft, top = dstTop, right = dstLeft + imgWidth, bottom = dstTop + imgHeight) {
                     drawRect(Color.White, topLeft = Offset(dstLeft, dstTop), size = Size(imgWidth, imgHeight))
 
-                    // 灰格层
                     val checkSize = 10f
                     val cols = (imgWidth / checkSize).toInt() + 1
                     val rows = (imgHeight / checkSize).toInt() + 1
@@ -174,21 +203,14 @@ fun EditorCanvasPanel(
                     }
                 }
 
-                // 2. 绘制图片主体
                 drawImage(bitmap, topLeft = Offset(dstLeft, dstTop))
 
-                // 3. 绘制像素网格 (使用主题色)
                 if (scale > 8f) {
                     val strokeWidth = 1f / scale
-                    for (x in 0..imgWidth.toInt()) {
-                        drawLine(gridColor, Offset(dstLeft + x, dstTop), Offset(dstLeft + x, dstTop + imgHeight), strokeWidth)
-                    }
-                    for (y in 0..imgHeight.toInt()) {
-                        drawLine(gridColor, Offset(dstLeft, dstTop + y), Offset(dstLeft + imgWidth, dstTop + y), strokeWidth)
-                    }
+                    for (x in 0..imgWidth.toInt()) drawLine(gridColor, Offset(dstLeft + x, dstTop), Offset(dstLeft + x, dstTop + imgHeight), strokeWidth)
+                    for (y in 0..imgHeight.toInt()) drawLine(gridColor, Offset(dstLeft, dstTop + y), Offset(dstLeft + imgWidth, dstTop + y), strokeWidth)
                 }
 
-                // 4. 高亮当前像素 (使用主题色)
                 hoverPixel?.let { pixel ->
                     drawRect(
                         color = highlightColor,
@@ -200,17 +222,37 @@ fun EditorCanvasPanel(
             }
         }
 
-        // 底部信息栏 (HUD)
-        InfoOverlay(
-            modifier = Modifier.align(Alignment.BottomStart).padding(16.dp),
-            hoverPixel = hoverPixel,
-            hoverColor = hoverColor,
-            scale = scale,
-            imgSize = IntSize(bufferedImage.width, bufferedImage.height)
-        )
+        // 底部信息栏 (保持不变)
+        if (displayLayer != null) {
+            InfoOverlay(
+                modifier = Modifier.align(Alignment.BottomStart).padding(16.dp),
+                hoverPixel = hoverPixel,
+                hoverColor = hoverColor,
+                scale = scale,
+                imgSize = IntSize(displayLayer.image.width, displayLayer.image.height)
+            )
+        }
+
+        // 【修改点 3】取色模式提示横幅
+        if (isPicking) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = 16.dp)
+                    .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(4.dp))
+                    .padding(horizontal = 12.dp, vertical = 6.dp)
+            ) {
+                Text(
+                    "正在取色... 点击图片选取 (长按取消)",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                )
+            }
+        }
     }
 }
 
+// 辅助组件：InfoOverlay (保持你原有的逻辑，这里直接复制你的代码)
 @Composable
 private fun InfoOverlay(
     modifier: Modifier,

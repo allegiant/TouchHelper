@@ -4,9 +4,23 @@
 use serde::{Deserialize, Serialize};
 
 // ==========================================
+// 4. MultiColorFilter(颜色选取)
+// ==========================================
+#[derive(Debug, Clone, Serialize, Deserialize, uniffi::Record)]
+pub struct MultiColorFilter {
+    // 颜色规则列表
+    pub rules: Vec<ColorRule>,
+    // 背景色/反色模式：勾选后，匹配到的颜色会被剔除，未匹配的保留
+    pub is_invert: bool,
+    // 颜色选留：勾选后保留原色，不勾选则二值化(白)
+    pub keep_original: bool,
+}
+
+// ==========================================
 // 1. ColorRule (纯数据 -> Record)
 // ==========================================
-#[derive(Debug, Clone, uniffi::Record)] // <--- 使用 Record
+//
+#[derive(Debug, Clone, Serialize, Deserialize, uniffi::Record)]
 pub struct ColorRule {
     pub id: i64,
     pub target_hex: String,

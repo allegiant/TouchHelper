@@ -9,10 +9,10 @@ data class ImageUiState(
     val assets: List<ImageLayer> = emptyList(),
     val activeChain: Pipeline? = null,
     val fontGenerator: FontGenerator? = null,
-
     // 临时状态
     val cropperLayer: ImageLayer? = null,
-    val previewLayer: ImageLayer? = null
+    val previewLayer: ImageLayer? = null,
+    val isColorPicking: Boolean = false,
 ) {
     val displayImage: ImageLayer?
         get() {

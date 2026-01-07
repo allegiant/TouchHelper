@@ -7,6 +7,6 @@ interface FilterRenderer {
     @Composable
     fun Content(
         filter: ImageFilter,              // 输入：当前的数据
-        onFilterChange: (ImageFilter) -> Unit // 输出：变更回调
+        onFilterChange: (ImageFilter) -> Unit, // 输出：变更回调
     )
 }
