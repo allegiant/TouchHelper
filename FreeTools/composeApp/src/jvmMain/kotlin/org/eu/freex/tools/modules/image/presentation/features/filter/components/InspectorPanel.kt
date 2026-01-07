@@ -93,7 +93,7 @@ fun InspectorPanel(
 
                             renderer.Content(
                                 filter = editingFilter, // 使用本地状态
-                                onFilterChange = { updateEditingFilter(it) }
+                                onFilterChange = { newFilter -> updateEditingFilter(newFilter) }
                             )
 
                             Spacer(Modifier.height(16.dp))
