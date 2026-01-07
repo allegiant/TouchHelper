@@ -1,15 +1,36 @@
 package org.eu.freex.tools.modules.image.presentation.features.filter.components.renderers
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.TooltipArea
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.HelpOutline
+import androidx.compose.material.icons.filled.HelpOutline
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.RadioButtonDefaults
 import androidx.compose.material3.RangeSlider
+import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -19,9 +40,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import org.eu.freex.tools.modules.image.domain.model.BinarizationFilter
+import org.eu.freex.tools.modules.image.domain.model.BinarizationMode
 import org.eu.freex.tools.modules.image.domain.model.ImageFilter
+import kotlin.math.roundToInt
 
 object BinarizationRenderer : FilterRenderer {
 
@@ -30,32 +56,168 @@ object BinarizationRenderer : FilterRenderer {
         filter: ImageFilter,
         onFilterChange: (ImageFilter) -> Unit
     ) {
-        // 2. 从 Draft 中提取当前正在编辑的滤镜参数
-        // FilterUIRegistry 已经保证了类型匹配，但为了安全这里做一次转换
-        val currentFilter = filter as? BinarizationFilter
+        val currentFilter = filter as? BinarizationFilter ?: return
 
-        if (currentFilter == null) {
-            Text("参数加载错误", color = MaterialTheme.colorScheme.error)
-            return
-        }
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
 
-        Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            // 3. 阈值范围滑块
-            ThresholdSlider(
-                min = currentFilter.min,
-                max = currentFilter.max,
-                onValueChange = { newMin, newMax ->
-                    // 发送预览事件：仅更新草稿和预览图，不提交到流水线
-                    onFilterChange(currentFilter.copy(min = newMin, max = newMax))
-                }
+            // --- 模式 1: 手动 ---
+            ModeSelectionRow(
+                text = "RGB平均阈值 (手动)",
+                // 【新增】说明文案
+                description = "最基础的模式。适合背景颜色单一、特征明显的截图。需要手动拖动滑块来选中想要的颜色范围。",
+                selected = currentFilter.mode == BinarizationMode.MANUAL,
+                onClick = { onFilterChange(currentFilter.copy(mode = BinarizationMode.MANUAL)) }
             )
 
-            // 4. RGB 平均值开关
-            RgbAvgControl(
-                isEnabled = currentFilter.isRgbAvg,
-                onChange = { newValue ->
-                    onFilterChange(currentFilter.copy(isRgbAvg = newValue))
+            AnimatedVisibility(
+                visible = currentFilter.mode == BinarizationMode.MANUAL,
+                enter = expandVertically() + fadeIn(),
+                exit = shrinkVertically() + fadeOut()
+            ) {
+                Column(
+                    modifier = Modifier.padding(start = 32.dp, bottom = 8.dp).fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    ThresholdSlider(
+                        min = currentFilter.min,
+                        max = currentFilter.max,
+                        onValueChange = { newMin, newMax ->
+                            onFilterChange(currentFilter.copy(min = newMin, max = newMax))
+                        }
+                    )
+                    RgbAvgControl(
+                        isEnabled = currentFilter.isRgbAvg,
+                        onChange = { onFilterChange(currentFilter.copy(isRgbAvg = it)) }
+                    )
                 }
+            }
+
+            // --- 模式 2: 智能 (Sauvola) ---
+            ModeSelectionRow(
+                text = "智能 (Sauvola / 点数均衡)",
+                // 【新增】说明文案
+                description = "高级模式。专为解决“光照不均”和“阴影”设计。它能根据局部窗口内的对比度自动计算阈值，特别适合拍摄的文档或有复杂底纹的图片。",
+                selected = currentFilter.mode == BinarizationMode.ADAPTIVE,
+                onClick = { onFilterChange(currentFilter.copy(mode = BinarizationMode.ADAPTIVE)) }
+            )
+
+            AnimatedVisibility(
+                visible = currentFilter.mode == BinarizationMode.ADAPTIVE,
+                enter = expandVertically() + fadeIn(),
+                exit = shrinkVertically() + fadeOut()
+            ) {
+                Column(
+                    modifier = Modifier.padding(start = 32.dp, bottom = 8.dp).fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    SingleValueSlider(
+                        label = "敏感度 (K值)",
+                        value = currentFilter.sauvolaK,
+                        valueRange = 0.0f..0.5f,
+                        displayValue = String.format("%.2f", currentFilter.sauvolaK),
+                        onValueChange = { onFilterChange(currentFilter.copy(sauvolaK = it)) }
+                    )
+                    val winSizeInt = currentFilter.windowSize.roundToInt()
+                    SingleValueSlider(
+                        label = "计算范围 (窗口大小)",
+                        value = currentFilter.windowSize,
+                        valueRange = 3f..51f,
+                        displayValue = "$winSizeInt px",
+                        onValueChange = { onFilterChange(currentFilter.copy(windowSize = it)) }
+                    )
+                }
+            }
+
+            // --- 模式 3: 自动 (OTSU) ---
+            ModeSelectionRow(
+                text = "自动 (OTSU算法)",
+                // 【新增】说明文案
+                description = "省心模式。算法会自动分析整张图的直方图，找到黑白分离的最佳全局阈值。适合光照均匀、黑白分明的普通截图。",
+                selected = currentFilter.mode == BinarizationMode.OTSU,
+                onClick = { onFilterChange(currentFilter.copy(mode = BinarizationMode.OTSU)) }
+            )
+        }
+    }
+
+    /**
+     * 带说明图标的单选行
+     */
+    @Composable
+    private fun ModeSelectionRow(
+        text: String,
+        description: String, // 新增说明参数
+        selected: Boolean,
+        onClick: () -> Unit
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(40.dp)
+                .selectable(
+                    selected = selected,
+                    onClick = onClick,
+                    role = Role.RadioButton
+                ),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            RadioButton(
+                selected = selected,
+                onClick = null,
+                colors = RadioButtonDefaults.colors(
+                    selectedColor = MaterialTheme.colorScheme.primary,
+                    unselectedColor = MaterialTheme.colorScheme.outline
+                )
+            )
+            Text(
+                text = text,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.padding(start = 8.dp)
+            )
+
+            // 【新增】帮助图标和 Tooltip
+            if (description.isNotEmpty()) {
+                HelpTooltip(description = description)
+            }
+        }
+    }
+
+    /**
+     * 【新增】封装的帮助 Tooltip 组件
+     * 使用 Compose Desktop 的 TooltipArea 实现
+     */
+    @OptIn(ExperimentalFoundationApi::class)
+    @Composable
+    private fun HelpTooltip(description: String) {
+        TooltipArea(
+            tooltip = {
+                // Tooltip 的外观样式
+                Box(
+                    modifier = Modifier
+                        .shadow(4.dp, RoundedCornerShape(4.dp))
+                        .background(MaterialTheme.colorScheme.surfaceContainer, RoundedCornerShape(4.dp))
+                        .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(4.dp))
+                        .padding(8.dp)
+                        // 限制最大宽度，防止文字太长
+                        .fillMaxWidth(0.6f)
+                ) {
+                    Text(
+                        text = description,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+            },
+            delayMillis = 300 // 稍微延迟显示，防止鼠标划过时闪烁
+        ) {
+            // 触发体：问号图标
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.HelpOutline, // 需要引入 Icons
+                contentDescription = "说明",
+                modifier = Modifier
+                    .padding(start = 8.dp)
+                    .size(16.dp), // 图标稍微小一点，不喧宾夺主
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
     }
@@ -135,6 +297,47 @@ private fun RgbAvgControl(
             color = MaterialTheme.colorScheme.onSurface,
             style = MaterialTheme.typography.bodyMedium,
             modifier = Modifier.padding(start = 8.dp)
+        )
+    }
+}
+
+/**
+ * 通用的单值滑块组件 (用于 K值 和 窗口大小)
+ */
+@Composable
+private fun SingleValueSlider(
+    label: String,
+    value: Float,
+    valueRange: ClosedFloatingPointRange<Float>,
+    displayValue: String,
+    onValueChange: (Float) -> Unit
+) {
+    Column {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                text = displayValue,
+                color = MaterialTheme.colorScheme.primary,
+                style = MaterialTheme.typography.labelMedium
+            )
+        }
+        Slider(
+            value = value,
+            onValueChange = onValueChange,
+            valueRange = valueRange,
+            colors = SliderDefaults.colors(
+                thumbColor = MaterialTheme.colorScheme.primary,
+                activeTrackColor = MaterialTheme.colorScheme.primary,
+                inactiveTrackColor = MaterialTheme.colorScheme.surfaceVariant
+            )
         )
     }
 }

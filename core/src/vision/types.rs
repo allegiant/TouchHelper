@@ -40,12 +40,24 @@ pub struct GridParams {
     pub row_count: i32,
 }
 
+// 1. 新增枚举：对应 Kotlin 里的 BinarizationMode
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, uniffi::Enum)]
+pub enum BinarizationMode {
+    Manual,   // 手动 (RGB平均 或 固定阈值)
+    Adaptive, // 智能 (Sauvola / 局部自适应)
+    Otsu,     // 自动 (大津法)
+}
+
 // 1. 必须引入 uniffi，并且加上 Serialize/Deserialize 以支持 JS
 #[derive(Debug, Clone, Serialize, Deserialize, uniffi::Record)]
 pub struct BinarizationFilter {
+    // 【新增】模式选择
+    pub mode: BinarizationMode,
     pub threshold_min: i32,
     pub threshold_max: i32,
     pub is_rgb_avg: bool,
+    pub sauvola_k: f64,   //Sauvola 敏感度 K
+    pub window_size: i32, //Sauvola 窗口大小
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, uniffi::Record)]

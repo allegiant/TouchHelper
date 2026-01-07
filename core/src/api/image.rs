@@ -1,8 +1,8 @@
 use image::{DynamicImage, ImageBuffer, Rgba};
 
 use crate::vision::types::{
-    BinarizationFilter, BlackWhiteInvertFilter, ColorInvertFilter, ColorRule, DenoiseFilter,
-    GrayscaleFilter, Rect, VisionError,
+    BinarizationFilter, BinarizationMode, BlackWhiteInvertFilter, ColorInvertFilter, ColorRule,
+    DenoiseFilter, GrayscaleFilter, Rect, VisionError,
 };
 use crate::vision::{analysis, filters};
 
@@ -61,13 +61,29 @@ pub fn apply_binarization(
 
     let threshold_min_u8 = filter.threshold_min.clamp(0, 255) as u8;
     let threshold_max_u8 = filter.threshold_max.clamp(0, 255) as u8;
-    process_image_wrapper(pixels, width, height, |img| {
-        if filter.is_rgb_avg {
-            // 逻辑 1: RGB 均值范围
-            filters::binarize_rgb_avg(img, threshold_min_u8, threshold_max_u8)
-        } else {
-            // 逻辑 2: 标准二值化
-            filters::binarize(img, threshold_min_u8)
+
+    // Sauvola 窗口必须是正奇数，做个安全处理
+    let win_size = if filter.window_size < 3 {
+        3
+    } else {
+        filter.window_size as u32
+    };
+    // 确保是奇数 (如果是偶数就+1)
+    let win_size = if win_size % 2 == 0 {
+        win_size + 1
+    } else {
+        win_size
+    };
+
+    process_image_wrapper(pixels, width, height, |img| match filter.mode {
+        BinarizationMode::Otsu => filters::binarize_otsu(img),
+        BinarizationMode::Adaptive => filters::binarize_sauvola(img, win_size, filter.sauvola_k),
+        BinarizationMode::Manual => {
+            if filter.is_rgb_avg {
+                filters::binarize_rgb_avg(img, threshold_min_u8, threshold_max_u8)
+            } else {
+                filters::binarize(img, threshold_min_u8)
+            }
         }
     })
 }

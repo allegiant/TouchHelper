@@ -21,6 +21,7 @@ import java.awt.GraphicsEnvironment
 import java.awt.Rectangle
 import java.awt.Robot
 import java.awt.Window
+import uniffi.touch_core.BinarizationMode as RustBinarizationMode
 import uniffi.touch_core.BinarizationFilter as RustBinarizationFilter
 import uniffi.touch_core.BlackWhiteInvertFilter as RustBlackWhiteInvertFilter
 import uniffi.touch_core.ColorInvertFilter as RustColorInvertFilter
@@ -95,7 +96,20 @@ class LayerRepositoryImpl : LayerRepository {
                     is BinarizationFilter -> {
                         val min = filter.min.roundToInt().coerceIn(0, 255)
                         val max = filter.max.roundToInt().coerceIn(0, 255)
-                        applyBinarization(pixels, w, h, RustBinarizationFilter(min, max, filter.isRgbAvg))
+                        val mode: RustBinarizationMode = when (filter.mode) {
+                            BinarizationMode.MANUAL -> RustBinarizationMode.MANUAL
+                            BinarizationMode.ADAPTIVE -> RustBinarizationMode.ADAPTIVE
+                            BinarizationMode.OTSU -> RustBinarizationMode.OTSU
+                        }
+                        val rustFilter = RustBinarizationFilter(
+                            mode,
+                            min,
+                            max,
+                            filter.isRgbAvg,
+                            filter.sauvolaK.toDouble(),
+                            filter.windowSize.toInt()
+                        )
+                        applyBinarization(pixels, w, h, rustFilter)
                     }
 
                     is GrayscaleFilter -> applyGrayscale(pixels, w, h, RustGrayscaleFilter())

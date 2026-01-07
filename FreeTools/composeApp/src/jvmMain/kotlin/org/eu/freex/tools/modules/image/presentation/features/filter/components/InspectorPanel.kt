@@ -132,6 +132,7 @@ fun InspectorPanel(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun InspectorTabs(selectedTab: Int, onTabSelected: (Int) -> Unit) {
     SecondaryTabRow(

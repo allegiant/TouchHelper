@@ -11,17 +11,17 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.Icon
 import androidx.compose.material.Surface
 import androidx.compose.material.Text
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.PlainTooltip
+import androidx.compose.material3.TooltipBox
+import androidx.compose.material3.TooltipDefaults
+import androidx.compose.material3.rememberTooltipState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -119,7 +119,6 @@ private fun FilterGroup(
                     for (i in 0 until 3) {
                         if (i < rowFilters.size) {
                             val filter = rowFilters[i]
-                            // 注意：FilterChip 已经在 SharedComponents.kt 中适配过颜色了
                             val isSelected = currentFilter::class == filter::class
                             FilterChip(
                                 text = filter.name,
@@ -141,27 +140,46 @@ private fun FilterGroup(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FilterChip(
+    modifier: Modifier = Modifier,
     text: String,
     isSelected: Boolean,
-    modifier: Modifier = Modifier,
+    tooltipText: String? = null,
     onClick: () -> Unit
 ) {
-    // 【修改】颜色映射
-    val backgroundColor = if (isSelected) {
-        MaterialTheme.colorScheme.primaryContainer
+    // 【新增】判断是否有 Tooltip 文本
+    if (!tooltipText.isNullOrBlank()) {
+        TooltipBox(
+            positionProvider = TooltipDefaults.rememberPlainTooltipPositionProvider(),
+            tooltip = {
+                PlainTooltip {
+                    Text(tooltipText)
+                }
+            },
+            state = rememberTooltipState()
+        ) {
+            ChipContent(modifier, isSelected, text, onClick)
+        }
     } else {
-        MaterialTheme.colorScheme.surfaceVariant
+        // 如果没有 Tooltip 文本，直接显示 Chip
+        ChipContent(modifier, isSelected, text, onClick)
     }
+}
 
-    val contentColor = if (isSelected) {
-        MaterialTheme.colorScheme.onPrimaryContainer
-    } else {
-        MaterialTheme.colorScheme.onSurfaceVariant
-    }
+@Composable
+fun ChipContent(
+    modifier: Modifier,
+    isSelected: Boolean,
+    text: String,
+    onClick: () -> Unit
+) {
+    val backgroundColor =
+        if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant
+    val contentColor =
+        if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
     val borderColor = if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent
-
     Surface(
         color = backgroundColor,
         shape = RoundedCornerShape(4.dp),
@@ -183,24 +201,5 @@ fun FilterChip(
                 overflow = TextOverflow.Ellipsis
             )
         }
-    }
-}
-
-@Composable
-fun SectionHeader(title: String) {
-    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 4.dp)) {
-        Icon(
-            Icons.Default.Tune,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.primary, // 【修改】主色
-            modifier = Modifier.size(16.dp)
-        )
-        Spacer(Modifier.width(8.dp))
-        Text(
-            title,
-            color = MaterialTheme.colorScheme.onSurface, // 【修改】
-            style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.Bold
-        )
     }
 }
