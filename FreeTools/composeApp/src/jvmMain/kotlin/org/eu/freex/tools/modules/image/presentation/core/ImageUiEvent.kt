@@ -26,6 +26,10 @@ object StartScreenCapture : ImageUiEvent
 data class ConfirmCrop(val sourceLayer: ImageLayer, val rect: Rect) : ImageUiEvent
 object DismissCropper : ImageUiEvent
 
+// --- 取色器 ---
+data class TriggerColorPick(val color: Color) : ImageUiEvent
+object CancelColorPick : ImageUiEvent
+
 // --- 流水线 ---
 data class SelectStep(val index: Int) : ImageUiEvent
 data class PreviewFilter(val filter: ImageFilter) : ImageUiEvent

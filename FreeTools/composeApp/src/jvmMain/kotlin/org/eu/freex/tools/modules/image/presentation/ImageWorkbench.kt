@@ -66,8 +66,14 @@ fun ImageWorkbench(
                     modifier = Modifier.weight(1f),
                     displayLayer = state.displayImage,
                     isPicking = state.isColorPicking,
-                    onPick = viewModel::onColorPicked,
-                    onCancel = viewModel::cancelColorPick
+                    // 当点击取色时，发送 TriggerColorPick 事件
+                    onPick = { color ->
+                        viewModel.handleEvent(TriggerColorPick(color))
+                    },
+                    // 当取消取色时，发送 CancelColorPick 事件
+                    onCancel = {
+                        viewModel.handleEvent(CancelColorPick)
+                    }
                 )
 
                 // 2. 流水线：固定高度，不再抢占空间

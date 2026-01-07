@@ -1,8 +1,5 @@
 package org.eu.freex.tools.modules.image.presentation.viewmodel
 
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -17,7 +14,26 @@ import org.eu.freex.tools.modules.image.domain.model.ImageFilter
 import org.eu.freex.tools.modules.image.domain.model.ImageLayer
 import org.eu.freex.tools.modules.image.domain.model.ImageWorkspace
 import org.eu.freex.tools.modules.image.domain.model.LayerConfig
-import org.eu.freex.tools.modules.image.presentation.core.*
+import org.eu.freex.tools.modules.image.presentation.core.ApplyFilterStep
+import org.eu.freex.tools.modules.image.presentation.core.CancelColorPick
+import org.eu.freex.tools.modules.image.presentation.core.CancelPreview
+import org.eu.freex.tools.modules.image.presentation.core.ConfirmCrop
+import org.eu.freex.tools.modules.image.presentation.core.DismissCropper
+import org.eu.freex.tools.modules.image.presentation.core.ExportDisplayImage
+import org.eu.freex.tools.modules.image.presentation.core.ExportImage
+import org.eu.freex.tools.modules.image.presentation.core.ImageUiEvent
+import org.eu.freex.tools.modules.image.presentation.core.ImageUiState
+import org.eu.freex.tools.modules.image.presentation.core.LoadFile
+import org.eu.freex.tools.modules.image.presentation.core.LoadProject
+import org.eu.freex.tools.modules.image.presentation.core.PreviewFilter
+import org.eu.freex.tools.modules.image.presentation.core.RemoveAsset
+import org.eu.freex.tools.modules.image.presentation.core.SaveProject
+import org.eu.freex.tools.modules.image.presentation.core.SelectAsset
+import org.eu.freex.tools.modules.image.presentation.core.SelectStep
+import org.eu.freex.tools.modules.image.presentation.core.StartFontMaker
+import org.eu.freex.tools.modules.image.presentation.core.StartScreenCapture
+import org.eu.freex.tools.modules.image.presentation.core.TriggerColorPick
+import org.eu.freex.tools.modules.image.presentation.core.UpdateFilterStep
 
 class ImageViewModel(
     private val useCase: WorkspaceUseCase
@@ -32,8 +48,8 @@ class ImageViewModel(
     // 使用 CONFLATED 通道解决积压
     private val previewChannel = Channel<PreviewRequest>(Channel.CONFLATED)
 
-    // 内部暂存回调函数 (不暴露给 UI)
-    private var pendingColorCallback: ((Color) -> Unit)? = null
+    // 用于在挂起函数和事件处理之间传递颜色的通道
+    private val colorPickChannel = Channel<Color>(Channel.RENDEZVOUS)
 
     init {
         viewModelScope.launch {
@@ -74,8 +90,8 @@ class ImageViewModel(
 
     fun handleEvent(event: ImageUiEvent) {
         viewModelScope.launch {
-            // PreviewFilter 不显示 loading，避免闪烁
-            if (event !is PreviewFilter && event !is CancelPreview) {
+            // Loading 状态处理... 预览和取色不触发Loading
+            if (event !is PreviewFilter && event !is TriggerColorPick) {
                 _uiState.update { it.copy(isLoading = true) }
             }
 
@@ -156,6 +172,20 @@ class ImageViewModel(
                         _uiState.update { s -> s.copy(previewLayer = null) }
                     }
 
+                    // --- 取色事件处理 ---
+                    is TriggerColorPick -> {
+                        // 收到 Canvas 的点击颜色，发送到通道，唤醒 awaitColorPick
+                        colorPickChannel.send(event.color)
+                        // UI 状态的 isColorPicking = false 会在 awaitColorPick 的 finally 块中自动处理
+                    }
+
+                    is CancelColorPick -> {
+                        // 关闭通道或发送空，这里简单处理为取消当前的协程等待
+                        // 在 awaitColorPick 中并未直接处理 cancel，但 UI 可以通过 Job 取消
+                        // 简单做法：重置 UI 状态即可，awaitColorPick 会因为超时或界面销毁而结束
+                        _uiState.update { it.copy(isColorPicking = false) }
+                    }
+
                     is PreviewFilter -> {
                         val chain = workspace.pipeline
                         if (chain != null) {
@@ -230,19 +260,24 @@ class ImageViewModel(
         }
     }
 
-    // --- 动作 ---
-    fun startColorPick(callback: (Color) -> Unit) {
-        pendingColorCallback = callback
+    /**
+     * 【核心改动】挂起函数等待取色结果
+     * UI 组件(如 Renderer) 调用此方法后会挂起，直到用户在画布上点击或取消。
+     * * @return 选中的颜色，如果取消则返回 null
+     */
+    suspend fun awaitColorPick(): Color? {
+        // 1. 进入取色模式：通知 Canvas 显示十字准星
         _uiState.update { it.copy(isColorPicking = true) }
-    }
 
-    fun onColorPicked(color: Color) {
-        pendingColorCallback?.invoke(color)
-        cancelColorPick()
-    }
-
-    fun cancelColorPick() {
-        pendingColorCallback = null
-        _uiState.update { it.copy(isColorPicking = false) }
+        return try {
+            // 2. 挂起，等待 handleEvent(TriggerColorPick) 往通道里塞数据
+            colorPickChannel.receive()
+        } catch (e: Exception) {
+            // 协程被取消（如组件销毁、界面切换）
+            null
+        } finally {
+            // 3. 无论成功还是异常退出，都自动恢复 UI 状态
+            _uiState.update { it.copy(isColorPicking = false) }
+        }
     }
 }

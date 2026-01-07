@@ -19,11 +19,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.launch
 import org.eu.freex.tools.common.ColorRule
 import org.eu.freex.tools.modules.image.domain.model.ImageFilter
 import org.eu.freex.tools.modules.image.domain.model.MultiColorFilter
-// 需要确保你能获取到 ImageViewModel，推荐通过 CompositionLocal 或者修改 Content 接口
-// 假设这里我们通过 CompositionLocal 获取 (见步骤8说明)
 import org.eu.freex.tools.modules.image.presentation.core.LocalImageViewModel
 
 object MultiColorRenderer : FilterRenderer {
@@ -32,6 +31,9 @@ object MultiColorRenderer : FilterRenderer {
     override fun Content(filter: ImageFilter, onFilterChange: (ImageFilter) -> Unit) {
         val currentFilter = filter as? MultiColorFilter ?: return
         val viewModel = LocalImageViewModel.current // 获取 ViewModel
+
+        // 我们需要一个协程作用域来启动挂起任务
+        val scope = rememberCoroutineScope()
 
         fun updateRules(newRules: List<ColorRule>) {
             onFilterChange(currentFilter.copy(rules = newRules))
@@ -65,17 +67,23 @@ object MultiColorRenderer : FilterRenderer {
                         updateRules(newRules)
                     },
                     onPickColor = {
-                        // 启动取色
-                        viewModel.startColorPick{ pickedColor ->
-                            val hex = "#%02X%02X%02X".format(
-                                (pickedColor.red * 255).toInt(),
-                                (pickedColor.green * 255).toInt(),
-                                (pickedColor.blue * 255).toInt()
-                            )
-                            val newRule = rule.copy(targetHex = hex)
-                            val newRules = currentFilter.rules.toMutableList()
-                            newRules[index] = newRule
-                            updateRules(newRules)
+                        // 【优化】使用协程线性调用
+                        scope.launch {
+                            // 1. 调用挂起函数，协程在此暂停，UI 显示取色器
+                            val pickedColor = viewModel.awaitColorPick()
+
+                            // 2. 只有当拿到了颜色（非 null）才继续执行
+                            if (pickedColor != null) {
+                                val hex = "#%02X%02X%02X".format(
+                                    (pickedColor.red * 255).toInt(),
+                                    (pickedColor.green * 255).toInt(),
+                                    (pickedColor.blue * 255).toInt()
+                                )
+                                val newRule = rule.copy(targetHex = hex)
+                                val newRules = currentFilter.rules.toMutableList()
+                                newRules[index] = newRule
+                                updateRules(newRules)
+                            }
                         }
                     }
                 )
