@@ -49,25 +49,18 @@ class ImageViewModel(
                             // 1. 校验：如果当前已经退出了预览模式，就丢弃结果
                             if (currentPreview == null) return@update currentState
 
-                            // 2. 【核心修复：防抖动逻辑】
-                            // 检查返回的结果类型是否与当前 UI 显示的滤镜类型一致。
-                            // 如果一致，说明是同一个滤镜的连续拖动。
+                            // 2. 防抖动与乐观更新校验
                             val resultFilter = resultLayer.activeFilter
                             val currentFilter = currentPreview.activeFilter
 
                             if (resultFilter != null && currentFilter != null &&
                                 resultFilter::class == currentFilter::class
                             ) {
-
-                                // 关键点：我们使用【计算出的新图片】，但保留【当前最新的参数配置】。
-                                // 这样即使 resultLayer 是 100ms 前的旧参数请求产生的，
-                                // 它也不会把滑块的位置（Config）“拖”回去，只会更新画面。
+                                // 保留当前 UI 的 config (因为用户可能又拖动了滑块)，只更新图像数据
                                 currentState.copy(
                                     previewLayer = resultLayer.copy(config = currentPreview.config)
                                 )
                             } else {
-                                // 如果类型都不一样了（比如用户极速切换了 Tab），说明结果过期了，或者就是需要切类型
-                                // 这种情况下直接使用结果即可
                                 currentState.copy(previewLayer = resultLayer)
                             }
                         }
@@ -81,22 +74,22 @@ class ImageViewModel(
 
     fun handleEvent(event: ImageUiEvent) {
         viewModelScope.launch {
-            if (event !is PreviewFilter) _uiState.update { it.copy(isLoading = true) }
+            // PreviewFilter 不显示 loading，避免闪烁
+            if (event !is PreviewFilter && event !is CancelPreview) {
+                _uiState.update { it.copy(isLoading = true) }
+            }
 
             runCatching {
                 when (event) {
                     is LoadFile -> {
                         useCase.importAsset(event.file).onSuccess { layer ->
-                            // 1. 先把新图加入资源列表
                             var newWorkspace = workspace.copy(assets = workspace.assets + layer)
-                            // 2. 然后激活它 (会自动应用当前的滤镜链)
                             useCase.activateAsset(newWorkspace, layer.id)
                                 .onSuccess { finalWorkspace ->
                                     workspace = finalWorkspace
                                     _uiState.update { s -> s.copy(previewLayer = null) }
                                 }
                                 .onFailure {
-                                    // 如果激活失败（比如滤镜出错），至少保留资源列表的更新
                                     workspace = newWorkspace
                                     it.printStackTrace()
                                 }
@@ -104,7 +97,6 @@ class ImageViewModel(
                     }
 
                     is SelectAsset -> {
-                        // 修改：处理 suspend 结果
                         useCase.activateAsset(workspace, event.assetId)
                             .onSuccess {
                                 workspace = it
@@ -119,15 +111,13 @@ class ImageViewModel(
                     }
 
                     is SaveProject -> {
-                        useCase.saveWorkspace(event.file, workspace).onFailure {
-                            it.printStackTrace() // 如果这里打印了错误，说明保存过程中崩了
-                        }
+                        useCase.saveWorkspace(event.file, workspace).onFailure { it.printStackTrace() }
                     }
                     is LoadProject -> {
                         useCase.loadWorkspace(event.file).onSuccess { loadedWorkspace ->
                             workspace = loadedWorkspace
                             _uiState.update { s -> s.copy(previewLayer = null) }
-                            refreshUiState() // 必须调用，触发 UI 重绘列表和画布
+                            refreshUiState()
                         }.onFailure { it.printStackTrace() }
                     }
 
@@ -143,18 +133,13 @@ class ImageViewModel(
                     }
 
                     is ConfirmCrop -> useCase.cropImage(event.sourceLayer, event.rect).onSuccess { croppedLayer ->
-                        // 1. 先把裁剪出来的新图加入到 workspace 的资源列表中
                         val workspaceWithAsset = workspace.copy(assets = workspace.assets + croppedLayer)
-
-                        // 2. 尝试激活这张新图 (复用当前的滤镜链重新计算)
                         useCase.activateAsset(workspaceWithAsset, croppedLayer.id)
                             .onSuccess { finalWorkspace ->
-                                // 成功：更新整个工作区，并关闭裁剪框
                                 workspace = finalWorkspace
                                 _uiState.update { s -> s.copy(cropperLayer = null) }
                             }
                             .onFailure { e ->
-                                // 失败：打印错误，但至少保留新图在列表中，并关闭裁剪框
                                 e.printStackTrace()
                                 workspace = workspaceWithAsset
                                 _uiState.update { s -> s.copy(cropperLayer = null) }
@@ -167,14 +152,14 @@ class ImageViewModel(
                     }
 
                     // --- 预览逻辑 ---
+                    is CancelPreview -> {
+                        _uiState.update { s -> s.copy(previewLayer = null) }
+                    }
+
                     is PreviewFilter -> {
                         val chain = workspace.pipeline
                         if (chain != null) {
                             val idx = chain.activeIndex
-
-                            // 确定底图逻辑：
-                            // 1. 如果选中原图(-1)或第0步，底图是原图
-                            // 2. 如果选中第N步，底图是第N-1步的结果
                             val baseLayer = if (idx <= 0) {
                                 workspace.assets.find { it.id == chain.inputAssetId }
                             } else {
@@ -182,10 +167,7 @@ class ImageViewModel(
                             }
 
                             if (baseLayer?.image != null) {
-                                // 1. 【同步更新 UI (乐观更新)】
-                                // 立即把 previewLayer 的 Config 更新为用户滑动的最新值。
-                                // 这保证了滑块紧跟鼠标，不会有延迟。
-                                // 图片暂时复用当前的（避免闪烁）。
+                                // 乐观更新：立即设置 Config 以响应 UI 拖动，图片复用旧的或当前的
                                 val currentImage = _uiState.value.previewLayer?.image
                                     ?: chain.getActiveLayer(workspace.assets)?.image
                                     ?: baseLayer.image
@@ -195,37 +177,30 @@ class ImageViewModel(
                                         previewLayer = ImageLayer(
                                             name = "Previewing...",
                                             image = currentImage,
-                                            config = LayerConfig.Filter(event.filter) // 这里的 filter 是最新的
+                                            config = LayerConfig.Filter(event.filter)
                                         ),
                                         isLoading = false
                                     )
                                 }
-
-                                // 2. 【异步计算】
-                                // 放入通道，结果回来时会与上面的 Config 进行合并
                                 previewChannel.trySend(PreviewRequest(baseLayer, event.filter))
                                 return@launch
                             }
                         }
                     }
 
-                    is ApplyNewStep -> {
-                        val p = _uiState.value.previewLayer
-                        if (p != null && p.config is LayerConfig.Filter) {
-                            useCase.addFilterStep(workspace, p.config.filter).onSuccess {
-                                workspace = it
-                                _uiState.update { s -> s.copy(previewLayer = null) }
-                            }
+                    // 【新增】应用指定 Filter 到新步骤
+                    is ApplyFilterStep -> {
+                        useCase.addFilterStep(workspace, event.filter).onSuccess {
+                            workspace = it
+                            _uiState.update { s -> s.copy(previewLayer = null) }
                         }
                     }
 
-                    is UpdateCurrentStep -> {
-                        val p = _uiState.value.previewLayer
-                        if (p != null && p.config is LayerConfig.Filter) {
-                            useCase.updateFilterStep(workspace, p.config.filter).onSuccess {
-                                workspace = it
-                                _uiState.update { s -> s.copy(previewLayer = null) }
-                            }
+                    // 【新增】更新当前步骤为指定 Filter
+                    is UpdateFilterStep -> {
+                        useCase.updateFilterStep(workspace, event.filter).onSuccess {
+                            workspace = it
+                            _uiState.update { s -> s.copy(previewLayer = null) }
                         }
                     }
 
@@ -256,33 +231,18 @@ class ImageViewModel(
     }
 
     // --- 动作 ---
-
-    /**
-     * 开始取色
-     */
     fun startColorPick(callback: (Color) -> Unit) {
-        // 1. 存下回调
         pendingColorCallback = callback
-        // 2. 更新 State 通知 UI 切换模式
         _uiState.update { it.copy(isColorPicking = true) }
     }
 
-    /**
-     * 确认取色 (由 Canvas 调用)
-     */
     fun onColorPicked(color: Color) {
-        // 1. 执行回调
         pendingColorCallback?.invoke(color)
-        // 2. 清理现场
         cancelColorPick()
     }
 
-    /**
-     * 取消取色
-     */
     fun cancelColorPick() {
         pendingColorCallback = null
         _uiState.update { it.copy(isColorPicking = false) }
     }
-
 }

@@ -19,7 +19,6 @@ data class ExportImage(val layer: ImageLayer, val file: File) : ImageUiEvent
 
 // 资源管理
 data class SelectAsset(val assetId: String) : ImageUiEvent
-// 【新增】删除资源事件
 data class RemoveAsset(val assetId: String) : ImageUiEvent
 
 // --- 截图与裁剪 ---
@@ -30,8 +29,11 @@ object DismissCropper : ImageUiEvent
 // --- 流水线 ---
 data class SelectStep(val index: Int) : ImageUiEvent
 data class PreviewFilter(val filter: ImageFilter) : ImageUiEvent
-object ApplyNewStep : ImageUiEvent
-object UpdateCurrentStep : ImageUiEvent
+object CancelPreview : ImageUiEvent // 取消/清除预览
+
+
+data class ApplyFilterStep(val filter: ImageFilter) : ImageUiEvent
+data class UpdateFilterStep(val filter: ImageFilter) : ImageUiEvent
 
 // --- 字库 ---
 object StartFontMaker : ImageUiEvent
