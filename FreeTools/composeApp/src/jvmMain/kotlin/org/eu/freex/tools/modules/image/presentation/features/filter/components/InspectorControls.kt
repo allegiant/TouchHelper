@@ -53,6 +53,7 @@ import org.eu.freex.tools.modules.image.domain.model.DenoiseFilter
 import org.eu.freex.tools.modules.image.domain.model.GrayscaleFilter
 import org.eu.freex.tools.modules.image.domain.model.ImageFilter
 import org.eu.freex.tools.modules.image.domain.model.MultiColorFilter
+import kotlin.collections.listOf
 
 
 @Composable
@@ -64,21 +65,20 @@ fun FilterSelectionList(
     // 准备数据
     val colorFilters = remember {
         listOf(
+            BinarizationFilter(),
+            MultiColorFilter(),
+            ColorInvertFilter,
             GrayscaleFilter,
-            ColorInvertFilter
         )
     }
     val bwFilters = remember {
         listOf(
-            BinarizationFilter(),
-            MultiColorFilter(),
+            DenoiseFilter(),
             BlackWhiteInvertFilter
         )
     }
     val commonFilters = remember {
-        listOf(
-            DenoiseFilter()
-        )
+        listOf<ImageFilter>()
     }
 
     Column(
