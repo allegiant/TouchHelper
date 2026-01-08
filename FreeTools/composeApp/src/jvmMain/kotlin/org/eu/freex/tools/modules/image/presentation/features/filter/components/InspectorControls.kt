@@ -60,6 +60,7 @@ import org.eu.freex.tools.modules.image.domain.model.PosterizationFilter
 import org.eu.freex.tools.modules.image.domain.model.RemoveLinesFilter
 import org.eu.freex.tools.modules.image.domain.model.RemoveNoiseFilter
 import org.eu.freex.tools.modules.image.domain.model.RotationFilter
+import org.eu.freex.tools.modules.image.domain.model.SmartLayoutFilter
 
 
 @Composable
@@ -88,6 +89,7 @@ fun FilterSelectionList(
             BlackWhiteInvertFilter(),
             DenoiseFilter(),
             MorphologyFilter(),
+            SmartLayoutFilter(),
         )
     }
     val commonFilters = remember {

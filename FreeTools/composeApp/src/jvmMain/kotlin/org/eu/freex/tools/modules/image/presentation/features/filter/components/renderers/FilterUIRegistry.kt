@@ -14,6 +14,7 @@ import org.eu.freex.tools.modules.image.domain.model.PosterizationFilter
 import org.eu.freex.tools.modules.image.domain.model.RemoveLinesFilter
 import org.eu.freex.tools.modules.image.domain.model.RemoveNoiseFilter
 import org.eu.freex.tools.modules.image.domain.model.RotationFilter
+import org.eu.freex.tools.modules.image.domain.model.SmartLayoutFilter
 import kotlin.reflect.KClass
 
 object FilterUIRegistry {
@@ -38,6 +39,7 @@ object FilterUIRegistry {
         DenoiseFilter::class to EmptyRenderer,
         BlackWhiteInvertFilter::class to BlackWhiteInvertRenderer,
         MorphologyFilter::class to MorphologyRenderer,
+        SmartLayoutFilter::class to SmartLayoutRenderer,
     )
 
     /**

@@ -1176,3 +1176,136 @@ pub fn apply_morphology(
 
     DynamicImage::ImageLuma8(out)
 }
+
+// core/src/vision/filters.rs
+
+/// 14. 智能重排 (Smart Layout / Fence Adjustment)
+/// 基于连通域分析，提取字符并重新排列，彻底解决断字、粘连和对齐问题。
+pub fn smart_layout(
+    img: &DynamicImage,
+    padding: u32,              // 字符间的间距
+    min_width: u32,            // 噪点过滤：最小宽度
+    min_height: u32,           // 噪点过滤：最小高度
+    fixed_height: Option<u32>, // 可选：强制统一高度（画布高度）
+    align_center: bool,        // 是否垂直居中
+) -> DynamicImage {
+    let gray = img.to_luma8();
+    let (w, h) = gray.dimensions();
+
+    // 1. 连通域标记
+    // Connectivity::Eight 保证斜角相连的像素也被视为同一个字
+    let labeled = connected_components(&gray, Connectivity::Eight, Luma([0u8]));
+
+    // 2. 收集连通块信息
+    // 结构：LabelID -> (min_x, max_x, min_y, max_y, pixels[(x,y)])
+    struct Blob {
+        min_x: u32,
+        max_x: u32,
+        min_y: u32,
+        max_y: u32,
+        pixels: Vec<(u32, u32)>,
+    }
+    let mut blobs: HashMap<u32, Blob> = HashMap::new();
+
+    for y in 0..h {
+        for x in 0..w {
+            let label = labeled.get_pixel(x, y)[0];
+            if label > 0 {
+                let entry = blobs.entry(label).or_insert(Blob {
+                    min_x: x,
+                    max_x: x,
+                    min_y: y,
+                    max_y: y,
+                    pixels: Vec::new(),
+                });
+                // 更新边界
+                if x < entry.min_x {
+                    entry.min_x = x;
+                }
+                if x > entry.max_x {
+                    entry.max_x = x;
+                }
+                if y < entry.min_y {
+                    entry.min_y = y;
+                }
+                if y > entry.max_y {
+                    entry.max_y = y;
+                }
+                // 记录相对坐标 (方便后续平移)
+                entry.pixels.push((x, y));
+            }
+        }
+    }
+
+    // 3. 过滤噪点并转换为列表
+    let mut valid_blobs: Vec<Blob> = blobs
+        .into_iter()
+        .map(|(_, blob)| blob)
+        .filter(|b| {
+            let w = b.max_x - b.min_x + 1;
+            let h = b.max_y - b.min_y + 1;
+            w >= min_width && h >= min_height
+        })
+        .collect();
+
+    // 4. 排序 (假设是横向排版，按 min_x 从左到右排序)
+    // 这样即使原图是乱的，重排后也会按顺序排列
+    valid_blobs.sort_by_key(|b| b.min_x);
+
+    if valid_blobs.is_empty() {
+        return img.clone(); // 没有有效内容，返回原图
+    }
+
+    // 5. 计算新画布尺寸
+    let total_chars_width: u32 = valid_blobs.iter().map(|b| (b.max_x - b.min_x + 1)).sum();
+    let total_padding = padding * (valid_blobs.len() as u32 + 1);
+    let new_width = total_chars_width + total_padding;
+
+    // 高度策略：如果有固定高度则使用，否则使用最高的字符高度 + padding
+    let max_blob_height = valid_blobs
+        .iter()
+        .map(|b| (b.max_y - b.min_y + 1))
+        .max()
+        .unwrap_or(0);
+    let new_height = fixed_height.unwrap_or(max_blob_height + padding * 2);
+
+    let mut out = GrayImage::new(new_width, new_height);
+
+    // 6. 重绘
+    let mut current_x = padding;
+
+    for blob in valid_blobs {
+        let blob_w = blob.max_x - blob.min_x + 1;
+        let blob_h = blob.max_y - blob.min_y + 1;
+
+        // 计算 Y 轴偏移
+        let target_y = if align_center {
+            (new_height as i32 - blob_h as i32) / 2
+        } else {
+            // 默认顶部对齐 (加一点 padding)
+            padding as i32
+        };
+
+        let target_y = target_y.max(0) as u32;
+
+        // 搬运像素
+        for (src_x, src_y) in blob.pixels {
+            // 计算像素在 Blob 内部的相对偏移
+            let offset_x = src_x - blob.min_x;
+            let offset_y = src_y - blob.min_y;
+
+            let dest_x = current_x + offset_x;
+            let dest_y = target_y + offset_y;
+
+            if dest_x < new_width && dest_y < new_height {
+                // 假设是二值化后的图，直接填白 (255)
+                // 如果需要保留原图灰度，需要传原始 img 进来查表，这里简化为二值重排
+                out.put_pixel(dest_x, dest_y, Luma([255]));
+            }
+        }
+
+        current_x += blob_w + padding;
+    }
+
+    DynamicImage::ImageLuma8(out)
+}

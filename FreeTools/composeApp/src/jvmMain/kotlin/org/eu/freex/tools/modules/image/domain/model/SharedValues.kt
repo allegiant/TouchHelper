@@ -204,6 +204,16 @@ data class MorphologyFilter(
     override val name = "形态学"
 }
 
+data class SmartLayoutFilter(
+    val padding: Int = 10,
+    val minWidth: Int = 5,
+    val minHeight: Int = 5,
+    val fixedHeight: Int = 0, // 0 表示自动适应
+    val alignCenter: Boolean = true
+) : ImageFilter {
+    override val name = "智能重排"
+}
+
 // --- 切割 ---
 @Serializable
 sealed interface Segmentation {

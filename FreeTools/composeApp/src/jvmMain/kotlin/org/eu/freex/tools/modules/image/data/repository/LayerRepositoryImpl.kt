@@ -25,6 +25,7 @@ import uniffi.touch_core.applyPosterizationFilter
 import uniffi.touch_core.applyRemoveLines
 import uniffi.touch_core.applyRemoveNoise
 import uniffi.touch_core.applyRotate
+import uniffi.touch_core.applySmartLayout
 import java.awt.GraphicsEnvironment
 import java.awt.Rectangle
 import java.awt.Robot
@@ -229,6 +230,23 @@ class LayerRepositoryImpl : LayerRepository {
                         }
                         val rustFilter = uniffi.touch_core.MorphologyFilter(mode, filter.kernelSize, filter.iterations)
                         applyMorphologyFilter(pixels, w, h, rustFilter)
+                    }
+                    is SmartLayoutFilter -> {
+                        val rustFilter = uniffi.touch_core.SmartLayoutFilter(
+                            padding = filter.padding,
+                            minWidth = filter.minWidth,
+                            minHeight = filter.minHeight,
+                            fixedHeight = filter.fixedHeight,
+                            alignCenter = filter.alignCenter
+                        )
+                        val result = applySmartLayout(pixels, w, h, rustFilter)
+
+                        // 使用新的宽高创建图片，解决花屏问题
+                        return@withContext ImageUtils.fromRgbaPixels(
+                            result.width,
+                            result.height,
+                            result.pixels
+                        )
                     }
                     is DenoiseFilter -> applyDenoise(pixels, w, h, RustDenoiseFilter(filter.radius))
                 }

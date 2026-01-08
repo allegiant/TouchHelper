@@ -193,6 +193,24 @@ pub struct MorphologyFilter {
     pub iterations: i32,  // 迭代次数
 }
 
+// 1. 新增：处理后的图像结果（包含新尺寸）
+#[derive(Debug, Clone, Serialize, Deserialize, uniffi::Record)]
+pub struct ProcessedImage {
+    pub width: i32,
+    pub height: i32,
+    pub pixels: Vec<u8>,
+}
+
+/// 智能重排滤镜参数
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, uniffi::Record)]
+pub struct SmartLayoutFilter {
+    pub padding: i32,
+    pub min_width: i32,
+    pub min_height: i32,
+    pub fixed_height: i32, // 传 0 或 -1 代表自动
+    pub align_center: bool,
+}
+
 // 【新增】定义错误类型
 #[derive(Debug, thiserror::Error, uniffi::Error)]
 pub enum VisionError {

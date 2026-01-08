@@ -3,8 +3,8 @@ use image::{DynamicImage, ImageBuffer, Rgba};
 use crate::vision::types::{
     BinarizationFilter, BinarizationMode, BlackWhiteInvertFilter, ColorRule, DenoiseFilter,
     DeskewFilter, ExtractBlobsFilter, ExtractContoursFilter, GrayscaleFilter, InvertMode,
-    MorphologyFilter, MultiColorFilter, PosterizationFilter, Rect, RemoveLinesFilter,
-    RemoveNoiseFilter, RotationFilter, VisionError,
+    MorphologyFilter, MultiColorFilter, PosterizationFilter, ProcessedImage, Rect,
+    RemoveLinesFilter, RemoveNoiseFilter, RotationFilter, SmartLayoutFilter, VisionError,
 };
 use crate::vision::{analysis, filters};
 
@@ -370,5 +370,51 @@ pub fn apply_morphology_filter(
             filter.kernel_size as u32,
             filter.iterations as u32,
         )
+    })
+}
+
+#[uniffi::export]
+pub fn apply_smart_layout(
+    pixels: Vec<u8>,
+    width: i32,
+    height: i32,
+    filter: SmartLayoutFilter,
+) -> Result<ProcessedImage, VisionError> {
+    log::info!("Executing Smart Layout: {:?}", filter);
+
+    // 1. 手动构建 DynamicImage (模仿 process_image_wrapper 的前半部分)
+    let width_u32 = width as u32;
+    let height_u32 = height as u32;
+    let expected_len = (width_u32 * height_u32 * 4) as usize;
+
+    if pixels.len() != expected_len {
+        return Err(VisionError::LoadError("Pixel data mismatch".into()));
+    }
+
+    let img_buffer = ImageBuffer::<Rgba<u8>, Vec<u8>>::from_raw(width_u32, height_u32, pixels)
+        .ok_or_else(|| VisionError::LoadError("Failed to create image buffer".into()))?;
+    let img = DynamicImage::ImageRgba8(img_buffer);
+
+    // 2. 调用核心算法
+    let fixed_h = if filter.fixed_height > 0 {
+        Some(filter.fixed_height as u32)
+    } else {
+        None
+    };
+
+    let result_img = filters::smart_layout(
+        &img,
+        filter.padding.max(0) as u32,
+        filter.min_width.max(0) as u32,
+        filter.min_height.max(0) as u32,
+        fixed_h,
+        filter.align_center,
+    );
+
+    // 3. 返回包含新尺寸的结果
+    Ok(ProcessedImage {
+        width: result_img.width() as i32,
+        height: result_img.height() as i32,
+        pixels: result_img.to_rgba8().into_raw(),
     })
 }
