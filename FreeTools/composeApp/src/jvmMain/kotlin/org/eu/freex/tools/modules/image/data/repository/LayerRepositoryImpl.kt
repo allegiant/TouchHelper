@@ -18,12 +18,14 @@ import uniffi.touch_core.applyColorInvert
 import uniffi.touch_core.applyDenoise
 import uniffi.touch_core.applyGrayscale
 import uniffi.touch_core.applyMultiColorFilter
+import uniffi.touch_core.applyPosterizationFilter
 import java.awt.GraphicsEnvironment
 import java.awt.Rectangle
 import java.awt.Robot
 import java.awt.Window
 import uniffi.touch_core.BinarizationMode as RustBinarizationMode
 import uniffi.touch_core.BinarizationFilter as RustBinarizationFilter
+import uniffi.touch_core.PosterizationFilter as RustPosterizationFilter
 import uniffi.touch_core.MultiColorFilter as RustMultiColorFilter
 import uniffi.touch_core.ColorRule as RustColorRule
 import uniffi.touch_core.BlackWhiteInvertFilter as RustBlackWhiteInvertFilter
@@ -113,6 +115,23 @@ class LayerRepositoryImpl : LayerRepository {
                             filter.windowSize.toInt()
                         )
                         applyBinarization(pixels, w, h, rustFilter)
+                    }
+                    is PosterizationFilter -> {
+                        // 映射枚举 Kotlin -> Rust
+                        val rustMode = when(filter.mode) {
+                            PosterizationMode.RGB -> uniffi.touch_core.PosterizationMode.RGB
+                            PosterizationMode.HSV -> uniffi.touch_core.PosterizationMode.HSV
+                        }
+
+                        val rustFilter = RustPosterizationFilter(
+                            rustMode,
+                            filter.isMultiValue,
+                            filter.level,
+                            filter.channel1,
+                            filter.channel2,
+                            filter.channel3
+                        )
+                        applyPosterizationFilter(pixels, w, h, rustFilter)
                     }
 
                     is MultiColorFilter -> {

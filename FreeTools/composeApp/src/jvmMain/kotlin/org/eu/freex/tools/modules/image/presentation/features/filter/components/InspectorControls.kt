@@ -53,6 +53,7 @@ import org.eu.freex.tools.modules.image.domain.model.DenoiseFilter
 import org.eu.freex.tools.modules.image.domain.model.GrayscaleFilter
 import org.eu.freex.tools.modules.image.domain.model.ImageFilter
 import org.eu.freex.tools.modules.image.domain.model.MultiColorFilter
+import org.eu.freex.tools.modules.image.domain.model.PosterizationFilter
 import kotlin.collections.listOf
 
 
@@ -67,6 +68,7 @@ fun FilterSelectionList(
         listOf(
             BinarizationFilter(),
             MultiColorFilter(),
+            PosterizationFilter(),
             ColorInvertFilter,
             GrayscaleFilter,
         )

@@ -7,6 +7,7 @@ import org.eu.freex.tools.modules.image.domain.model.DenoiseFilter
 import org.eu.freex.tools.modules.image.domain.model.GrayscaleFilter
 import org.eu.freex.tools.modules.image.domain.model.ImageFilter
 import org.eu.freex.tools.modules.image.domain.model.MultiColorFilter
+import org.eu.freex.tools.modules.image.domain.model.PosterizationFilter
 import kotlin.reflect.KClass
 
 object FilterUIRegistry {
@@ -19,7 +20,9 @@ object FilterUIRegistry {
         BinarizationFilter::class to BinarizationRenderer,
         // 【新增】注册多点找色
         MultiColorFilter::class to MultiColorRenderer,
+        PosterizationFilter::class to PosterizationRenderer,
         DenoiseFilter::class to EmptyRenderer, // 如果你有 DenoiseRenderer 就换成它，没有就用 Empty
+
 
         // 2. 无参数的滤镜 (object)：通常不需要额外的 UI 面板，直接绑定 EmptyRenderer
         // 也可以不写，依赖 getRenderer 的默认值，但显式写出来更清晰

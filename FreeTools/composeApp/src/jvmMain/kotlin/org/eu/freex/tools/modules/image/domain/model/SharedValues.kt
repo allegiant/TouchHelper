@@ -36,6 +36,28 @@ data class BinarizationFilter(
     override val name = "二值化"
 }
 
+// [新增] 色彩空间枚举
+enum class PosterizationMode {
+    RGB, HSV
+}
+
+@Serializable
+@SerialName("POSTERIZATION")
+data class PosterizationFilter(
+    // [新增] 模式选择
+    val mode: PosterizationMode = PosterizationMode.RGB,
+
+    val isMultiValue: Boolean = true,
+    val level: Int = 2,
+
+    // 通道开关 (RGB模式下代表R/G/B，HSV模式下代表H/S/V)
+    val channel1: Boolean = false, // 原 extractR
+    val channel2: Boolean = false, // 原 extractG
+    val channel3: Boolean = false  // 原 extractB
+) : ImageFilter {
+    override val name = "色调分离"
+}
+
 
 @Serializable
 @SerialName("KEEPCOLORS")
