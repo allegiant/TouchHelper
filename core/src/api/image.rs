@@ -1,8 +1,8 @@
 use image::{DynamicImage, ImageBuffer, Rgba};
 
 use crate::vision::types::{
-    BinarizationFilter, BinarizationMode, BlackWhiteInvertFilter, ColorInvertFilter, ColorRule,
-    DenoiseFilter, DeskewFilter, ExtractBlobsFilter, ExtractContoursFilter, GrayscaleFilter,
+    BinarizationFilter, BinarizationMode, BlackWhiteInvertFilter, ColorRule, DenoiseFilter,
+    DeskewFilter, ExtractBlobsFilter, ExtractContoursFilter, GrayscaleFilter, InvertMode,
     MultiColorFilter, PosterizationFilter, Rect, RemoveLinesFilter, RemoveNoiseFilter,
     RotationFilter, VisionError,
 };
@@ -273,19 +273,6 @@ pub fn apply_denoise(
     })
 }
 
-/// 对图片应用反色滤镜
-#[uniffi::export]
-pub fn apply_color_invert(
-    pixels: Vec<u8>,
-    width: i32,
-    height: i32,
-    filter: ColorInvertFilter,
-) -> Result<Vec<u8>, VisionError> {
-    log::info!("Executing color invert: {:?}", filter);
-
-    process_image_wrapper(pixels, width, height, |img| filters::invert(img))
-}
-
 /// 对黑白图片应用反色滤镜
 #[uniffi::export]
 pub fn apply_blackwhite_invert(
@@ -296,7 +283,17 @@ pub fn apply_blackwhite_invert(
 ) -> Result<Vec<u8>, VisionError> {
     log::info!("Executing black-white invert: {:?}", filter);
 
-    process_image_wrapper(pixels, width, height, |img| filters::invert(img))
+    // 将 Kotlin 传来的 Int/Enum 映射为 Rust 枚举
+    // 假设 filter.mode 是 i32 或 enum: 0=AutoWhite, 1=AutoBlack, 2=Force
+    let mode = match filter.mode {
+        0 => InvertMode::AutoToWhiteBg,
+        1 => InvertMode::AutoToBlackBg,
+        _ => InvertMode::Force,
+    };
+
+    process_image_wrapper(pixels, width, height, |img| {
+        filters::smart_invert(img, mode)
+    })
 }
 
 /// 扫描组件

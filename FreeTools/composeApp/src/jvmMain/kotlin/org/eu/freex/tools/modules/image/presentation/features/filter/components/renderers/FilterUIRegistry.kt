@@ -2,7 +2,6 @@ package org.eu.freex.tools.modules.image.presentation.features.filter.components
 
 import org.eu.freex.tools.modules.image.domain.model.BinarizationFilter
 import org.eu.freex.tools.modules.image.domain.model.BlackWhiteInvertFilter
-import org.eu.freex.tools.modules.image.domain.model.ColorInvertFilter
 import org.eu.freex.tools.modules.image.domain.model.DenoiseFilter
 import org.eu.freex.tools.modules.image.domain.model.DeskewFilter
 import org.eu.freex.tools.modules.image.domain.model.ExtractBlobsFilter
@@ -36,8 +35,7 @@ object FilterUIRegistry {
         DeskewFilter::class to DeskewRenderer,
         RotationFilter::class to RotationRenderer,
         DenoiseFilter::class to EmptyRenderer,
-        ColorInvertFilter::class to EmptyRenderer,
-        BlackWhiteInvertFilter::class to EmptyRenderer
+        BlackWhiteInvertFilter::class to BlackWhiteInvertRenderer,
     )
 
     /**

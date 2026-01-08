@@ -158,15 +158,22 @@ pub struct RotationFilter {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, uniffi::Record)]
-pub struct ColorInvertFilter {}
-
-#[derive(Debug, Clone, Serialize, Deserialize, uniffi::Record)]
 pub struct DenoiseFilter {
     pub radius: u32,
 }
 
+/// 智能反色模式枚举 (对应 Kotlin 端的定义)
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, uniffi::Enum)]
+pub enum InvertMode {
+    AutoToWhiteBg, // 智能：确保白底黑字 (边缘是黑则反色)
+    AutoToBlackBg, // 智能：确保黑底白字 (边缘是白则反色)
+    Force,         // 强制：直接反色
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, uniffi::Record)]
-pub struct BlackWhiteInvertFilter {}
+pub struct BlackWhiteInvertFilter {
+    pub mode: i32,
+}
 
 // 【新增】定义错误类型
 #[derive(Debug, thiserror::Error, uniffi::Error)]

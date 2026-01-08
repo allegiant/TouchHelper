@@ -90,12 +90,6 @@ data class GrayscaleFilter(
 }
 
 @Serializable
-@SerialName("COLOR_INVERT")
-object ColorInvertFilter : ImageFilter {
-    override val name = "颜色反转"
-}
-
-@Serializable
 @SerialName("DENOISE")
 data class DenoiseFilter(val radius: UInt = 1u) : ImageFilter {
     override val name = "去噪"
@@ -183,10 +177,12 @@ data class RotationFilter(
     override val name = "旋转纠正"
 }
 
-
 @Serializable
-@SerialName("BW_INVERT")
-object BlackWhiteInvertFilter : ImageFilter {
+@SerialName("BlackWhiteInvert")
+data class BlackWhiteInvertFilter(
+    // 0: 统一为白底黑字 (推荐), 1: 统一为黑底白字, 2: 强制反色
+    val mode: Int = 0
+) : ImageFilter {
     override val name = "黑白反转"
 }
 

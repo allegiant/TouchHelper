@@ -48,7 +48,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import org.eu.freex.tools.modules.image.domain.model.BinarizationFilter
 import org.eu.freex.tools.modules.image.domain.model.BlackWhiteInvertFilter
-import org.eu.freex.tools.modules.image.domain.model.ColorInvertFilter
 import org.eu.freex.tools.modules.image.domain.model.DenoiseFilter
 import org.eu.freex.tools.modules.image.domain.model.DeskewFilter
 import org.eu.freex.tools.modules.image.domain.model.ExtractBlobsFilter
@@ -60,7 +59,6 @@ import org.eu.freex.tools.modules.image.domain.model.PosterizationFilter
 import org.eu.freex.tools.modules.image.domain.model.RemoveLinesFilter
 import org.eu.freex.tools.modules.image.domain.model.RemoveNoiseFilter
 import org.eu.freex.tools.modules.image.domain.model.RotationFilter
-import org.eu.freex.tools.modules.image.presentation.features.filter.components.renderers.DeskewRenderer
 
 
 @Composable
@@ -76,7 +74,6 @@ fun FilterSelectionList(
             MultiColorFilter(),
             PosterizationFilter(),
             GrayscaleFilter(),
-            ColorInvertFilter,
         )
     }
     val bwFilters = remember {
@@ -87,8 +84,8 @@ fun FilterSelectionList(
             ExtractBlobsFilter(),
             DeskewFilter(),
             RotationFilter(),
+            BlackWhiteInvertFilter(),
             DenoiseFilter(),
-            BlackWhiteInvertFilter
         )
     }
     val commonFilters = remember {

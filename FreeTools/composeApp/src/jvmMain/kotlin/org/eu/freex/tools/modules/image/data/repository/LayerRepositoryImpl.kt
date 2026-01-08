@@ -14,7 +14,6 @@ import kotlin.math.roundToInt
 // Rust Bindings
 import uniffi.touch_core.applyBinarization
 import uniffi.touch_core.applyBlackwhiteInvert
-import uniffi.touch_core.applyColorInvert
 import uniffi.touch_core.applyDenoise
 import uniffi.touch_core.applyDeskew
 import uniffi.touch_core.applyExtractBlobs
@@ -35,7 +34,6 @@ import uniffi.touch_core.PosterizationFilter as RustPosterizationFilter
 import uniffi.touch_core.MultiColorFilter as RustMultiColorFilter
 import uniffi.touch_core.ColorRule as RustColorRule
 import uniffi.touch_core.BlackWhiteInvertFilter as RustBlackWhiteInvertFilter
-import uniffi.touch_core.ColorInvertFilter as RustColorInvertFilter
 import uniffi.touch_core.DenoiseFilter as RustDenoiseFilter
 import uniffi.touch_core.GrayscaleFilter as RustGrayscaleFilter
 import uniffi.touch_core.GrayscaleMode as RustGrayscaleMode
@@ -216,9 +214,10 @@ class LayerRepositoryImpl : LayerRepository {
                         applyRotate(pixels, w, h, rustFilter)
 
                     }
-                    is ColorInvertFilter -> applyColorInvert(pixels, w, h, RustColorInvertFilter())
+                    is BlackWhiteInvertFilter -> {
+                        applyBlackwhiteInvert(pixels, w, h, RustBlackWhiteInvertFilter(filter.mode))
+                    }
                     is DenoiseFilter -> applyDenoise(pixels, w, h, RustDenoiseFilter(filter.radius))
-                    is BlackWhiteInvertFilter -> applyBlackwhiteInvert(pixels, w, h, RustBlackWhiteInvertFilter())
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
