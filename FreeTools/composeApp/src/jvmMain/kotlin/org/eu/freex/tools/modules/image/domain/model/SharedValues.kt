@@ -69,9 +69,23 @@ data class MultiColorFilter(
     override val name = "颜色选取"
 }
 
+// 1. 新增枚举：对应 Rust 里的逻辑
+@Serializable
+enum class GrayscaleMode {
+    WEIGHTED, // 标准 (加权平均)
+    MAX,      // 最大值 (去黑底)
+    MIN,      // 最小值 (去白底)
+    RED,      // 红色通道 (去红章)
+    GREEN,    // 绿色通道 (高清晰度)
+    BLUE      // 蓝色通道
+}
+
+// 2. 修改滤镜类：增加 mode 字段，默认为标准模式
 @Serializable
 @SerialName("GRAYSCALE")
-object GrayscaleFilter : ImageFilter {
+data class GrayscaleFilter(
+    val mode: GrayscaleMode = GrayscaleMode.WEIGHTED
+) : ImageFilter {
     override val name = "灰度化"
 }
 

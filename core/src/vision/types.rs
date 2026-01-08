@@ -91,8 +91,21 @@ pub struct BinarizationFilter {
     pub window_size: i32, //Sauvola 窗口大小
 }
 
+// [新增] 定义灰度模式枚举
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, uniffi::Enum)]
+pub enum GrayscaleMode {
+    Weighted, // 标准加权平均 (默认)
+    Max,      // 最大值法 (去色/高亮) - 适合白底黑字 OCR
+    Min,      // 最小值法 - 适合黑底白字
+    Red,      // 红色通道 - 过滤红色印章
+    Green,    // 绿色通道 - 细节最丰富，噪点少
+    Blue,     // 蓝色通道
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, uniffi::Record)]
-pub struct GrayscaleFilter {}
+pub struct GrayscaleFilter {
+    pub mode: GrayscaleMode,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, uniffi::Record)]
 pub struct ColorInvertFilter {}

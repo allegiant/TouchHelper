@@ -32,6 +32,7 @@ import uniffi.touch_core.BlackWhiteInvertFilter as RustBlackWhiteInvertFilter
 import uniffi.touch_core.ColorInvertFilter as RustColorInvertFilter
 import uniffi.touch_core.DenoiseFilter as RustDenoiseFilter
 import uniffi.touch_core.GrayscaleFilter as RustGrayscaleFilter
+import uniffi.touch_core.GrayscaleMode as RustGrayscaleMode
 import uniffi.touch_core.scanComponents as rustScanComponents
 
 class LayerRepositoryImpl : LayerRepository {
@@ -150,8 +151,21 @@ class LayerRepositoryImpl : LayerRepository {
                         )
                         applyMultiColorFilter(pixels, w, h, rustFilter)
                     }
-
-                    is GrayscaleFilter -> applyGrayscale(pixels, w, h, RustGrayscaleFilter())
+                    is GrayscaleFilter -> {
+                        // 1. 映射枚举 (Kotlin -> Rust)
+                        val rustMode = when (filter.mode) {
+                            GrayscaleMode.WEIGHTED -> RustGrayscaleMode.WEIGHTED
+                            GrayscaleMode.MAX -> RustGrayscaleMode.MAX
+                            GrayscaleMode.MIN -> RustGrayscaleMode.MIN
+                            GrayscaleMode.RED -> RustGrayscaleMode.RED
+                            GrayscaleMode.GREEN -> RustGrayscaleMode.GREEN
+                            GrayscaleMode.BLUE -> RustGrayscaleMode.BLUE
+                        }
+                        // 2. 创建 Rust 滤镜对象 (现在它接受 mode 参数了)
+                        val rustFilter = RustGrayscaleFilter(rustMode)
+                        // 3. 调用底层
+                        applyGrayscale(pixels, w, h, rustFilter)
+                    }
                     is ColorInvertFilter -> applyColorInvert(pixels, w, h, RustColorInvertFilter())
                     is DenoiseFilter -> applyDenoise(pixels, w, h, RustDenoiseFilter(filter.radius))
                     is BlackWhiteInvertFilter -> applyBlackwhiteInvert(pixels, w, h, RustBlackWhiteInvertFilter())

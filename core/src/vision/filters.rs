@@ -4,7 +4,7 @@ use imageproc::distance_transform::Norm;
 use imageproc::filter::median_filter;
 use imageproc::morphology::{dilate, erode};
 
-use super::types::{ColorRule, PosterizationFilter, PosterizationMode};
+use super::types::{ColorRule, GrayscaleMode, PosterizationFilter, PosterizationMode};
 use super::{colors, skeleton};
 
 /// 1. 二值化 (固定阈值)
@@ -135,9 +135,50 @@ pub fn binarize_sauvola(img: &DynamicImage, window_size: u32, k: f64) -> Dynamic
     DynamicImage::ImageLuma8(out)
 }
 
-/// 3. 灰度化
-pub fn grayscale(img: &DynamicImage) -> DynamicImage {
-    DynamicImage::ImageLuma8(img.to_luma8())
+/// 3. 灰度化 (增强版)
+/// 支持多种灰度算法，针对不同场景优化
+pub fn grayscale(img: &DynamicImage, mode: GrayscaleMode) -> DynamicImage {
+    // 如果是标准加权，直接使用 image 库的高性能实现
+    if let GrayscaleMode::Weighted = mode {
+        return DynamicImage::ImageLuma8(img.to_luma8());
+    }
+
+    let rgb = img.to_rgb8();
+    let (w, h) = rgb.dimensions();
+    let mut out = GrayImage::new(w, h);
+
+    // 遍历像素进行处理
+    for (x, y, pixel) in rgb.enumerate_pixels() {
+        let r = pixel[0];
+        let g = pixel[1];
+        let b = pixel[2];
+
+        let val = match mode {
+            GrayscaleMode::Weighted => unreachable!(), // 上面已处理
+
+            // 最大值法: 取 R,G,B 中最亮的。
+            // 效果: 图像整体变亮，浅色背景(如纸张纹理)会趋向于纯白(255)，适合文档 OCR 预处理。
+            GrayscaleMode::Max => r.max(g).max(b),
+
+            // 最小值法: 取 R,G,B 中最暗的。
+            // 效果: 图像整体变暗，适合提取亮色背景下的深色骨架。
+            GrayscaleMode::Min => r.min(g).min(b),
+
+            // 单通道提取
+            // 红色通道: 红色物体(如印章)会变白(消失)，蓝黑色文字保留。
+            GrayscaleMode::Red => r,
+
+            // 绿色通道: 拜耳阵列中绿色像素最多，噪点最少，细节通常最清晰。
+            GrayscaleMode::Green => g,
+
+            // 蓝色通道: 较少单独使用，除非特定色偏场景。
+            GrayscaleMode::Blue => b,
+        };
+
+        out.put_pixel(x, y, Luma([val]));
+    }
+
+    DynamicImage::ImageLuma8(out)
 }
 
 /// 4. 反色 (Invert)

@@ -132,10 +132,9 @@ pub fn apply_grayscale(
 ) -> Result<Vec<u8>, VisionError> {
     log::info!("Executing Grayscale: {:?}", filter);
 
-    // 调用公共方法
     process_image_wrapper(pixels, width, height, |img| {
-        // 如果 GrayscaleFilter 将来有参数，可以在这里使用 filter.mode
-        filters::grayscale(img)
+        // [修改] 将 filter.mode 传递给底层逻辑
+        filters::grayscale(img, filter.mode)
     })
 }
 

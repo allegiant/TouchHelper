@@ -69,8 +69,8 @@ fun FilterSelectionList(
             BinarizationFilter(),
             MultiColorFilter(),
             PosterizationFilter(),
+            GrayscaleFilter(),
             ColorInvertFilter,
-            GrayscaleFilter,
         )
     }
     val bwFilters = remember {
