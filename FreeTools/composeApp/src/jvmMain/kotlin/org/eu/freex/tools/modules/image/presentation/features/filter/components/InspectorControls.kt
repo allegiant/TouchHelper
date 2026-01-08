@@ -54,6 +54,7 @@ import org.eu.freex.tools.modules.image.domain.model.ExtractBlobsFilter
 import org.eu.freex.tools.modules.image.domain.model.ExtractContoursFilter
 import org.eu.freex.tools.modules.image.domain.model.GrayscaleFilter
 import org.eu.freex.tools.modules.image.domain.model.ImageFilter
+import org.eu.freex.tools.modules.image.domain.model.MorphologyFilter
 import org.eu.freex.tools.modules.image.domain.model.MultiColorFilter
 import org.eu.freex.tools.modules.image.domain.model.PosterizationFilter
 import org.eu.freex.tools.modules.image.domain.model.RemoveLinesFilter
@@ -86,6 +87,7 @@ fun FilterSelectionList(
             RotationFilter(),
             BlackWhiteInvertFilter(),
             DenoiseFilter(),
+            MorphologyFilter(),
         )
     }
     val commonFilters = remember {

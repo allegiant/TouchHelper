@@ -8,7 +8,9 @@ use imageproc::geometric_transformations::{rotate_about_center, Interpolation};
 use imageproc::morphology::{dilate, erode};
 use imageproc::region_labelling::{connected_components, Connectivity};
 
-use super::types::{ColorRule, GrayscaleMode, InvertMode, PosterizationFilter, PosterizationMode};
+use super::types::{
+    ColorRule, GrayscaleMode, InvertMode, MorphologyMode, PosterizationFilter, PosterizationMode,
+};
 use super::{colors, skeleton};
 
 /// 1. 二值化 (固定阈值)
@@ -1105,4 +1107,72 @@ pub fn smart_invert(img: &DynamicImage, mode: InvertMode) -> DynamicImage {
     } else {
         img.clone()
     }
+}
+
+/// [新增] 高级形态学变换
+/// radius: 核半径 (1 => 3x3, 2 => 5x5)
+/// iterations: 执行次数
+pub fn apply_morphology(
+    img: &DynamicImage,
+    mode: MorphologyMode,
+    radius: u32,
+    iterations: u32,
+) -> DynamicImage {
+    let gray = img.to_luma8();
+
+    // 辅助函数：执行腐蚀
+    let do_erode = |input: &GrayImage, r: u32, iter: u32| -> GrayImage {
+        // Norm::LInf 代表切比雪夫距离，对应方形核 (Square Kernel)
+        // 這是最适合像素文字处理的形状
+        let mut temp = input.clone();
+        for _ in 0..iter {
+            temp = erode(&temp, Norm::LInf, r as u8);
+        }
+        temp
+    };
+
+    // 辅助函数：执行膨胀
+    let do_dilate = |input: &GrayImage, r: u32, iter: u32| -> GrayImage {
+        let mut temp = input.clone();
+        for _ in 0..iter {
+            temp = dilate(&temp, Norm::LInf, r as u8);
+        }
+        temp
+    };
+
+    let out = match mode {
+        MorphologyMode::Dilate => do_dilate(&gray, radius, iterations),
+        MorphologyMode::Erode => do_erode(&gray, radius, iterations),
+
+        // 开运算：先腐蚀，后膨胀 (去除孤立噪点)
+        MorphologyMode::Open => {
+            let temp = do_erode(&gray, radius, iterations);
+            do_dilate(&temp, radius, iterations)
+        }
+
+        // 闭运算：先膨胀，后腐蚀 (连接断裂笔画)
+        MorphologyMode::Close => {
+            let temp = do_dilate(&gray, radius, iterations);
+            do_erode(&temp, radius, iterations)
+        }
+
+        // 形态学梯度：膨胀图 - 腐蚀图 (提取空心轮廓)
+        MorphologyMode::Gradient => {
+            let dilated = do_dilate(&gray, radius, iterations);
+            let eroded = do_erode(&gray, radius, iterations);
+
+            let (w, h) = gray.dimensions();
+            let mut diff = GrayImage::new(w, h);
+            for y in 0..h {
+                for x in 0..w {
+                    let d = dilated.get_pixel(x, y)[0];
+                    let e = eroded.get_pixel(x, y)[0];
+                    diff.put_pixel(x, y, Luma([d.saturating_sub(e)]));
+                }
+            }
+            diff
+        }
+    };
+
+    DynamicImage::ImageLuma8(out)
 }

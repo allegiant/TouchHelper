@@ -175,6 +175,24 @@ pub struct BlackWhiteInvertFilter {
     pub mode: i32,
 }
 
+// [新增] 形态学操作模式
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, uniffi::Enum)]
+pub enum MorphologyMode {
+    Dilate,   // 膨胀 (扩张白色)
+    Erode,    // 腐蚀 (收缩白色)
+    Open,     // 开运算 (先腐蚀后膨胀 -> 去噪)
+    Close,    // 闭运算 (先膨胀后腐蚀 -> 连笔)
+    Gradient, // 形态学梯度 (膨胀 - 腐蚀 -> 轮廓)
+}
+
+// [新增] 形态学滤镜参数
+#[derive(Debug, Clone, Serialize, Deserialize, uniffi::Record)]
+pub struct MorphologyFilter {
+    pub mode: MorphologyMode,
+    pub kernel_size: i32, // 核大小 (半径)，实际大小 = 2*r + 1
+    pub iterations: i32,  // 迭代次数
+}
+
 // 【新增】定义错误类型
 #[derive(Debug, thiserror::Error, uniffi::Error)]
 pub enum VisionError {

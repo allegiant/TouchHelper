@@ -8,6 +8,7 @@ import org.eu.freex.tools.modules.image.domain.model.ExtractBlobsFilter
 import org.eu.freex.tools.modules.image.domain.model.ExtractContoursFilter
 import org.eu.freex.tools.modules.image.domain.model.GrayscaleFilter
 import org.eu.freex.tools.modules.image.domain.model.ImageFilter
+import org.eu.freex.tools.modules.image.domain.model.MorphologyFilter
 import org.eu.freex.tools.modules.image.domain.model.MultiColorFilter
 import org.eu.freex.tools.modules.image.domain.model.PosterizationFilter
 import org.eu.freex.tools.modules.image.domain.model.RemoveLinesFilter
@@ -36,6 +37,7 @@ object FilterUIRegistry {
         RotationFilter::class to RotationRenderer,
         DenoiseFilter::class to EmptyRenderer,
         BlackWhiteInvertFilter::class to BlackWhiteInvertRenderer,
+        MorphologyFilter::class to MorphologyRenderer,
     )
 
     /**

@@ -186,6 +186,24 @@ data class BlackWhiteInvertFilter(
     override val name = "黑白反转"
 }
 
+// 1. 新增枚举：对应 Rust 里的逻辑
+@Serializable
+enum class MorphologyMode {
+    DILATE,   // 膨胀 (扩张白色)
+    ERODE,    // 腐蚀 (收缩白色)
+    OPEN,     // 开运算 (先腐蚀后膨胀 -> 去噪)
+    CLOSE,    // 闭运算 (先膨胀后腐蚀 -> 连笔)
+    GRADIENT, // 形态学梯度 (膨胀 - 腐蚀 -> 轮廓)
+}
+
+data class MorphologyFilter(
+    val mode: MorphologyMode = MorphologyMode.DILATE,
+    val kernelSize: Int = 1, // 核大小 (半径)，实际大小 = 2*r + 1
+    val iterations: Int = 1 // 迭代次数
+): ImageFilter {
+    override val name = "形态学"
+}
+
 // --- 切割 ---
 @Serializable
 sealed interface Segmentation {

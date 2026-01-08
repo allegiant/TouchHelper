@@ -19,6 +19,7 @@ import uniffi.touch_core.applyDeskew
 import uniffi.touch_core.applyExtractBlobs
 import uniffi.touch_core.applyExtractContours
 import uniffi.touch_core.applyGrayscale
+import uniffi.touch_core.applyMorphologyFilter
 import uniffi.touch_core.applyMultiColorFilter
 import uniffi.touch_core.applyPosterizationFilter
 import uniffi.touch_core.applyRemoveLines
@@ -39,6 +40,7 @@ import uniffi.touch_core.GrayscaleFilter as RustGrayscaleFilter
 import uniffi.touch_core.GrayscaleMode as RustGrayscaleMode
 import uniffi.touch_core.RemoveNoiseFilter as RustRemoveNoiseFilter
 import uniffi.touch_core.RemoveLinesFilter as RustRemoveLinesFilter
+import uniffi.touch_core.MorphologyMode as RustMorphologyMode
 import uniffi.touch_core.scanComponents as rustScanComponents
 
 class LayerRepositoryImpl : LayerRepository {
@@ -216,6 +218,17 @@ class LayerRepositoryImpl : LayerRepository {
                     }
                     is BlackWhiteInvertFilter -> {
                         applyBlackwhiteInvert(pixels, w, h, RustBlackWhiteInvertFilter(filter.mode))
+                    }
+                    is MorphologyFilter -> {
+                        val mode = when (filter.mode) {
+                            MorphologyMode.DILATE -> RustMorphologyMode.DILATE
+                            MorphologyMode.ERODE -> RustMorphologyMode.ERODE
+                            MorphologyMode.OPEN -> RustMorphologyMode.OPEN
+                            MorphologyMode.CLOSE -> RustMorphologyMode.CLOSE
+                            MorphologyMode.GRADIENT -> RustMorphologyMode.GRADIENT
+                        }
+                        val rustFilter = uniffi.touch_core.MorphologyFilter(mode, filter.kernelSize, filter.iterations)
+                        applyMorphologyFilter(pixels, w, h, rustFilter)
                     }
                     is DenoiseFilter -> applyDenoise(pixels, w, h, RustDenoiseFilter(filter.radius))
                 }

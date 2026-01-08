@@ -3,8 +3,8 @@ use image::{DynamicImage, ImageBuffer, Rgba};
 use crate::vision::types::{
     BinarizationFilter, BinarizationMode, BlackWhiteInvertFilter, ColorRule, DenoiseFilter,
     DeskewFilter, ExtractBlobsFilter, ExtractContoursFilter, GrayscaleFilter, InvertMode,
-    MultiColorFilter, PosterizationFilter, Rect, RemoveLinesFilter, RemoveNoiseFilter,
-    RotationFilter, VisionError,
+    MorphologyFilter, MultiColorFilter, PosterizationFilter, Rect, RemoveLinesFilter,
+    RemoveNoiseFilter, RotationFilter, VisionError,
 };
 use crate::vision::{analysis, filters};
 
@@ -351,4 +351,24 @@ pub fn scan_components(
         let rects = analysis::scan_connected_components(&img, rules, 1, 1);
         Ok(rects)
     }
+}
+
+/// [新增] 应用形态学滤镜
+#[uniffi::export]
+pub fn apply_morphology_filter(
+    pixels: Vec<u8>,
+    width: i32,
+    height: i32,
+    filter: MorphologyFilter,
+) -> Result<Vec<u8>, VisionError> {
+    log::info!("Executing Morphology: {:?}", filter);
+
+    process_image_wrapper(pixels, width, height, |img| {
+        filters::apply_morphology(
+            img,
+            filter.mode,
+            filter.kernel_size as u32,
+            filter.iterations as u32,
+        )
+    })
 }
