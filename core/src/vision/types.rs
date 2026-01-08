@@ -3,6 +3,23 @@
 
 use serde::{Deserialize, Serialize};
 
+// [新增] 模式枚举
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, uniffi::Enum)]
+pub enum PosterizationMode {
+    Rgb,
+    Hsv,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, uniffi::Record)]
+pub struct PosterizationFilter {
+    pub mode: PosterizationMode,
+    pub is_multi_value: bool,
+    pub level: i32,
+    pub channel1: bool,
+    pub channel2: bool,
+    pub channel3: bool,
+}
+
 // ==========================================
 // 4. MultiColorFilter(颜色选取)
 // ==========================================

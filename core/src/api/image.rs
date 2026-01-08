@@ -2,7 +2,7 @@ use image::{DynamicImage, ImageBuffer, Rgba};
 
 use crate::vision::types::{
     BinarizationFilter, BinarizationMode, BlackWhiteInvertFilter, ColorInvertFilter, ColorRule,
-    DenoiseFilter, GrayscaleFilter, MultiColorFilter, Rect, VisionError,
+    DenoiseFilter, GrayscaleFilter, MultiColorFilter, PosterizationFilter, Rect, VisionError,
 };
 use crate::vision::{analysis, filters};
 
@@ -85,6 +85,20 @@ pub fn apply_binarization(
                 filters::binarize(img, threshold_min_u8)
             }
         }
+    })
+}
+
+#[uniffi::export]
+pub fn apply_posterization_filter(
+    pixels: Vec<u8>,
+    width: i32,
+    height: i32,
+    filter: PosterizationFilter,
+) -> Result<Vec<u8>, VisionError> {
+    log::info!("Executing Posterization: {:?}", filter);
+
+    process_image_wrapper(pixels, width, height, |img| {
+        filters::posterize(img, &filter)
     })
 }
 
