@@ -59,6 +59,7 @@ import org.eu.freex.tools.modules.image.domain.model.MultiColorFilter
 import org.eu.freex.tools.modules.image.domain.model.PosterizationFilter
 import org.eu.freex.tools.modules.image.domain.model.RemoveLinesFilter
 import org.eu.freex.tools.modules.image.domain.model.RemoveNoiseFilter
+import org.eu.freex.tools.modules.image.domain.model.RotationFilter
 import org.eu.freex.tools.modules.image.presentation.features.filter.components.renderers.DeskewRenderer
 
 
@@ -85,6 +86,7 @@ fun FilterSelectionList(
             ExtractContoursFilter(),
             ExtractBlobsFilter(),
             DeskewFilter(),
+            RotationFilter(),
             DenoiseFilter(),
             BlackWhiteInvertFilter
         )

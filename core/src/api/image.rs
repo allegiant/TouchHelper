@@ -3,7 +3,8 @@ use image::{DynamicImage, ImageBuffer, Rgba};
 use crate::vision::types::{
     BinarizationFilter, BinarizationMode, BlackWhiteInvertFilter, ColorInvertFilter, ColorRule,
     DenoiseFilter, DeskewFilter, ExtractBlobsFilter, ExtractContoursFilter, GrayscaleFilter,
-    MultiColorFilter, PosterizationFilter, Rect, RemoveLinesFilter, RemoveNoiseFilter, VisionError,
+    MultiColorFilter, PosterizationFilter, Rect, RemoveLinesFilter, RemoveNoiseFilter,
+    RotationFilter, VisionError,
 };
 use crate::vision::{analysis, filters};
 
@@ -235,6 +236,25 @@ pub fn apply_deskew(
 
     process_image_wrapper(pixels, width, height, |img| {
         filters::deskew(img, filter.angle, filter.auto, filter.background_color)
+    })
+}
+/// 旋转矫正
+#[uniffi::export]
+pub fn apply_rotate(
+    pixels: Vec<u8>,
+    width: i32,
+    height: i32,
+    filter: RotationFilter,
+) -> Result<Vec<u8>, VisionError> {
+    log::info!("Executing ratate: {:?}", filter);
+    process_image_wrapper(pixels, width, height, |img| {
+        filters::rotate_and_deskew(
+            img,
+            filter.is_auto,
+            filter.manual_angle,
+            filter.max_search_angle,
+            filter.precision,
+        )
     })
 }
 

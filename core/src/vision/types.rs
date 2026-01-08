@@ -150,6 +150,14 @@ pub struct DeskewFilter {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, uniffi::Record)]
+pub struct RotationFilter {
+    pub is_auto: bool,
+    pub manual_angle: f64,     // 手动模式角度
+    pub max_search_angle: f64, // 自动模式：最大搜索范围 (如 30.0)
+    pub precision: f64,        // 自动模式：精度步长 (如 0.5)
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, uniffi::Record)]
 pub struct ColorInvertFilter {}
 
 #[derive(Debug, Clone, Serialize, Deserialize, uniffi::Record)]

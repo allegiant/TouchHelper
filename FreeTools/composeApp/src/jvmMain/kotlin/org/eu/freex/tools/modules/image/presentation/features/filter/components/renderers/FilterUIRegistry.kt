@@ -13,6 +13,7 @@ import org.eu.freex.tools.modules.image.domain.model.MultiColorFilter
 import org.eu.freex.tools.modules.image.domain.model.PosterizationFilter
 import org.eu.freex.tools.modules.image.domain.model.RemoveLinesFilter
 import org.eu.freex.tools.modules.image.domain.model.RemoveNoiseFilter
+import org.eu.freex.tools.modules.image.domain.model.RotationFilter
 import kotlin.reflect.KClass
 
 object FilterUIRegistry {
@@ -33,6 +34,7 @@ object FilterUIRegistry {
         ExtractContoursFilter::class to ExtractContoursRenderer,
         ExtractBlobsFilter::class to ExtractBlobsRenderer,
         DeskewFilter::class to DeskewRenderer,
+        RotationFilter::class to RotationRenderer,
         DenoiseFilter::class to EmptyRenderer,
         ColorInvertFilter::class to EmptyRenderer,
         BlackWhiteInvertFilter::class to EmptyRenderer

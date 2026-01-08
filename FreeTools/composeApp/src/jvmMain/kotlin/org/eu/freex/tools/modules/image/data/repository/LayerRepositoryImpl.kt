@@ -24,6 +24,7 @@ import uniffi.touch_core.applyMultiColorFilter
 import uniffi.touch_core.applyPosterizationFilter
 import uniffi.touch_core.applyRemoveLines
 import uniffi.touch_core.applyRemoveNoise
+import uniffi.touch_core.applyRotate
 import java.awt.GraphicsEnvironment
 import java.awt.Rectangle
 import java.awt.Robot
@@ -204,6 +205,16 @@ class LayerRepositoryImpl : LayerRepository {
                     is DeskewFilter -> {
                         val rustFilter = uniffi.touch_core.DeskewFilter(filter.angle, filter.isAuto,filter.bgColor.toUByte())
                         applyDeskew(pixels, w, h, rustFilter)
+                    }
+                    is RotationFilter -> {
+                        val rustFilter = uniffi.touch_core.RotationFilter(
+                            filter.isAuto,
+                            filter.angle.toDouble(),
+                            filter.maxSearchRange.toDouble(),
+                            filter.precision.toDouble()
+                        )
+                        applyRotate(pixels, w, h, rustFilter)
+
                     }
                     is ColorInvertFilter -> applyColorInvert(pixels, w, h, RustColorInvertFilter())
                     is DenoiseFilter -> applyDenoise(pixels, w, h, RustDenoiseFilter(filter.radius))

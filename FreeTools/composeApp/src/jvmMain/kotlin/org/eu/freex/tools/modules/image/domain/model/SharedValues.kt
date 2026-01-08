@@ -171,6 +171,20 @@ data class DeskewFilter(
 }
 
 @Serializable
+@SerialName("RotationFilter")
+data class RotationFilter(
+    val isAuto: Boolean = true,
+    // 手动模式参数
+    val angle: Float = 0f,
+    // 自动模式参数
+    val maxSearchRange: Float = 30f,
+    val precision: Float = 0.5f
+) : ImageFilter {
+    override val name = "旋转纠正"
+}
+
+
+@Serializable
 @SerialName("BW_INVERT")
 object BlackWhiteInvertFilter : ImageFilter {
     override val name = "黑白反转"

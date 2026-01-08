@@ -25,7 +25,6 @@ import androidx.compose.ui.unit.dp
 import org.eu.freex.tools.common.components.HelpTooltip
 import org.eu.freex.tools.modules.image.domain.model.DeskewFilter
 import org.eu.freex.tools.modules.image.domain.model.ImageFilter
-import kotlin.math.roundToInt
 
 object DeskewRenderer : FilterRenderer {
 
