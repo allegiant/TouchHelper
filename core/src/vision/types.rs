@@ -133,6 +133,16 @@ pub struct ExtractContoursFilter {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, uniffi::Record)]
+pub struct ExtractBlobsFilter {
+    pub min_w: u32,
+    pub max_w: u32,
+    pub min_h: u32,
+    pub max_h: u32,
+    pub min_area: u32,
+    pub max_area: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, uniffi::Record)]
 pub struct ColorInvertFilter {}
 
 #[derive(Debug, Clone, Serialize, Deserialize, uniffi::Record)]

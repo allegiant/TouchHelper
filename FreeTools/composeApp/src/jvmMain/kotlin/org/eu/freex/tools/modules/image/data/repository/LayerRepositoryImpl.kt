@@ -16,6 +16,7 @@ import uniffi.touch_core.applyBinarization
 import uniffi.touch_core.applyBlackwhiteInvert
 import uniffi.touch_core.applyColorInvert
 import uniffi.touch_core.applyDenoise
+import uniffi.touch_core.applyExtractBlobs
 import uniffi.touch_core.applyExtractContours
 import uniffi.touch_core.applyGrayscale
 import uniffi.touch_core.applyMultiColorFilter
@@ -187,6 +188,17 @@ class LayerRepositoryImpl : LayerRepository {
                             filter.morphKernel.toUByte()
                         )
                         applyExtractContours(pixels, w, h, rustFilter)
+                    }
+                    is ExtractBlobsFilter -> {
+                        val rustFilter = uniffi.touch_core.ExtractBlobsFilter(
+                            filter.minWidth.toUInt(),
+                            filter.maxWidth.toUInt(),
+                            filter.minHeight.toUInt(),
+                            filter.maxHeight.toUInt(),
+                            filter.minArea.toUInt(),
+                            filter.maxArea.toUInt(),
+                        )
+                        applyExtractBlobs(pixels, w, h, rustFilter)
                     }
                     is ColorInvertFilter -> applyColorInvert(pixels, w, h, RustColorInvertFilter())
                     is DenoiseFilter -> applyDenoise(pixels, w, h, RustDenoiseFilter(filter.radius))

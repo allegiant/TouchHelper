@@ -2,8 +2,8 @@ use image::{DynamicImage, ImageBuffer, Rgba};
 
 use crate::vision::types::{
     BinarizationFilter, BinarizationMode, BlackWhiteInvertFilter, ColorInvertFilter, ColorRule,
-    DenoiseFilter, ExtractContoursFilter, GrayscaleFilter, MultiColorFilter, PosterizationFilter,
-    Rect, RemoveLinesFilter, RemoveNoiseFilter, VisionError,
+    DenoiseFilter, ExtractBlobsFilter, ExtractContoursFilter, GrayscaleFilter, MultiColorFilter,
+    PosterizationFilter, Rect, RemoveLinesFilter, RemoveNoiseFilter, VisionError,
 };
 use crate::vision::{analysis, filters};
 
@@ -196,6 +196,29 @@ pub fn apply_extract_contours(
             filter.canny_low,
             filter.canny_high,
             filter.morph_kernel as u8,
+        )
+    })
+}
+
+/// 提取色块
+#[uniffi::export]
+pub fn apply_extract_blobs(
+    pixels: Vec<u8>,
+    width: i32,
+    height: i32,
+    filter: ExtractBlobsFilter,
+) -> Result<Vec<u8>, VisionError> {
+    log::info!("Executing Extract Blobs: {:?}", filter);
+
+    process_image_wrapper(pixels, width, height, |img| {
+        filters::extract_blobs(
+            img,
+            filter.min_w,
+            filter.max_w,
+            filter.min_h,
+            filter.max_h,
+            filter.min_area,
+            filter.max_area,
         )
     })
 }
