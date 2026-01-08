@@ -2,8 +2,8 @@ use image::{DynamicImage, ImageBuffer, Rgba};
 
 use crate::vision::types::{
     BinarizationFilter, BinarizationMode, BlackWhiteInvertFilter, ColorInvertFilter, ColorRule,
-    DenoiseFilter, ExtractBlobsFilter, ExtractContoursFilter, GrayscaleFilter, MultiColorFilter,
-    PosterizationFilter, Rect, RemoveLinesFilter, RemoveNoiseFilter, VisionError,
+    DenoiseFilter, DeskewFilter, ExtractBlobsFilter, ExtractContoursFilter, GrayscaleFilter,
+    MultiColorFilter, PosterizationFilter, Rect, RemoveLinesFilter, RemoveNoiseFilter, VisionError,
 };
 use crate::vision::{analysis, filters};
 
@@ -220,6 +220,21 @@ pub fn apply_extract_blobs(
             filter.min_area,
             filter.max_area,
         )
+    })
+}
+
+/// 倾斜校正滤镜
+#[uniffi::export]
+pub fn apply_deskew(
+    pixels: Vec<u8>,
+    width: i32,
+    height: i32,
+    filter: DeskewFilter,
+) -> Result<Vec<u8>, VisionError> {
+    log::info!("Executing Deskew: {:?}", filter);
+
+    process_image_wrapper(pixels, width, height, |img| {
+        filters::deskew(img, filter.angle, filter.auto, filter.background_color)
     })
 }
 

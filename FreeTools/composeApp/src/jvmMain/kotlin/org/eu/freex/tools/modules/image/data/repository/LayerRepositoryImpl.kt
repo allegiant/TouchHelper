@@ -16,6 +16,7 @@ import uniffi.touch_core.applyBinarization
 import uniffi.touch_core.applyBlackwhiteInvert
 import uniffi.touch_core.applyColorInvert
 import uniffi.touch_core.applyDenoise
+import uniffi.touch_core.applyDeskew
 import uniffi.touch_core.applyExtractBlobs
 import uniffi.touch_core.applyExtractContours
 import uniffi.touch_core.applyGrayscale
@@ -199,6 +200,10 @@ class LayerRepositoryImpl : LayerRepository {
                             filter.maxArea.toUInt(),
                         )
                         applyExtractBlobs(pixels, w, h, rustFilter)
+                    }
+                    is DeskewFilter -> {
+                        val rustFilter = uniffi.touch_core.DeskewFilter(filter.angle, filter.isAuto,filter.bgColor.toUByte())
+                        applyDeskew(pixels, w, h, rustFilter)
                     }
                     is ColorInvertFilter -> applyColorInvert(pixels, w, h, RustColorInvertFilter())
                     is DenoiseFilter -> applyDenoise(pixels, w, h, RustDenoiseFilter(filter.radius))

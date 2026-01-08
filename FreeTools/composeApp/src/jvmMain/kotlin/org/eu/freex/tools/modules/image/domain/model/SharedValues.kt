@@ -156,6 +156,21 @@ data class ExtractBlobsFilter(
 }
 
 @Serializable
+@SerialName("Deskew") // 如果你使用了多态序列化
+data class DeskewFilter(
+    // 自动检测开关
+    val isAuto: Boolean = false,
+    // 手动角度 (度)，正数为顺时针，负数为逆时针
+    val angle: Float = 0f,
+    // 填充背景色 (0=黑, 255=白)
+    val splitBackgroundColor: Boolean = false
+) : ImageFilter {
+    override val name = "倾斜矫正"
+    // 辅助属性，用于 UI 转换背景色 bool 到 int
+    val bgColor: Int get() = if (splitBackgroundColor) 255 else 0
+}
+
+@Serializable
 @SerialName("BW_INVERT")
 object BlackWhiteInvertFilter : ImageFilter {
     override val name = "黑白反转"

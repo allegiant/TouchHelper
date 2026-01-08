@@ -4,6 +4,7 @@ import org.eu.freex.tools.modules.image.domain.model.BinarizationFilter
 import org.eu.freex.tools.modules.image.domain.model.BlackWhiteInvertFilter
 import org.eu.freex.tools.modules.image.domain.model.ColorInvertFilter
 import org.eu.freex.tools.modules.image.domain.model.DenoiseFilter
+import org.eu.freex.tools.modules.image.domain.model.DeskewFilter
 import org.eu.freex.tools.modules.image.domain.model.ExtractBlobsFilter
 import org.eu.freex.tools.modules.image.domain.model.ExtractContoursFilter
 import org.eu.freex.tools.modules.image.domain.model.GrayscaleFilter
@@ -31,6 +32,7 @@ object FilterUIRegistry {
         RemoveLinesFilter::class to RemoveLinesRenderer,
         ExtractContoursFilter::class to ExtractContoursRenderer,
         ExtractBlobsFilter::class to ExtractBlobsRenderer,
+        DeskewFilter::class to DeskewRenderer,
         DenoiseFilter::class to EmptyRenderer,
         ColorInvertFilter::class to EmptyRenderer,
         BlackWhiteInvertFilter::class to EmptyRenderer

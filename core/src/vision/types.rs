@@ -143,6 +143,13 @@ pub struct ExtractBlobsFilter {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, uniffi::Record)]
+pub struct DeskewFilter {
+    pub angle: f32, // 输入的角度 (Degrees)
+    pub auto: bool,
+    pub background_color: u8,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, uniffi::Record)]
 pub struct ColorInvertFilter {}
 
 #[derive(Debug, Clone, Serialize, Deserialize, uniffi::Record)]
