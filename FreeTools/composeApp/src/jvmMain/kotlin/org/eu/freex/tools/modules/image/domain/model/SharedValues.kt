@@ -214,6 +214,21 @@ data class SmartLayoutFilter(
     override val name = "智能重排"
 }
 
+enum class AutoCropMode {
+    AUTO_CORNERS, // 自动取角落
+    FIXED_COLOR   // 固定颜色
+}
+
+data class AutoCropFilter(
+    val mode: AutoCropMode = AutoCropMode.AUTO_CORNERS,
+    val tolerance: Float = 10f,      // 颜色容差 0-255
+    val padding: Int = 1,            // 留白
+    val noiseThreshold: Int = 3,     // 抗噪阈值：至少连续3个非背景点才算内容
+    val fixedColorHex: String = "#000000" // 如果是手动模式
+) : ImageFilter {
+    override val name = "智能裁切"
+}
+
 // --- 切割 ---
 @Serializable
 sealed interface Segmentation {

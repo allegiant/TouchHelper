@@ -7,6 +7,7 @@ import kotlinx.coroutines.withContext
 import org.eu.freex.tools.common.utils.ImageUtils
 import org.eu.freex.tools.modules.image.domain.model.*
 import org.eu.freex.tools.modules.image.domain.repository.LayerRepository
+import uniffi.touch_core.applyAutoCrop
 import java.awt.image.BufferedImage
 import java.io.File
 import kotlin.math.roundToInt
@@ -42,6 +43,7 @@ import uniffi.touch_core.GrayscaleMode as RustGrayscaleMode
 import uniffi.touch_core.RemoveNoiseFilter as RustRemoveNoiseFilter
 import uniffi.touch_core.RemoveLinesFilter as RustRemoveLinesFilter
 import uniffi.touch_core.MorphologyMode as RustMorphologyMode
+import uniffi.touch_core.AutoCropMode as RustAutoCropMode
 import uniffi.touch_core.scanComponents as rustScanComponents
 
 class LayerRepositoryImpl : LayerRepository {
@@ -242,6 +244,27 @@ class LayerRepositoryImpl : LayerRepository {
                         val result = applySmartLayout(pixels, w, h, rustFilter)
 
                         // 使用新的宽高创建图片，解决花屏问题
+                        return@withContext ImageUtils.fromRgbaPixels(
+                            result.width,
+                            result.height,
+                            result.pixels
+                        )
+                    }
+                    is AutoCropFilter -> {
+                        val mode = when (filter.mode) {
+                            AutoCropMode.AUTO_CORNERS -> RustAutoCropMode.AUTO_CORNERS
+                            AutoCropMode.FIXED_COLOR -> RustAutoCropMode.FIXED_COLOR
+                        }
+
+
+                        val rustFilter = uniffi.touch_core.AutoCropFilter(
+                            mode = mode,
+                            tolerance = filter.tolerance,
+                            padding = filter.padding,
+                            noiseThreshold = filter.noiseThreshold,
+                            fixedColorHex = filter.fixedColorHex
+                        )
+                        val result = applyAutoCrop(pixels,w,h,rustFilter)
                         return@withContext ImageUtils.fromRgbaPixels(
                             result.width,
                             result.height,

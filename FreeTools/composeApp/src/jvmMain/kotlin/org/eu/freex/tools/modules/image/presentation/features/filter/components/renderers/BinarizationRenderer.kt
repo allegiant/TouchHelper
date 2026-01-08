@@ -32,6 +32,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import org.eu.freex.tools.common.components.HelpTooltip
+import org.eu.freex.tools.common.components.ModeSelectionRow
 import org.eu.freex.tools.modules.image.domain.model.BinarizationFilter
 import org.eu.freex.tools.modules.image.domain.model.BinarizationMode
 import org.eu.freex.tools.modules.image.domain.model.ImageFilter
@@ -127,48 +128,7 @@ object BinarizationRenderer : FilterRenderer {
         }
     }
 
-    /**
-     * 带说明图标的单选行
-     */
-    @Composable
-    private fun ModeSelectionRow(
-        text: String,
-        description: String, // 新增说明参数
-        selected: Boolean,
-        onClick: () -> Unit
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(40.dp)
-                .selectable(
-                    selected = selected,
-                    onClick = onClick,
-                    role = Role.RadioButton
-                ),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            RadioButton(
-                selected = selected,
-                onClick = null,
-                colors = RadioButtonDefaults.colors(
-                    selectedColor = MaterialTheme.colorScheme.primary,
-                    unselectedColor = MaterialTheme.colorScheme.outline
-                )
-            )
-            Text(
-                text = text,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.padding(start = 8.dp)
-            )
 
-            // 【新增】帮助图标和 Tooltip
-            if (description.isNotEmpty()) {
-                HelpTooltip(description = description)
-            }
-        }
-    }
 
 }
 

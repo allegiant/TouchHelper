@@ -1309,3 +1309,141 @@ pub fn smart_layout(
 
     DynamicImage::ImageLuma8(out)
 }
+
+// core/src/vision/filters.rs
+
+// 确保引入 Rgb 类型
+use image::Rgb;
+
+/// 15. 智能自动裁剪 (Auto Crop - Smart Scanning)
+/// 方案 A 实现：基于扫描线的高性能裁剪，带容差和去噪功能。
+pub fn auto_crop_smart(
+    img: &DynamicImage,
+    target_color: Option<Rgb<u8>>, // 如果是 FixedColor 模式则传入，否则为 None
+    tolerance: u8,
+    padding: u32,
+    skip_step: u32,
+    noise_threshold: u32,
+) -> DynamicImage {
+    let rgb = img.to_rgb8();
+    let (w, h) = rgb.dimensions();
+
+    // 1. 确定背景色
+    // 如果没有指定颜色，默认取左上角 (0,0) 的颜色作为背景基准
+    let (bg_r, bg_g, bg_b) = if let Some(c) = target_color {
+        (c[0] as i32, c[1] as i32, c[2] as i32)
+    } else {
+        let bg_pixel = rgb.get_pixel(0, 0);
+        (bg_pixel[0] as i32, bg_pixel[1] as i32, bg_pixel[2] as i32)
+    };
+
+    // 辅助闭包：判断像素是否是背景
+    let is_background = |p: &image::Rgb<u8>| -> bool {
+        let r = p[0] as i32;
+        let g = p[1] as i32;
+        let b = p[2] as i32;
+        // 欧几里得距离平方 (避免开根号提升性能)
+        let diff = (r - bg_r).pow(2) + (g - bg_g).pow(2) + (b - bg_b).pow(2);
+        diff <= (tolerance as i32).pow(2)
+    };
+
+    // 2. 扫描上边界 (Top)
+    let mut top = 0;
+    for y in (0..h).step_by(skip_step as usize) {
+        let mut row_noise_count = 0;
+        let mut is_content_row = false;
+
+        for x in (0..w).step_by(skip_step as usize) {
+            if !is_background(rgb.get_pixel(x, y)) {
+                row_noise_count += 1;
+                // 只有当非背景像素数量超过阈值时，才确认为有效内容
+                if row_noise_count > noise_threshold {
+                    is_content_row = true;
+                    break;
+                }
+            }
+        }
+        if is_content_row {
+            top = y;
+            break;
+        }
+    }
+
+    // 3. 扫描下边界 (Bottom)
+    let mut bottom = h;
+    for y in (0..h).rev().step_by(skip_step as usize) {
+        let mut row_noise_count = 0;
+        let mut is_content_row = false;
+
+        for x in (0..w).step_by(skip_step as usize) {
+            if !is_background(rgb.get_pixel(x, y)) {
+                row_noise_count += 1;
+                if row_noise_count > noise_threshold {
+                    is_content_row = true;
+                    break;
+                }
+            }
+        }
+        if is_content_row {
+            bottom = y + 1;
+            break;
+        }
+    }
+
+    // 如果整张图都是背景，直接返回原图
+    if top >= bottom {
+        return img.clone();
+    }
+
+    // 4. 扫描左边界 (Left) - 仅在 Top~Bottom 范围内扫描
+    let mut left = 0;
+    for x in (0..w).step_by(skip_step as usize) {
+        let mut col_noise_count = 0;
+        let mut is_content_col = false;
+
+        for y in (top..bottom).step_by(skip_step as usize) {
+            if !is_background(rgb.get_pixel(x, y)) {
+                col_noise_count += 1;
+                if col_noise_count > noise_threshold {
+                    is_content_col = true;
+                    break;
+                }
+            }
+        }
+        if is_content_col {
+            left = x;
+            break;
+        }
+    }
+
+    // 5. 扫描右边界 (Right)
+    let mut right = w;
+    for x in (0..w).rev().step_by(skip_step as usize) {
+        let mut col_noise_count = 0;
+        let mut is_content_col = false;
+
+        for y in (top..bottom).step_by(skip_step as usize) {
+            if !is_background(rgb.get_pixel(x, y)) {
+                col_noise_count += 1;
+                if col_noise_count > noise_threshold {
+                    is_content_col = true;
+                    break;
+                }
+            }
+        }
+        if is_content_col {
+            right = x + 1;
+            break;
+        }
+    }
+
+    // 6. 应用 Padding 并进行边界检查
+    let crop_x = left.saturating_sub(padding);
+    let crop_y = top.saturating_sub(padding);
+    let crop_w = (right - left + padding * 2).min(w - crop_x).max(1);
+    let crop_h = (bottom - top + padding * 2).min(h - crop_y).max(1);
+
+    // 7. 执行裁剪并返回
+    let cropped_buffer = image::imageops::crop_imm(img, crop_x, crop_y, crop_w, crop_h).to_image();
+    DynamicImage::ImageRgba8(cropped_buffer)
+}

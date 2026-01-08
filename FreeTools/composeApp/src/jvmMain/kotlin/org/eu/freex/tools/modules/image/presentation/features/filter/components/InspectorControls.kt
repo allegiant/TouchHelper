@@ -46,6 +46,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import org.eu.freex.tools.modules.image.domain.model.AutoCropFilter
 import org.eu.freex.tools.modules.image.domain.model.BinarizationFilter
 import org.eu.freex.tools.modules.image.domain.model.BlackWhiteInvertFilter
 import org.eu.freex.tools.modules.image.domain.model.DenoiseFilter
@@ -90,6 +91,7 @@ fun FilterSelectionList(
             DenoiseFilter(),
             MorphologyFilter(),
             SmartLayoutFilter(),
+            AutoCropFilter(),
         )
     }
     val commonFilters = remember {

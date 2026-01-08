@@ -1,12 +1,13 @@
 use image::{DynamicImage, ImageBuffer, Rgba};
 
 use crate::vision::types::{
-    BinarizationFilter, BinarizationMode, BlackWhiteInvertFilter, ColorRule, DenoiseFilter,
-    DeskewFilter, ExtractBlobsFilter, ExtractContoursFilter, GrayscaleFilter, InvertMode,
-    MorphologyFilter, MultiColorFilter, PosterizationFilter, ProcessedImage, Rect,
-    RemoveLinesFilter, RemoveNoiseFilter, RotationFilter, SmartLayoutFilter, VisionError,
+    AutoCropFilter, AutoCropMode, BinarizationFilter, BinarizationMode, BlackWhiteInvertFilter,
+    ColorRule, DenoiseFilter, DeskewFilter, ExtractBlobsFilter, ExtractContoursFilter,
+    GrayscaleFilter, InvertMode, MorphologyFilter, MultiColorFilter, PosterizationFilter,
+    ProcessedImage, Rect, RemoveLinesFilter, RemoveNoiseFilter, RotationFilter, SmartLayoutFilter,
+    VisionError,
 };
-use crate::vision::{analysis, filters};
+use crate::vision::{analysis, colors, filters};
 
 // =========================================================
 // 1. 公共辅助函数 (Private Helper)
@@ -412,6 +413,59 @@ pub fn apply_smart_layout(
     );
 
     // 3. 返回包含新尺寸的结果
+    Ok(ProcessedImage {
+        width: result_img.width() as i32,
+        height: result_img.height() as i32,
+        pixels: result_img.to_rgba8().into_raw(),
+    })
+}
+
+// core/src/api/image.rs
+
+/// [新增] 应用自动裁剪
+/// 返回 ProcessedImage 因为图片尺寸会发生变化
+#[uniffi::export]
+pub fn apply_auto_crop(
+    pixels: Vec<u8>,
+    width: i32,
+    height: i32,
+    filter: AutoCropFilter,
+) -> Result<ProcessedImage, VisionError> {
+    log::info!("Executing Auto Crop: {:?}", filter);
+
+    // 1. 构建 ImageBuffer (标准流程)
+    let width_u32 = width as u32;
+    let height_u32 = height as u32;
+    let expected_len = (width_u32 * height_u32 * 4) as usize;
+
+    if pixels.len() != expected_len {
+        return Err(VisionError::LoadError("Pixel data mismatch".into()));
+    }
+
+    let img_buffer = ImageBuffer::<Rgba<u8>, Vec<u8>>::from_raw(width_u32, height_u32, pixels)
+        .ok_or_else(|| VisionError::LoadError("Failed to create image buffer".into()))?;
+    let img = DynamicImage::ImageRgba8(img_buffer);
+
+    // 2. 处理固定颜色模式
+    let target_color = if filter.mode == AutoCropMode::FixedColor {
+        // 解析 Hex 字符串 (#RRGGBB)
+        let [r, g, b] = colors::parse_hex(&filter.fixed_color_hex);
+        Some(image::Rgb([r, g, b]))
+    } else {
+        None
+    };
+
+    // 3. 调用核心算法
+    let result_img = filters::auto_crop_smart(
+        &img,
+        target_color,
+        filter.tolerance as u8,
+        filter.padding.max(0) as u32,
+        2, // 步长 skip_step 固定为 2 以提升性能
+        filter.noise_threshold.max(0) as u32,
+    );
+
+    // 4. 返回结果
     Ok(ProcessedImage {
         width: result_img.width() as i32,
         height: result_img.height() as i32,

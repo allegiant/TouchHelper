@@ -211,6 +211,23 @@ pub struct SmartLayoutFilter {
     pub align_center: bool,
 }
 
+// [新增] 自动裁剪模式
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, uniffi::Enum)]
+pub enum AutoCropMode {
+    AutoCorners, // 自动探测角落
+    FixedColor,  // 固定颜色
+}
+
+// [新增] 自动裁剪滤镜参数
+#[derive(Debug, Clone, Serialize, Deserialize, uniffi::Record)]
+pub struct AutoCropFilter {
+    pub mode: AutoCropMode,
+    pub tolerance: f32,          // 对应 Kotlin 的 Float
+    pub padding: i32,            // 留白
+    pub noise_threshold: i32,    // 抗噪阈值
+    pub fixed_color_hex: String, // 指定背景色 (例如 "#000000")
+}
+
 // 【新增】定义错误类型
 #[derive(Debug, thiserror::Error, uniffi::Error)]
 pub enum VisionError {
