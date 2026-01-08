@@ -2,8 +2,8 @@ use image::{DynamicImage, ImageBuffer, Rgba};
 
 use crate::vision::types::{
     BinarizationFilter, BinarizationMode, BlackWhiteInvertFilter, ColorInvertFilter, ColorRule,
-    DenoiseFilter, GrayscaleFilter, MultiColorFilter, PosterizationFilter, Rect, RemoveNoiseFilter,
-    VisionError,
+    DenoiseFilter, GrayscaleFilter, MultiColorFilter, PosterizationFilter, Rect, RemoveLinesFilter,
+    RemoveNoiseFilter, VisionError,
 };
 use crate::vision::{analysis, filters};
 
@@ -155,6 +155,26 @@ pub fn apply_remove_noise(
             filter.min_area as u32,
             filter.gap as u32,
             filter.remove_white,
+        )
+    })
+}
+
+/// 应用形态学去直线滤镜
+#[uniffi::export]
+pub fn apply_remove_lines(
+    pixels: Vec<u8>,
+    width: i32,
+    height: i32,
+    filter: RemoveLinesFilter,
+) -> Result<Vec<u8>, VisionError> {
+    log::info!("Executing Remove Lines Morph: {:?}", filter);
+
+    process_image_wrapper(pixels, width, height, |img| {
+        filters::remove_lines_morph(
+            img,
+            filter.min_length as u32,
+            filter.remove_horizontal,
+            filter.remove_vertical,
         )
     })
 }

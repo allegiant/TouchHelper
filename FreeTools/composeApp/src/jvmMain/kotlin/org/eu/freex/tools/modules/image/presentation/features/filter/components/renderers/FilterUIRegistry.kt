@@ -8,6 +8,7 @@ import org.eu.freex.tools.modules.image.domain.model.GrayscaleFilter
 import org.eu.freex.tools.modules.image.domain.model.ImageFilter
 import org.eu.freex.tools.modules.image.domain.model.MultiColorFilter
 import org.eu.freex.tools.modules.image.domain.model.PosterizationFilter
+import org.eu.freex.tools.modules.image.domain.model.RemoveLinesFilter
 import org.eu.freex.tools.modules.image.domain.model.RemoveNoiseFilter
 import kotlin.reflect.KClass
 
@@ -25,6 +26,7 @@ object FilterUIRegistry {
         GrayscaleFilter::class to GrayscaleRenderer,
 
         RemoveNoiseFilter::class to RemoveNoiseRenderer,
+        RemoveLinesFilter::class to RemoveLinesRenderer,
         DenoiseFilter::class to EmptyRenderer,
         ColorInvertFilter::class to EmptyRenderer,
         BlackWhiteInvertFilter::class to EmptyRenderer

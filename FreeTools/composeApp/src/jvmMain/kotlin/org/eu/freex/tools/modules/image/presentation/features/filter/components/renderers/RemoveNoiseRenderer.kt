@@ -1,24 +1,14 @@
 package org.eu.freex.tools.modules.image.presentation.features.filter.components.renderers
 
-import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.TooltipArea
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.HelpOutline
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.RadioButtonDefaults
@@ -28,8 +18,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.unit.dp
+import org.eu.freex.tools.common.components.HelpTooltip
 import org.eu.freex.tools.modules.image.domain.model.ImageFilter
 import org.eu.freex.tools.modules.image.domain.model.RemoveNoiseFilter
 
@@ -154,42 +144,6 @@ object RemoveNoiseRenderer : FilterRenderer {
                 color = MaterialTheme.colorScheme.onSurface
             )
             HelpTooltip(description)
-        }
-    }
-
-    /**
-     * 帮助 Tooltip 组件 (复用自 BinarizationRenderer)
-     */
-    @OptIn(ExperimentalFoundationApi::class)
-    @Composable
-    private fun HelpTooltip(description: String) {
-        TooltipArea(
-            tooltip = {
-                Box(
-                    modifier = Modifier
-                        .shadow(4.dp, RoundedCornerShape(4.dp))
-                        .background(MaterialTheme.colorScheme.surfaceContainer, RoundedCornerShape(4.dp))
-                        .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(4.dp))
-                        .padding(8.dp)
-                        .fillMaxWidth(0.6f) // 限制宽度
-                ) {
-                    Text(
-                        text = description,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                }
-            },
-            delayMillis = 300
-        ) {
-            Icon(
-                imageVector = Icons.AutoMirrored.Filled.HelpOutline,
-                contentDescription = "说明",
-                modifier = Modifier
-                    .padding(start = 6.dp)
-                    .size(16.dp),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
-            )
         }
     }
 

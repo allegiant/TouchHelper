@@ -114,6 +114,13 @@ pub struct RemoveNoiseFilter {
     pub gap: i32,           // 对应 "间隙数值"
     pub remove_white: bool, // true="白色点去除", false="黑色点去除"
 }
+/// 去除直线滤镜结构
+#[derive(Debug, Clone, Serialize, Deserialize, uniffi::Record)]
+pub struct RemoveLinesFilter {
+    pub min_length: i32, // 线条的最小长度 (核的大小)。长度小于此值的线条不会被去除
+    pub remove_horizontal: bool, // 是否去除横线
+    pub remove_vertical: bool, // 是否去除竖线
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, uniffi::Record)]
 pub struct ColorInvertFilter {}

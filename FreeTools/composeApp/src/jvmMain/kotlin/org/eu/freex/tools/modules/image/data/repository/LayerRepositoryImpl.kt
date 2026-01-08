@@ -19,6 +19,7 @@ import uniffi.touch_core.applyDenoise
 import uniffi.touch_core.applyGrayscale
 import uniffi.touch_core.applyMultiColorFilter
 import uniffi.touch_core.applyPosterizationFilter
+import uniffi.touch_core.applyRemoveLines
 import uniffi.touch_core.applyRemoveNoise
 import java.awt.GraphicsEnvironment
 import java.awt.Rectangle
@@ -35,6 +36,7 @@ import uniffi.touch_core.DenoiseFilter as RustDenoiseFilter
 import uniffi.touch_core.GrayscaleFilter as RustGrayscaleFilter
 import uniffi.touch_core.GrayscaleMode as RustGrayscaleMode
 import uniffi.touch_core.RemoveNoiseFilter as RustRemoveNoiseFilter
+import uniffi.touch_core.RemoveLinesFilter as RustRemoveLinesFilter
 import uniffi.touch_core.scanComponents as rustScanComponents
 
 class LayerRepositoryImpl : LayerRepository {
@@ -171,6 +173,10 @@ class LayerRepositoryImpl : LayerRepository {
                     is RemoveNoiseFilter -> {
                         val rustFilter = RustRemoveNoiseFilter(filter.minArea, filter.gap, filter.removeWhite)
                         applyRemoveNoise(pixels, w, h, rustFilter)
+                    }
+                    is RemoveLinesFilter -> {
+                        val rustFilter = RustRemoveLinesFilter(filter.minLength, filter.removeHorizontal, filter.removeVertical)
+                        applyRemoveLines(pixels, w, h, rustFilter)
                     }
                     is ColorInvertFilter -> applyColorInvert(pixels, w, h, RustColorInvertFilter())
                     is DenoiseFilter -> applyDenoise(pixels, w, h, RustDenoiseFilter(filter.radius))

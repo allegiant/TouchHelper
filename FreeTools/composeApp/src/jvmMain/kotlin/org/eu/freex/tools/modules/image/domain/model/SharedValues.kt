@@ -111,6 +111,14 @@ data class RemoveNoiseFilter(
     override val name = "消除杂点"
 }
 
+data class RemoveLinesFilter(
+    val minLength: Int = 30, // 线条的最小长度 (核的大小)。长度小于此值的线条不会被去除
+    val removeHorizontal: Boolean = true, // 是否去除横线
+    val removeVertical: Boolean = false, // 是否去除竖线
+): ImageFilter {
+    override val name = "去直线"
+}
+
 @Serializable
 @SerialName("BW_INVERT")
 object BlackWhiteInvertFilter : ImageFilter {
