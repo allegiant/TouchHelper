@@ -102,6 +102,16 @@ data class DenoiseFilter(val radius: UInt = 1u) : ImageFilter {
 }
 
 @Serializable
+@SerialName("REMOVE_NOISE")
+data class RemoveNoiseFilter(
+    val minArea: Int = 6,      // 默认阈值 6
+    val gap: Int = 0,          // 默认间隙 0
+    val removeWhite: Boolean = true // 默认去除白色
+) : ImageFilter {
+    override val name = "消除杂点"
+}
+
+@Serializable
 @SerialName("BW_INVERT")
 object BlackWhiteInvertFilter : ImageFilter {
     override val name = "黑白反转"

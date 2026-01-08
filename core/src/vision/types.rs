@@ -107,6 +107,14 @@ pub struct GrayscaleFilter {
     pub mode: GrayscaleMode,
 }
 
+// 清除杂点滤镜结构
+#[derive(Debug, Clone, Serialize, Deserialize, uniffi::Record)]
+pub struct RemoveNoiseFilter {
+    pub min_area: i32,      // 对应 "阈值范围" (0~8)
+    pub gap: i32,           // 对应 "间隙数值"
+    pub remove_white: bool, // true="白色点去除", false="黑色点去除"
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, uniffi::Record)]
 pub struct ColorInvertFilter {}
 

@@ -54,7 +54,7 @@ import org.eu.freex.tools.modules.image.domain.model.GrayscaleFilter
 import org.eu.freex.tools.modules.image.domain.model.ImageFilter
 import org.eu.freex.tools.modules.image.domain.model.MultiColorFilter
 import org.eu.freex.tools.modules.image.domain.model.PosterizationFilter
-import kotlin.collections.listOf
+import org.eu.freex.tools.modules.image.domain.model.RemoveNoiseFilter
 
 
 @Composable
@@ -75,6 +75,7 @@ fun FilterSelectionList(
     }
     val bwFilters = remember {
         listOf(
+            RemoveNoiseFilter(),
             DenoiseFilter(),
             BlackWhiteInvertFilter
         )

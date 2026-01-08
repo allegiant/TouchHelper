@@ -1,8 +1,11 @@
+use std::collections::HashMap;
+
 use image::{DynamicImage, GrayImage, Luma, Rgba, RgbaImage};
 use imageproc::contrast::{adaptive_threshold, otsu_level, threshold};
 use imageproc::distance_transform::Norm;
 use imageproc::filter::median_filter;
 use imageproc::morphology::{dilate, erode};
+use imageproc::region_labelling::{connected_components, Connectivity};
 
 use super::types::{ColorRule, GrayscaleMode, PosterizationFilter, PosterizationMode};
 use super::{colors, skeleton};
@@ -306,7 +309,7 @@ fn rgb_to_hsv(r: u8, g: u8, b: u8) -> (u8, u8, u8) {
     };
 
     // H (Hue)
-    let mut h = if delta == 0.0 {
+    let h = if delta == 0.0 {
         0.0
     } else {
         let temp = if max == r {
@@ -475,24 +478,69 @@ pub fn keep_multi_colors(
     }
 }
 
-// --- 辅助函数 ---
+/// [新增] 智能清除杂点 (Connected Component Analysis)
+pub fn remove_noise_smart(
+    img: &DynamicImage,
+    min_area: u32,
+    gap: u32,
+    remove_white: bool,
+) -> DynamicImage {
+    let gray = img.to_luma8();
+    let (w, h) = gray.dimensions();
 
-fn parse_hex(hex: &str) -> [u8; 3] {
-    let hex = hex.trim_start_matches('#');
-    if hex.len() == 6 {
-        let r = u8::from_str_radix(&hex[0..2], 16).unwrap_or(0);
-        let g = u8::from_str_radix(&hex[2..4], 16).unwrap_or(0);
-        let b = u8::from_str_radix(&hex[4..6], 16).unwrap_or(0);
-        [r, g, b]
+    // 1. 预处理：确定什么是"前景"
+    // 如果去除白点，原图直接用；如果去除黑点，先反色
+    let work_img = if remove_white {
+        gray.clone()
     } else {
-        [0, 0, 0]
+        let mut inv = gray.clone();
+        image::imageops::invert(&mut inv);
+        inv
+    };
+
+    // 2. 膨胀处理 (处理间隙)
+    // 如果 gap > 0，先膨胀让断开的笔画连起来
+    let analysis_img = if gap > 0 {
+        dilate(&work_img, Norm::LInf, gap as u8)
+    } else {
+        work_img
+    };
+
+    // 3. 计算连通域
+    // 0 是背景，>0 是连通域 ID
+    let labeled = connected_components(&analysis_img, Connectivity::Eight, Luma([0u8]));
+
+    // 4. 统计每个连通域的面积
+    let mut area_map = HashMap::new();
+    for p in labeled.pixels() {
+        let label = p[0];
+        if label > 0 {
+            *area_map.entry(label).or_insert(0) += 1;
+        }
     }
-}
 
-fn is_color_match(c: [u8; 3], t: [u8; 3], b: [u8; 3]) -> bool {
-    let r_diff = (c[0] as i16 - t[0] as i16).abs() as u8;
-    let g_diff = (c[1] as i16 - t[1] as i16).abs() as u8;
-    let b_diff = (c[2] as i16 - t[2] as i16).abs() as u8;
+    // 5. 擦除杂点
+    // 我们在原始 gray 图上操作
+    let mut out = gray.clone();
+    // 决定用什么颜色填充擦除区域 (去白点用黑填，去黑点用白填)
+    let fill_color = if remove_white { Luma([0]) } else { Luma([255]) };
 
-    r_diff <= b[0] && g_diff <= b[1] && b_diff <= b[2]
+    for y in 0..h {
+        for x in 0..w {
+            // 获取当前像素在分析图中的 Label
+            // 注意：要查 labeled 图，因为它是经过 gap 处理后的逻辑归属
+            let label = labeled.get_pixel(x, y)[0];
+
+            if label > 0 {
+                // 如果这个像素所属的连通域面积 <= 阈值，擦掉
+                if let Some(&area) = area_map.get(&label) {
+                    if area <= min_area {
+                        out.put_pixel(x, y, fill_color);
+                    }
+                }
+            }
+        }
+    }
+
+    DynamicImage::ImageLuma8(out)
 }

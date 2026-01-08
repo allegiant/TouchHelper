@@ -2,7 +2,8 @@ use image::{DynamicImage, ImageBuffer, Rgba};
 
 use crate::vision::types::{
     BinarizationFilter, BinarizationMode, BlackWhiteInvertFilter, ColorInvertFilter, ColorRule,
-    DenoiseFilter, GrayscaleFilter, MultiColorFilter, PosterizationFilter, Rect, VisionError,
+    DenoiseFilter, GrayscaleFilter, MultiColorFilter, PosterizationFilter, Rect, RemoveNoiseFilter,
+    VisionError,
 };
 use crate::vision::{analysis, filters};
 
@@ -135,6 +136,26 @@ pub fn apply_grayscale(
     process_image_wrapper(pixels, width, height, |img| {
         // [修改] 将 filter.mode 传递给底层逻辑
         filters::grayscale(img, filter.mode)
+    })
+}
+
+/// [新增] 对图片应用智能清除杂点
+#[uniffi::export]
+pub fn apply_remove_noise(
+    pixels: Vec<u8>,
+    width: i32,
+    height: i32,
+    filter: RemoveNoiseFilter,
+) -> Result<Vec<u8>, VisionError> {
+    log::info!("Executing Remove Noise Smart: {:?}", filter);
+
+    process_image_wrapper(pixels, width, height, |img| {
+        filters::remove_noise_smart(
+            img,
+            filter.min_area as u32,
+            filter.gap as u32,
+            filter.remove_white,
+        )
     })
 }
 
