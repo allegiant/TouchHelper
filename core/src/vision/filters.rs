@@ -691,3 +691,46 @@ pub fn remove_lines_morph(
 
     DynamicImage::ImageLuma8(result)
 }
+
+/// 提取轮廓 (Extract Contours)
+/// 支持两种模式：
+/// 1. Canny: 经典的边缘检测算法，适合提取线条和边界
+/// 2. Morphological: 形态学梯度 (膨胀 - 腐蚀)，适合提取文字的“空心”轮廓
+pub fn extract_contours(
+    img: &DynamicImage,
+    is_canny: bool,
+    // Canny 参数
+    canny_low: f32,
+    canny_high: f32,
+    // 形态学参数
+    morph_kernel: u8,
+) -> DynamicImage {
+    let gray = img.to_luma8();
+
+    if is_canny {
+        // --- 模式 A: Canny 边缘检测 ---
+        // imageproc 的 canny 返回的是 ImageBuffer<Luma<u8>, Vec<u8>>
+        let edges = imageproc::edges::canny(&gray, canny_low, canny_high);
+        DynamicImage::ImageLuma8(edges)
+    } else {
+        // --- 模式 B: 形态学梯度 (Gradient = Dilate - Erode) ---
+        // 1. 膨胀
+        let dilated = dilate(&gray, Norm::LInf, morph_kernel);
+        // 2. 腐蚀
+        let eroded = erode(&gray, Norm::LInf, morph_kernel);
+
+        // 3. 相减 (Dilated - Eroded)
+        let (w, h) = gray.dimensions();
+        let mut out = GrayImage::new(w, h);
+
+        for y in 0..h {
+            for x in 0..w {
+                let d_val = dilated.get_pixel(x, y)[0];
+                let e_val = eroded.get_pixel(x, y)[0];
+                // 饱和相减
+                out.put_pixel(x, y, Luma([d_val.saturating_sub(e_val)]));
+            }
+        }
+        DynamicImage::ImageLuma8(out)
+    }
+}

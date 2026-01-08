@@ -2,8 +2,8 @@ use image::{DynamicImage, ImageBuffer, Rgba};
 
 use crate::vision::types::{
     BinarizationFilter, BinarizationMode, BlackWhiteInvertFilter, ColorInvertFilter, ColorRule,
-    DenoiseFilter, GrayscaleFilter, MultiColorFilter, PosterizationFilter, Rect, RemoveLinesFilter,
-    RemoveNoiseFilter, VisionError,
+    DenoiseFilter, ExtractContoursFilter, GrayscaleFilter, MultiColorFilter, PosterizationFilter,
+    Rect, RemoveLinesFilter, RemoveNoiseFilter, VisionError,
 };
 use crate::vision::{analysis, filters};
 
@@ -175,6 +175,27 @@ pub fn apply_remove_lines(
             filter.min_length as u32,
             filter.remove_horizontal,
             filter.remove_vertical,
+        )
+    })
+}
+
+/// 提取轮廓滤镜
+#[uniffi::export]
+pub fn apply_extract_contours(
+    pixels: Vec<u8>,
+    width: i32,
+    height: i32,
+    filter: ExtractContoursFilter,
+) -> Result<Vec<u8>, VisionError> {
+    log::info!("Executing Extract Contours: {:?}", filter);
+
+    process_image_wrapper(pixels, width, height, |img| {
+        filters::extract_contours(
+            img,
+            filter.is_canny,
+            filter.canny_low,
+            filter.canny_high,
+            filter.morph_kernel as u8,
         )
     })
 }

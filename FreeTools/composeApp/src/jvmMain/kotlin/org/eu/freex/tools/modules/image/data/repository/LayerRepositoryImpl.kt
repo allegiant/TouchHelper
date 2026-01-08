@@ -16,6 +16,7 @@ import uniffi.touch_core.applyBinarization
 import uniffi.touch_core.applyBlackwhiteInvert
 import uniffi.touch_core.applyColorInvert
 import uniffi.touch_core.applyDenoise
+import uniffi.touch_core.applyExtractContours
 import uniffi.touch_core.applyGrayscale
 import uniffi.touch_core.applyMultiColorFilter
 import uniffi.touch_core.applyPosterizationFilter
@@ -177,6 +178,15 @@ class LayerRepositoryImpl : LayerRepository {
                     is RemoveLinesFilter -> {
                         val rustFilter = RustRemoveLinesFilter(filter.minLength, filter.removeHorizontal, filter.removeVertical)
                         applyRemoveLines(pixels, w, h, rustFilter)
+                    }
+                    is ExtractContoursFilter -> {
+                        val rustFilter = uniffi.touch_core.ExtractContoursFilter(
+                            filter.isCanny,
+                            filter.cannyLow,
+                            filter.cannyHigh,
+                            filter.morphKernel.toUByte()
+                        )
+                        applyExtractContours(pixels, w, h, rustFilter)
                     }
                     is ColorInvertFilter -> applyColorInvert(pixels, w, h, RustColorInvertFilter())
                     is DenoiseFilter -> applyDenoise(pixels, w, h, RustDenoiseFilter(filter.radius))

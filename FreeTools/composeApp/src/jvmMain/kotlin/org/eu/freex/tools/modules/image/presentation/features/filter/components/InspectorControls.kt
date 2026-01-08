@@ -50,6 +50,7 @@ import org.eu.freex.tools.modules.image.domain.model.BinarizationFilter
 import org.eu.freex.tools.modules.image.domain.model.BlackWhiteInvertFilter
 import org.eu.freex.tools.modules.image.domain.model.ColorInvertFilter
 import org.eu.freex.tools.modules.image.domain.model.DenoiseFilter
+import org.eu.freex.tools.modules.image.domain.model.ExtractContoursFilter
 import org.eu.freex.tools.modules.image.domain.model.GrayscaleFilter
 import org.eu.freex.tools.modules.image.domain.model.ImageFilter
 import org.eu.freex.tools.modules.image.domain.model.MultiColorFilter
@@ -78,6 +79,7 @@ fun FilterSelectionList(
         listOf(
             RemoveNoiseFilter(),
             RemoveLinesFilter(),
+            ExtractContoursFilter(),
             DenoiseFilter(),
             BlackWhiteInvertFilter
         )

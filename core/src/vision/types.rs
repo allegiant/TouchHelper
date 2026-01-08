@@ -123,6 +123,16 @@ pub struct RemoveLinesFilter {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, uniffi::Record)]
+pub struct ExtractContoursFilter {
+    pub is_canny: bool,
+    // Canny 参数
+    pub canny_low: f32,
+    pub canny_high: f32,
+    // 形态学参数
+    pub morph_kernel: u8,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, uniffi::Record)]
 pub struct ColorInvertFilter {}
 
 #[derive(Debug, Clone, Serialize, Deserialize, uniffi::Record)]

@@ -110,13 +110,28 @@ data class RemoveNoiseFilter(
 ) : ImageFilter {
     override val name = "消除杂点"
 }
-
+@Serializable
+@SerialName("REMOVE_LINES")
 data class RemoveLinesFilter(
     val minLength: Int = 30, // 线条的最小长度 (核的大小)。长度小于此值的线条不会被去除
     val removeHorizontal: Boolean = true, // 是否去除横线
     val removeVertical: Boolean = false, // 是否去除竖线
 ): ImageFilter {
     override val name = "去直线"
+}
+
+@Serializable
+@SerialName("EXTRACT_CONTOURS") // 确保序列化名称唯一
+data class ExtractContoursFilter(
+    // 模式开关：True 为 Canny，False 为 形态学
+    val isCanny: Boolean = true,
+    // Canny 专用参数
+    val cannyLow: Float = 50f,
+    val cannyHigh: Float = 150f,
+    // 形态学专用参数 (线条粗细)
+    val morphKernel: Int = 1
+) : ImageFilter {
+    override val name: String = "提取轮廓"
 }
 
 @Serializable
