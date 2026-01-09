@@ -131,20 +131,18 @@ data class ExtractContoursFilter(
 @Serializable
 @SerialName("EXTRACT_BLOBS") // 确保序列化名称唯一
 data class ExtractBlobsFilter(
-    // 宽度的范围
-    val minWidth: Float = 1f,
-    val maxWidth: Float = 100f,
-    // 高度的范围
-    val minHeight: Float = 1f,
-    val maxHeight: Float = 100f,
-    // 面积(像素点数)的范围
-    val minArea: Float = 1f,
-    val maxArea: Float = 500f,
+    val minWidth: Float = 0f,
+    val maxWidth: Float = 1000f,
+    val minHeight: Float = 0f,
+    val maxHeight: Float = 1000f,
+    val minArea: Float = 0f,
+    val maxArea: Float = 10000f,
 
-    // UI交互用的最大上限值 (Slider的右边界)
-    val limitWidth: Float = 200f,
-    val limitHeight: Float = 200f,
-    val limitArea: Float = 1000f
+    val limitWidth: Float = 200f,  // UI滑块上限
+    val limitHeight: Float = 200f, // UI滑块上限
+    val limitArea: Float = 500f,   // UI滑块上限
+
+    val useEightConnectivity: Boolean = true // [新增字段] 默认为 true (8向)
 ) : ImageFilter {
     override val name = "提取色块"
 }

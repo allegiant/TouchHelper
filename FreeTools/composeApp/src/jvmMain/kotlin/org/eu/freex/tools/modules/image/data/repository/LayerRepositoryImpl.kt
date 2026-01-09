@@ -202,6 +202,7 @@ class LayerRepositoryImpl : LayerRepository {
                             filter.maxHeight.toUInt(),
                             filter.minArea.toUInt(),
                             filter.maxArea.toUInt(),
+                            filter.useEightConnectivity
                         )
                         applyExtractBlobs(pixels, w, h, rustFilter)
                     }

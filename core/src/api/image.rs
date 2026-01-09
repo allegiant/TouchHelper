@@ -221,6 +221,7 @@ pub fn apply_extract_blobs(
             filter.max_h,
             filter.min_area,
             filter.max_area,
+            filter.use_eight_connectivity, // [新增传递] 假设您已在 Kotlin/UDL 中添加了此字段
         )
     })
 }

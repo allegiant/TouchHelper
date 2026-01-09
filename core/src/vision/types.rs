@@ -140,6 +140,7 @@ pub struct ExtractBlobsFilter {
     pub max_h: u32,
     pub min_area: u32,
     pub max_area: u32,
+    pub use_eight_connectivity: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, uniffi::Record)]

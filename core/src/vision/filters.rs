@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use image::{DynamicImage, GrayImage, Luma, Rgba, RgbaImage};
+use image::{DynamicImage, GrayImage, Luma, Rgba, RgbaImage}; // 确保引入 Rgba
 use imageproc::contrast::{adaptive_threshold, otsu_level, threshold};
 use imageproc::distance_transform::Norm;
 use imageproc::filter::median_filter;
@@ -747,15 +747,23 @@ pub fn extract_blobs(
     max_h: u32,
     min_area: u32,
     max_area: u32,
+    use_eight_connectivity: bool,
     // 可选：是否只保留实心的东西 (Solidity = Area / (W*H))
     // 为了简化暂不传参，如有需要可扩展
 ) -> DynamicImage {
     let gray = img.to_luma8();
     let (w, h) = gray.dimensions();
 
+    // 1. 根据参数选择连通性
+    let connectivity = if use_eight_connectivity {
+        Connectivity::Eight
+    } else {
+        Connectivity::Four
+    };
+
     // 1. 连通域标记 (0是背景，1..N 是连通域ID)
     // Connectivity::Eight 对应 8邻域 (对角线连通也算)
-    let labeled = connected_components(&gray, Connectivity::Eight, Luma([0u8]));
+    let labeled = connected_components(&gray, connectivity, Luma([0u8]));
 
     // 2. 统计每个 Blob 的属性
     // 使用 HashMap 存储: Label ID -> (min_x, max_x, min_y, max_y, count)
@@ -1310,140 +1318,216 @@ pub fn smart_layout(
     DynamicImage::ImageLuma8(out)
 }
 
-// core/src/vision/filters.rs
-
-// 确保引入 Rgb 类型
-use image::Rgb;
-
-/// 15. 智能自动裁剪 (Auto Crop - Smart Scanning)
-/// 方案 A 实现：基于扫描线的高性能裁剪，带容差和去噪功能。
+/// 15. 智能自动裁剪 (Auto Crop - Ultimate Trim)
+/// 采用“分边独立探测”策略，能够处理渐变背景和杂色边框。
 pub fn auto_crop_smart(
     img: &DynamicImage,
-    target_color: Option<Rgb<u8>>, // 如果是 FixedColor 模式则传入，否则为 None
+    target_color: Option<image::Rgb<u8>>,
     tolerance: u8,
     padding: u32,
-    skip_step: u32,
+    skip_step: u32, // 建议传 1 或 2，传太大可能会漏掉细线
     noise_threshold: u32,
 ) -> DynamicImage {
-    let rgb = img.to_rgb8();
-    let (w, h) = rgb.dimensions();
+    let rgba = img.to_rgba8();
+    let (w, h) = rgba.dimensions();
 
-    // 1. 确定背景色
-    // 如果没有指定颜色，默认取左上角 (0,0) 的颜色作为背景基准
-    let (bg_r, bg_g, bg_b) = if let Some(c) = target_color {
-        (c[0] as i32, c[1] as i32, c[2] as i32)
-    } else {
-        let bg_pixel = rgb.get_pixel(0, 0);
-        (bg_pixel[0] as i32, bg_pixel[1] as i32, bg_pixel[2] as i32)
+    // 辅助：计算色差平方
+    let color_diff_sq = |c1: [u8; 4], c2: [u8; 4]| -> i32 {
+        // 如果两个像素 alpha 都很小，视为相同
+        if c1[3] < 10 && c2[3] < 10 {
+            return 0;
+        }
+        let r = c1[0] as i32 - c2[0] as i32;
+        let g = c1[1] as i32 - c2[1] as i32;
+        let b = c1[2] as i32 - c2[2] as i32;
+        // 如果是固定背景色模式，我们通常忽略 Alpha 差异，除非背景本身是透明
+        r * r + g * g + b * b
     };
 
-    // 辅助闭包：判断像素是否是背景
-    let is_background = |p: &image::Rgb<u8>| -> bool {
-        let r = p[0] as i32;
-        let g = p[1] as i32;
-        let b = p[2] as i32;
-        // 欧几里得距离平方 (避免开根号提升性能)
-        let diff = (r - bg_r).pow(2) + (g - bg_g).pow(2) + (b - bg_b).pow(2);
-        diff <= (tolerance as i32).pow(2)
+    let tolerance_sq = (tolerance as i32).pow(2);
+
+    // --- 核心策略：寻找一行/一列中的“主流颜色” (Mode Color) ---
+    // 这比只看角落要稳健得多，可以忽略边框上的噪点
+    let get_dominant_color = |pixels: Vec<[u8; 4]>| -> [u8; 4] {
+        let mut counts: HashMap<[u8; 4], usize> = HashMap::new();
+        for p in pixels {
+            // 简单的量化处理，避免噪点被当做不同颜色
+            // 这里为了性能直接统计，如果噪点多，其实 Mode 依然会是背景色
+            *counts.entry(p).or_insert(0) += 1;
+        }
+        counts
+            .into_iter()
+            .max_by_key(|&(_, count)| count)
+            .map(|(color, _)| color)
+            .unwrap_or([0, 0, 0, 0]) // Fallback
     };
 
-    // 2. 扫描上边界 (Top)
+    // 如果用户指定了固定颜色，则所有方向都用这个颜色
+    let fixed_bg = target_color.map(|c| [c[0], c[1], c[2], 255]);
+
+    // ===========================
+    // 1. 扫描上边界 (Top)
+    // ===========================
     let mut top = 0;
-    for y in (0..h).step_by(skip_step as usize) {
-        let mut row_noise_count = 0;
-        let mut is_content_row = false;
 
+    // 确定上边的参考背景色
+    let top_bg = if let Some(c) = fixed_bg {
+        c
+    } else {
+        // 采样第一行 (Row 0) 的所有像素，找出出现最多的颜色
+        let mut sample = Vec::with_capacity(w as usize);
         for x in (0..w).step_by(skip_step as usize) {
-            if !is_background(rgb.get_pixel(x, y)) {
-                row_noise_count += 1;
-                // 只有当非背景像素数量超过阈值时，才确认为有效内容
-                if row_noise_count > noise_threshold {
-                    is_content_row = true;
+            sample.push(rgba.get_pixel(x, 0).0);
+        }
+        get_dominant_color(sample)
+    };
+
+    for y in (0..h).step_by(skip_step as usize) {
+        let mut row_noise = 0;
+        let mut found_content = false;
+        for x in (0..w).step_by(skip_step as usize) {
+            let p = rgba.get_pixel(x, y).0;
+            // 判定逻辑：1. 透明度低是背景 2. 颜色接近参考色是背景
+            let is_bg = p[3] < 10 || (top_bg[3] >= 10 && color_diff_sq(p, top_bg) <= tolerance_sq);
+
+            if !is_bg {
+                row_noise += 1;
+                if row_noise > noise_threshold {
+                    found_content = true;
                     break;
                 }
             }
         }
-        if is_content_row {
+        if found_content {
             top = y;
             break;
         }
     }
 
-    // 3. 扫描下边界 (Bottom)
+    // ===========================
+    // 2. 扫描下边界 (Bottom)
+    // ===========================
     let mut bottom = h;
-    for y in (0..h).rev().step_by(skip_step as usize) {
-        let mut row_noise_count = 0;
-        let mut is_content_row = false;
 
+    let bottom_bg = if let Some(c) = fixed_bg {
+        c
+    } else {
+        // 采样最后一行
+        let mut sample = Vec::with_capacity(w as usize);
         for x in (0..w).step_by(skip_step as usize) {
-            if !is_background(rgb.get_pixel(x, y)) {
-                row_noise_count += 1;
-                if row_noise_count > noise_threshold {
-                    is_content_row = true;
+            sample.push(rgba.get_pixel(x, h - 1).0);
+        }
+        get_dominant_color(sample)
+    };
+
+    for y in (0..h).rev().step_by(skip_step as usize) {
+        let mut row_noise = 0;
+        let mut found_content = false;
+        for x in (0..w).step_by(skip_step as usize) {
+            let p = rgba.get_pixel(x, y).0;
+            let is_bg =
+                p[3] < 10 || (bottom_bg[3] >= 10 && color_diff_sq(p, bottom_bg) <= tolerance_sq);
+
+            if !is_bg {
+                row_noise += 1;
+                if row_noise > noise_threshold {
+                    found_content = true;
                     break;
                 }
             }
         }
-        if is_content_row {
+        if found_content {
             bottom = y + 1;
             break;
         }
     }
 
-    // 如果整张图都是背景，直接返回原图
     if top >= bottom {
-        return img.clone();
+        return img.clone(); // 全是背景
     }
 
-    // 4. 扫描左边界 (Left) - 仅在 Top~Bottom 范围内扫描
+    // ===========================
+    // 3. 扫描左边界 (Left)
+    // ===========================
     let mut left = 0;
-    for x in (0..w).step_by(skip_step as usize) {
-        let mut col_noise_count = 0;
-        let mut is_content_col = false;
 
+    let left_bg = if let Some(c) = fixed_bg {
+        c
+    } else {
+        // 采样第一列 (Col 0)
+        let mut sample = Vec::with_capacity(h as usize);
+        for y in (0..h).step_by(skip_step as usize) {
+            sample.push(rgba.get_pixel(0, y).0);
+        }
+        get_dominant_color(sample)
+    };
+
+    for x in (0..w).step_by(skip_step as usize) {
+        let mut col_noise = 0;
+        let mut found_content = false;
+        // 只扫描 Top~Bottom 范围内的像素
         for y in (top..bottom).step_by(skip_step as usize) {
-            if !is_background(rgb.get_pixel(x, y)) {
-                col_noise_count += 1;
-                if col_noise_count > noise_threshold {
-                    is_content_col = true;
+            let p = rgba.get_pixel(x, y).0;
+            let is_bg =
+                p[3] < 10 || (left_bg[3] >= 10 && color_diff_sq(p, left_bg) <= tolerance_sq);
+
+            if !is_bg {
+                col_noise += 1;
+                if col_noise > noise_threshold {
+                    found_content = true;
                     break;
                 }
             }
         }
-        if is_content_col {
+        if found_content {
             left = x;
             break;
         }
     }
 
-    // 5. 扫描右边界 (Right)
+    // ===========================
+    // 4. 扫描右边界 (Right)
+    // ===========================
     let mut right = w;
-    for x in (0..w).rev().step_by(skip_step as usize) {
-        let mut col_noise_count = 0;
-        let mut is_content_col = false;
 
+    let right_bg = if let Some(c) = fixed_bg {
+        c
+    } else {
+        let mut sample = Vec::with_capacity(h as usize);
+        for y in (0..h).step_by(skip_step as usize) {
+            sample.push(rgba.get_pixel(w - 1, y).0);
+        }
+        get_dominant_color(sample)
+    };
+
+    for x in (0..w).rev().step_by(skip_step as usize) {
+        let mut col_noise = 0;
+        let mut found_content = false;
         for y in (top..bottom).step_by(skip_step as usize) {
-            if !is_background(rgb.get_pixel(x, y)) {
-                col_noise_count += 1;
-                if col_noise_count > noise_threshold {
-                    is_content_col = true;
+            let p = rgba.get_pixel(x, y).0;
+            let is_bg =
+                p[3] < 10 || (right_bg[3] >= 10 && color_diff_sq(p, right_bg) <= tolerance_sq);
+
+            if !is_bg {
+                col_noise += 1;
+                if col_noise > noise_threshold {
+                    found_content = true;
                     break;
                 }
             }
         }
-        if is_content_col {
+        if found_content {
             right = x + 1;
             break;
         }
     }
 
-    // 6. 应用 Padding 并进行边界检查
+    // 应用 Padding
     let crop_x = left.saturating_sub(padding);
     let crop_y = top.saturating_sub(padding);
     let crop_w = (right - left + padding * 2).min(w - crop_x).max(1);
     let crop_h = (bottom - top + padding * 2).min(h - crop_y).max(1);
 
-    // 7. 执行裁剪并返回
     let cropped_buffer = image::imageops::crop_imm(img, crop_x, crop_y, crop_w, crop_h).to_image();
     DynamicImage::ImageRgba8(cropped_buffer)
 }
