@@ -186,6 +186,7 @@ data class BlackWhiteInvertFilter(
 
 // 1. 新增枚举：对应 Rust 里的逻辑
 @Serializable
+@SerialName("MorphologyMode")
 enum class MorphologyMode {
     DILATE,   // 膨胀 (扩张白色)
     ERODE,    // 腐蚀 (收缩白色)
@@ -194,6 +195,7 @@ enum class MorphologyMode {
     GRADIENT, // 形态学梯度 (膨胀 - 腐蚀 -> 轮廓)
 }
 
+@SerialName("MorphologyFilter")
 data class MorphologyFilter(
     val mode: MorphologyMode = MorphologyMode.DILATE,
     val kernelSize: Int = 1, // 核大小 (半径)，实际大小 = 2*r + 1
@@ -202,6 +204,8 @@ data class MorphologyFilter(
     override val name = "形态学"
 }
 
+@Serializable
+@SerialName("SmartLayoutFilter")
 data class SmartLayoutFilter(
     val padding: Int = 10,
     val minWidth: Int = 5,
@@ -211,12 +215,14 @@ data class SmartLayoutFilter(
 ) : ImageFilter {
     override val name = "智能重排"
 }
-
+@Serializable
+@SerialName("AutoCropMode")
 enum class AutoCropMode {
     AUTO_CORNERS, // 自动取角落
     FIXED_COLOR   // 固定颜色
 }
-
+@Serializable
+@SerialName("SmartLayoutFilter")
 data class AutoCropFilter(
     val mode: AutoCropMode = AutoCropMode.AUTO_CORNERS,
     val tolerance: Float = 10f,      // 颜色容差 0-255
@@ -225,6 +231,19 @@ data class AutoCropFilter(
     val fixedColorHex: String = "#000000" // 如果是手动模式
 ) : ImageFilter {
     override val name = "智能裁切"
+}
+
+
+/**
+ * 缩放滤镜参数
+ */
+@Serializable
+@SerialName("ResizeScaleFilter")
+data class ResizeScaleFilter(
+    val scaleFactor: Float = 1.0f,  // 缩放倍率 (例如 0.5, 2.0)
+    val highQuality: Boolean = true, // true=Lanczos3(平滑), false=Nearest(硬边)
+) : ImageFilter {
+    override val name = "智能缩放"
 }
 
 // --- 切割 ---

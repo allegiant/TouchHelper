@@ -15,6 +15,7 @@ import org.eu.freex.tools.modules.image.domain.model.MultiColorFilter
 import org.eu.freex.tools.modules.image.domain.model.PosterizationFilter
 import org.eu.freex.tools.modules.image.domain.model.RemoveLinesFilter
 import org.eu.freex.tools.modules.image.domain.model.RemoveNoiseFilter
+import org.eu.freex.tools.modules.image.domain.model.ResizeScaleFilter
 import org.eu.freex.tools.modules.image.domain.model.RotationFilter
 import org.eu.freex.tools.modules.image.domain.model.SmartLayoutFilter
 import kotlin.reflect.KClass
@@ -43,6 +44,8 @@ object FilterUIRegistry {
         MorphologyFilter::class to MorphologyRenderer,
         SmartLayoutFilter::class to SmartLayoutRenderer,
         AutoCropFilter::class to AutoCropRenderer,
+
+        ResizeScaleFilter::class to ResizeScaleRenderer,
     )
 
     /**

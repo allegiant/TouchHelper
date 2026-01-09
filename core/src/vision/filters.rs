@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use image::{DynamicImage, GrayImage, Luma, Rgba, RgbaImage}; // 确保引入 Rgba
+use image::{DynamicImage, GenericImageView, GrayImage, Luma, Rgba, RgbaImage}; // 确保引入 Rgba
 use imageproc::contrast::{adaptive_threshold, otsu_level, threshold};
 use imageproc::distance_transform::Norm;
 use imageproc::filter::median_filter;
@@ -1530,4 +1530,35 @@ pub fn auto_crop_smart(
 
     let cropped_buffer = image::imageops::crop_imm(img, crop_x, crop_y, crop_w, crop_h).to_image();
     DynamicImage::ImageRgba8(cropped_buffer)
+}
+
+/// [新增] 按倍率缩放 (Resize by Scale)
+pub fn resize_by_scale(img: &DynamicImage, scale: f32, high_quality: bool) -> DynamicImage {
+    let (width, height) = img.dimensions();
+
+    // 1. 安全检查：如果缩放比例无效或是 1.0，直接返回原图
+    if scale <= 0.0 || (scale - 1.0).abs() < f32::EPSILON {
+        return img.clone();
+    }
+
+    // 2. 计算新尺寸 (使用 round 四舍五入，避免 100*1.5=149.999 变成 149)
+    let new_width = (width as f32 * scale).round() as u32;
+    let new_height = (height as f32 * scale).round() as u32;
+
+    // 防止无效尺寸
+    if new_width == 0 || new_height == 0 {
+        return img.clone();
+    }
+
+    // 3. 选择算法
+    // Lanczos3: 质量最好，适合照片/截图
+    // Nearest: 速度最快，适合像素风或二值化后的图(保持硬边缘)
+    let filter = if high_quality {
+        image::imageops::FilterType::Lanczos3
+    } else {
+        image::imageops::FilterType::Nearest
+    };
+
+    // 4. 执行缩放 (强制使用计算出的尺寸)
+    img.resize_exact(new_width, new_height, filter)
 }

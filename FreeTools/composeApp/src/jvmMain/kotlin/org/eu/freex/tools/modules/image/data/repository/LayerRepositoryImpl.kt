@@ -25,6 +25,7 @@ import uniffi.touch_core.applyMultiColorFilter
 import uniffi.touch_core.applyPosterizationFilter
 import uniffi.touch_core.applyRemoveLines
 import uniffi.touch_core.applyRemoveNoise
+import uniffi.touch_core.applyResizeScale
 import uniffi.touch_core.applyRotate
 import uniffi.touch_core.applySmartLayout
 import java.awt.GraphicsEnvironment
@@ -266,6 +267,15 @@ class LayerRepositoryImpl : LayerRepository {
                             fixedColorHex = filter.fixedColorHex
                         )
                         val result = applyAutoCrop(pixels,w,h,rustFilter)
+                        return@withContext ImageUtils.fromRgbaPixels(
+                            result.width,
+                            result.height,
+                            result.pixels
+                        )
+                    }
+                    is ResizeScaleFilter -> {
+                        val rustFilter = uniffi.touch_core.ResizeScaleFilter(filter.scaleFactor, filter.highQuality)
+                        val result = applyResizeScale(pixels, w, h, rustFilter)
                         return@withContext ImageUtils.fromRgbaPixels(
                             result.width,
                             result.height,

@@ -229,6 +229,13 @@ pub struct AutoCropFilter {
     pub fixed_color_hex: String, // 指定背景色 (例如 "#000000")
 }
 
+// [新增] 缩放滤镜参数
+#[derive(Debug, Clone, Serialize, Deserialize, uniffi::Record)]
+pub struct ResizeScaleFilter {
+    pub scale_factor: f32,  // 缩放倍率 (例如 0.5, 2.0)
+    pub high_quality: bool, // true=Lanczos3(平滑), false=Nearest(硬边)
+}
+
 // 【新增】定义错误类型
 #[derive(Debug, thiserror::Error, uniffi::Error)]
 pub enum VisionError {

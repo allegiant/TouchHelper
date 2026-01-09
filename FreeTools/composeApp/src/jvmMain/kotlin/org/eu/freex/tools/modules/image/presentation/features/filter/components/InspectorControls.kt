@@ -60,6 +60,7 @@ import org.eu.freex.tools.modules.image.domain.model.MultiColorFilter
 import org.eu.freex.tools.modules.image.domain.model.PosterizationFilter
 import org.eu.freex.tools.modules.image.domain.model.RemoveLinesFilter
 import org.eu.freex.tools.modules.image.domain.model.RemoveNoiseFilter
+import org.eu.freex.tools.modules.image.domain.model.ResizeScaleFilter
 import org.eu.freex.tools.modules.image.domain.model.RotationFilter
 import org.eu.freex.tools.modules.image.domain.model.SmartLayoutFilter
 
@@ -95,7 +96,9 @@ fun FilterSelectionList(
         )
     }
     val commonFilters = remember {
-        listOf<ImageFilter>()
+        listOf(
+            ResizeScaleFilter()
+        )
     }
 
     Column(
