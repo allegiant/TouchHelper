@@ -4,7 +4,6 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -14,28 +13,51 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.FilterQuality
-import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.toComposeImageBitmap
 import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.graphics.toComposeImageBitmap
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.drawText
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import java.awt.image.BufferedImage
+
 // 请确保引用路径正确
 import org.eu.freex.tools.modules.image.domain.model.SegmentationConfig
 import org.eu.freex.tools.modules.image.domain.model.SegmentationMode
 import org.eu.freex.tools.modules.image.domain.model.SegmentationRect
 import org.eu.freex.tools.modules.image.presentation.core.SegmentationInteraction
-import java.awt.image.BufferedImage
+
+/**
+ * 🎨 性能优化：缓存颜色配置，避免在每个 Item 中重复查询 Theme
+ */
+@Immutable
+data class GridItemColors(
+    val selectedBg: Color,
+    val unselectedBg: Color,
+    val selectedBorder: Color,
+    val unselectedBorder: Color,
+    val labelBg: Color,
+    val labelText: Color
+)
 
 @Composable
 fun SegmentationPanel(
@@ -50,8 +72,63 @@ fun SegmentationPanel(
     onSubmitLabel: (String) -> Unit,
     onStopLabeling: () -> Unit
 ) {
-    // [性能关键] 缓存 ImageBitmap，避免每次重绘都转换
-    val composeBitmap = remember(sourceImage) { sourceImage?.toComposeImageBitmap() }
+    // 缓存大图的 Compose 版本（用于降级显示和弹窗）
+    val bigComposeBitmap = remember(sourceImage) { sourceImage?.toComposeImageBitmap() }
+
+    // [核心优化] 预切片缓存列表
+    val slicedCache = remember { mutableStateListOf<ImageBitmap?>() }
+
+    // [核心优化] 监听 results 变化，在后台线程生成小图
+    LaunchedEffect(results, sourceImage) {
+        if (sourceImage == null || results.isEmpty()) {
+            slicedCache.clear()
+            return@LaunchedEffect
+        }
+
+        // 切换到 IO 线程进行耗时的切图操作，避免阻塞 UI
+        withContext(Dispatchers.IO) {
+            val newSlices = ArrayList<ImageBitmap?>(results.size)
+
+            for (rect in results) {
+                try {
+                    val rW = rect.width.toInt()
+                    val rH = rect.height.toInt()
+                    val rX = rect.left
+                    val rY = rect.top
+
+                    // 边界安全检查
+                    if (rW > 0 && rH > 0 &&
+                        rX >= 0 && rY >= 0 &&
+                        (rX + rW) <= sourceImage.width &&
+                        (rY + rH) <= sourceImage.height
+                    ) {
+                        // A. 获取子图像视图
+                        val subView = sourceImage.getSubimage(rX, rY, rW, rH)
+
+                        // B. [关键] 创建一个新的独立 BufferedImage 并拷贝像素
+                        // 这样每个 Item 持有独立的小纹理，不再依赖原始大图，极大降低显存带宽压力
+                        val copy = BufferedImage(rW, rH, BufferedImage.TYPE_INT_ARGB)
+                        val g = copy.createGraphics()
+                        g.drawImage(subView, 0, 0, null)
+                        g.dispose()
+
+                        newSlices.add(copy.toComposeImageBitmap())
+                    } else {
+                        newSlices.add(null)
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                    newSlices.add(null)
+                }
+            }
+
+            // 切割完成后，切回主线程一次性更新
+            withContext(Dispatchers.Main) {
+                slicedCache.clear()
+                slicedCache.addAll(newSlices)
+            }
+        }
+    }
 
     Column(modifier = modifier.padding(8.dp)) {
         ConfigSection(config, onConfigChange)
@@ -67,19 +144,20 @@ fun SegmentationPanel(
                 results = results,
                 labels = labels,
                 selectedIndex = interaction.selectedIndex,
-                sourceImage = composeBitmap,
+                sourceImage = bigComposeBitmap, // 大图（备用）
+                slicedImages = slicedCache,     // 小图列表（优先）
                 onSelectChar = onSelectChar
             )
         }
 
         // 标注弹窗
-        if (interaction.isLabeling && interaction.selectedIndex in results.indices && composeBitmap != null) {
+        if (interaction.isLabeling && interaction.selectedIndex in results.indices && bigComposeBitmap != null) {
             val rect = results[interaction.selectedIndex]
             val initialText = labels[interaction.selectedIndex] ?: ""
 
             LabelingDialog(
                 rect = rect,
-                sourceImage = composeBitmap,
+                sourceImage = bigComposeBitmap,
                 initialText = initialText,
                 onConfirm = onSubmitLabel,
                 onDismiss = onStopLabeling
@@ -146,7 +224,7 @@ fun ConfigSection(config: SegmentationConfig, onChange: (SegmentationConfig) -> 
 }
 
 // ==========================================
-// 🚀 核心优化区域：列表性能优化 v2
+// 🚀 核心优化区域：列表性能优化 v4
 // ==========================================
 
 @Composable
@@ -155,9 +233,11 @@ fun CharGridSection(
     labels: Map<Int, String>,
     selectedIndex: Int,
     sourceImage: ImageBitmap?,
+    slicedImages: List<ImageBitmap?>,
     onSelectChar: (Int) -> Unit
 ) {
     val gridState = rememberLazyGridState()
+    val textMeasurer = rememberTextMeasurer()
 
     // 自动滚动到选中项
     LaunchedEffect(selectedIndex) {
@@ -165,6 +245,26 @@ fun CharGridSection(
             gridState.animateScrollToItem(selectedIndex)
         }
     }
+
+    // 缓存主题颜色
+    val colorScheme = MaterialTheme.colorScheme
+    val gridColors = remember(colorScheme) {
+        GridItemColors(
+            selectedBg = colorScheme.primaryContainer,
+            unselectedBg = colorScheme.surfaceContainerLow,
+            selectedBorder = colorScheme.primary,
+            unselectedBorder = colorScheme.outlineVariant,
+            labelBg = colorScheme.surface.copy(alpha = 0.75f),
+            labelText = colorScheme.onSurface
+        )
+    }
+
+    // 缓存文字样式
+    val labelTextStyle = MaterialTheme.typography.labelSmall.copy(
+        color = gridColors.labelText,
+        fontSize = 10.sp,
+        textAlign = TextAlign.Center
+    )
 
     LazyVerticalGrid(
         columns = GridCells.Adaptive(minSize = 48.dp),
@@ -175,26 +275,33 @@ fun CharGridSection(
     ) {
         itemsIndexed(
             items = results,
-            // [优化1] 必须加 key！防止列表重排
-            key = { index, _ -> index }
+            key = { index, _ -> index },
+            contentType = { _, _ -> 0 }
         ) { index, rect ->
-            // [优化2] 使用 Canvas 合并绘制的 Item，减少 Modifier 层级
+            // 获取当前索引对应的预切片缓存（如果尚未生成则为 null）
+            val cachedSlice = if (index < slicedImages.size) slicedImages[index] else null
+
             CharGridItemUnified(
                 index = index,
                 rect = rect,
                 label = labels[index],
                 isSelected = index == selectedIndex,
-                sourceImage = sourceImage,
-                onClick = { onSelectChar(index) }
+                sourceImage = sourceImage, // 备用大图
+                cachedSlice = cachedSlice, // 优先使用缓存小图
+                colors = gridColors,
+                textMeasurer = textMeasurer,
+                textStyle = labelTextStyle,
+                onItemClick = onSelectChar
             )
         }
     }
 }
 
 /**
- * 🎨 统一绘制组件 (Canvas-Only)
- * 移除了 Box, background, border, clip 等所有 Modifier，全部在 Canvas 内一次性画完。
- * 这是 Compose 中性能最高的绘制方式。
+ * 🎨 统一绘制组件 (Pure Canvas + Hybrid Rendering)
+ * 1. 没有任何子 Composable，纯 Canvas 绘制。
+ * 2. 优先使用 cachedSlice (小图)，极大减少显存带宽占用。
+ * 3. 兜底使用 sourceImage (大图裁剪)，保证无缝体验。
  */
 @Composable
 private fun CharGridItemUnified(
@@ -203,88 +310,118 @@ private fun CharGridItemUnified(
     label: String?,
     isSelected: Boolean,
     sourceImage: ImageBitmap?,
-    onClick: () -> Unit
+    cachedSlice: ImageBitmap?,
+    colors: GridItemColors,
+    textMeasurer: androidx.compose.ui.text.TextMeasurer,
+    textStyle: TextStyle,
+    onItemClick: (Int) -> Unit
 ) {
-    // 预取颜色
-    val primaryColor = MaterialTheme.colorScheme.primary
-    val outlineColor = MaterialTheme.colorScheme.outlineVariant
-    val primaryContainer = MaterialTheme.colorScheme.primaryContainer
-    val surfaceContainer = MaterialTheme.colorScheme.surfaceContainerLow
-    val labelBgColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.75f)
-
-    // 布局容器：Box 仅用于提供尺寸和点击事件，不参与绘制
-    Box(
+    Spacer(
         modifier = Modifier
             .aspectRatio(1f)
-            // 点击事件放在这里
-            .pointerInput(Unit) {
-                detectTapGestures(onTap = { onClick() })
-            }
-    ) {
-        Canvas(modifier = Modifier.fillMaxSize()) {
-            val w = size.width
-            val h = size.height
-            val cornerRadius = 4.dp.toPx() // 圆角半径
+            .clickable { onItemClick(index) }
+            .drawWithCache {
+                val cornerRadiusPx = 4.dp.toPx()
+                val paddingPx = 3.dp.toPx()
 
-            // 1. 绘制背景 (替代 .background)
-            val bgColor = if (isSelected) primaryContainer else surfaceContainer
-            drawRoundRect(
-                color = bgColor,
-                cornerRadius = CornerRadius(cornerRadius, cornerRadius)
-            )
+                // 解析 Rect 尺寸（仅在需要大图兜底时用到）
+                val rWidth = rect.width.toInt()
+                val rHeight = rect.height.toInt()
+                val rLeft = rect.left
+                val rTop = rect.top
 
-            // 2. 绘制图片切片 (替代 VirtualSliceCanvas)
-            if (sourceImage != null) {
-                // 计算内缩 (Padding)
-                val padding = 3.dp.toPx()
-                val imgDstW = w - padding * 2
-                val imgDstH = h - padding * 2
-
-                // 简单的居中计算
-                if (imgDstW > 0 && imgDstH > 0) {
-                    val srcOffset = IntOffset(rect.left, rect.top)
-                    val srcSize = IntSize(rect.width.toInt(), rect.height.toInt())
-
-                    drawImage(
-                        image = sourceImage,
-                        srcOffset = srcOffset,
-                        srcSize = srcSize,
-                        dstOffset = IntOffset(padding.toInt(), padding.toInt()),
-                        dstSize = IntSize(imgDstW.toInt(), imgDstH.toInt()),
-                        // [关键] 必须使用 None，双线性插值(Low/Medium)在小图缩放时极慢
-                        filterQuality = FilterQuality.None
+                // 预测量文字
+                val textResult = if (!label.isNullOrEmpty()) {
+                    textMeasurer.measure(
+                        text = label,
+                        style = textStyle,
+                        maxLines = 1,
+                        constraints = Constraints(maxWidth = size.width.toInt())
                     )
+                } else null
+
+                onDrawBehind {
+                    val w = size.width
+                    val h = size.height
+
+                    // 1. 绘制背景
+                    val bgColor = if (isSelected) colors.selectedBg else colors.unselectedBg
+                    drawRoundRect(
+                        color = bgColor,
+                        cornerRadius = CornerRadius(cornerRadiusPx, cornerRadiusPx)
+                    )
+
+                    // 2. 绘制图片 (混合渲染逻辑)
+                    val imgDstW = w - paddingPx * 2
+                    val imgDstH = h - paddingPx * 2
+
+                    if (imgDstW > 0 && imgDstH > 0) {
+                        if (cachedSlice != null) {
+                            // [极速模式] 缓存存在，直接画小图
+                            drawImage(
+                                image = cachedSlice,
+                                dstOffset = IntOffset(paddingPx.toInt(), paddingPx.toInt()),
+                                dstSize = IntSize(imgDstW.toInt(), imgDstH.toInt()),
+                                filterQuality = FilterQuality.None
+                            )
+                        } else if (sourceImage != null) {
+                            // [兼容模式] 缓存生成中，临时从大图裁剪
+                            // 确保源矩形在图片范围内
+                            val imgW = sourceImage.width
+                            val imgH = sourceImage.height
+                            val safeLeft = rLeft.coerceAtLeast(0)
+                            val safeTop = rTop.coerceAtLeast(0)
+                            val safeRight = (rLeft + rWidth).coerceAtMost(imgW)
+                            val safeBottom = (rTop + rHeight).coerceAtMost(imgH)
+
+                            val srcW = safeRight - safeLeft
+                            val srcH = safeBottom - safeTop
+
+                            if (srcW > 0 && srcH > 0) {
+                                drawImage(
+                                    image = sourceImage,
+                                    srcOffset = IntOffset(safeLeft, safeTop),
+                                    srcSize = IntSize(srcW, srcH),
+                                    dstOffset = IntOffset(paddingPx.toInt(), paddingPx.toInt()),
+                                    dstSize = IntSize(imgDstW.toInt(), imgDstH.toInt()),
+                                    filterQuality = FilterQuality.None
+                                )
+                            }
+                        }
+                    }
+
+                    // 3. 绘制边框
+                    val borderColor = if (isSelected) colors.selectedBorder else colors.unselectedBorder
+                    val borderWidth = if (isSelected) 2.dp.toPx() else 1.dp.toPx()
+
+                    drawRoundRect(
+                        color = borderColor,
+                        cornerRadius = CornerRadius(cornerRadiusPx, cornerRadiusPx),
+                        style = Stroke(width = borderWidth)
+                    )
+
+                    // 4. 绘制文字 (直接画在 Canvas 上)
+                    if (textResult != null) {
+                        val labelH = textResult.size.height + 4.dp.toPx()
+
+                        // 标签背景
+                        drawRect(
+                            color = colors.labelBg,
+                            topLeft = Offset(0f, h - labelH),
+                            size = Size(w, labelH)
+                        )
+
+                        // 标签文字居中
+                        val textOffsetX = (w - textResult.size.width) / 2
+                        val textOffsetY = h - labelH + 2.dp.toPx()
+
+                        translate(left = textOffsetX, top = textOffsetY) {
+                            drawText(textResult)
+                        }
+                    }
                 }
             }
-
-            // 3. 绘制边框 (替代 .border)
-            val borderColor = if (isSelected) primaryColor else outlineColor
-            val borderWidth = if (isSelected) 2.dp.toPx() else 1.dp.toPx()
-
-            // 边框居中绘制，需要偏移半个边框宽度
-            drawRoundRect(
-                color = borderColor,
-                cornerRadius = CornerRadius(cornerRadius, cornerRadius),
-                style = Stroke(width = borderWidth)
-            )
-        }
-
-        // 4. 文字标签 (仅文字使用 Composable，因为它在 Canvas 里很难画)
-        if (!label.isNullOrEmpty()) {
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
-                textAlign = TextAlign.Center,
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .fillMaxWidth()
-                    .background(labelBgColor)
-                    .padding(vertical = 2.dp)
-            )
-        }
-    }
+    )
 }
 
 @Composable
@@ -303,13 +440,22 @@ fun RowScope.CompactNumInput(label: String, value: Int, onValueChange: (Int) -> 
 @Composable
 fun SimpleSliceCanvas(image: ImageBitmap, rect: SegmentationRect, modifier: Modifier = Modifier) {
     Canvas(modifier = modifier) {
-        drawImage(
-            image = image,
-            srcOffset = IntOffset(rect.left, rect.top),
-            srcSize = IntSize(rect.width.toInt(), rect.height.toInt()),
-            dstSize = IntSize(size.width.toInt(), size.height.toInt()),
-            filterQuality = FilterQuality.None
-        )
+        val rW = rect.width.toInt()
+        val rH = rect.height.toInt()
+
+        // 简单边界保护
+        val safeW = rW.coerceAtMost(image.width - rect.left)
+        val safeH = rH.coerceAtMost(image.height - rect.top)
+
+        if (safeW > 0 && safeH > 0) {
+            drawImage(
+                image = image,
+                srcOffset = IntOffset(rect.left, rect.top),
+                srcSize = IntSize(safeW, safeH),
+                dstSize = IntSize(size.width.toInt(), size.height.toInt()),
+                filterQuality = FilterQuality.None
+            )
+        }
     }
 }
 
@@ -324,7 +470,6 @@ fun LabelingDialog(
     var text by remember(initialText) { mutableStateOf(initialText) }
 
     Dialog(onDismissRequest = onDismiss) {
-        // 弹窗这种低频界面用 Card 没问题
         Card(modifier = Modifier.padding(16.dp)) {
             Column(
                 modifier = Modifier.padding(16.dp),
