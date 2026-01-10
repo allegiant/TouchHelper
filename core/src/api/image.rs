@@ -2,12 +2,12 @@ use image::{DynamicImage, ImageBuffer, Rgba};
 
 use crate::vision::types::{
     AutoCropFilter, AutoCropMode, BinarizationFilter, BinarizationMode, BlackWhiteInvertFilter,
-    ColorRule, DenoiseFilter, DeskewFilter, ExtractBlobsFilter, ExtractContoursFilter,
-    GrayscaleFilter, InvertMode, MorphologyFilter, MultiColorFilter, PosterizationFilter,
-    ProcessedImage, Rect, RemoveLinesFilter, RemoveNoiseFilter, ResizeScaleFilter, RotationFilter,
-    SmartLayoutFilter, VisionError,
+    DenoiseFilter, DeskewFilter, ExtractBlobsFilter, ExtractContoursFilter, GrayscaleFilter,
+    InvertMode, MorphologyFilter, MultiColorFilter, PosterizationFilter, ProcessedImage,
+    RemoveLinesFilter, RemoveNoiseFilter, ResizeScaleFilter, RotationFilter, SmartLayoutFilter,
+    VisionError,
 };
-use crate::vision::{analysis, colors, filters};
+use crate::vision::{colors, filters};
 
 // =========================================================
 // 1. 公共辅助函数 (Private Helper)
@@ -296,63 +296,6 @@ pub fn apply_blackwhite_invert(
     process_image_wrapper(pixels, width, height, |img| {
         filters::smart_invert(img, mode)
     })
-}
-
-/// 扫描组件
-#[uniffi::export]
-pub fn scan_components(
-    pixels: Vec<u8>,
-    width: i32,
-    height: i32,
-    rules: Vec<ColorRule>,
-    is_grid_mode: bool,
-    grid_rows: Option<i32>,
-    grid_cols: Option<i32>,
-) -> Result<Vec<Rect>, VisionError> {
-    let width_u32 = width as u32;
-    let height_u32 = height as u32;
-    let expected_len = (width_u32 * height_u32 * 4) as usize;
-
-    if pixels.len() != expected_len {
-        return Err(VisionError::LoadError("Pixel data mismatch".to_string()));
-    }
-
-    let img_buffer =
-        image::ImageBuffer::<image::Rgba<u8>, Vec<u8>>::from_raw(width_u32, height_u32, pixels)
-            .ok_or_else(|| VisionError::LoadError("Failed to create image buffer".to_string()))?;
-    let img = image::DynamicImage::ImageRgba8(img_buffer);
-
-    if is_grid_mode {
-        // 【实现网格切分逻辑】
-        // 使用 grid_rows 和 grid_cols 计算切分矩形
-        let rows = grid_rows.unwrap_or(1).max(1) as u32;
-        let cols = grid_cols.unwrap_or(1).max(1) as u32;
-
-        let cell_w = width_u32 / cols;
-        let cell_h = height_u32 / rows;
-
-        let mut rects = Vec::new();
-
-        for r in 0..rows {
-            for c in 0..cols {
-                let left = c * cell_w;
-                let top = r * cell_h;
-                // 最后一个格子可能需要补齐余数，这里简单处理为固定大小
-                rects.push(Rect {
-                    left: left as i32,
-                    top: top as i32,
-                    width: cell_w,
-                    height: cell_h,
-                });
-            }
-        }
-        Ok(rects)
-    } else {
-        // 智能连通区域识别
-        // 传入最小宽高 (1, 1) 防止过滤掉有效像素
-        let rects = analysis::scan_connected_components(&img, rules, 1, 1);
-        Ok(rects)
-    }
 }
 
 /// [新增] 应用形态学滤镜

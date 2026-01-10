@@ -6,6 +6,7 @@ use log::{error, info};
 use rquickjs::prelude::Func;
 use rquickjs::{Class, Ctx, Object, Result};
 
+pub mod analysis_api;
 pub mod colors;
 pub mod device;
 pub mod image;

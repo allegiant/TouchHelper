@@ -248,3 +248,38 @@ pub enum VisionError {
     #[error("Encoding failed: {0}")]
     EncodeError(String),
 }
+
+// [新增] 切割模式枚举
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, uniffi::Enum)]
+pub enum SegmentationMode {
+    FixedGrid,     // 固定网格
+    Projection,    // 投影切割 (XY轴扫描)
+    ConnectedComp, // 智能连通域 (Blob)
+}
+
+// [新增] 统一的切割参数配置
+// 为了方便前端调用，我们将三种模式的参数合并到一个结构体中
+#[derive(Debug, Clone, Serialize, Deserialize, uniffi::Record)]
+pub struct SegmentationConfig {
+    pub mode: SegmentationMode,
+
+    // --- 通用参数 ---
+    pub padding: i32,    // 切割后的微调留白 (正数扩大，负数缩小)
+    pub min_width: u32,  // 最小宽度过滤 (像素)
+    pub min_height: u32, // 最小高度过滤 (像素)
+
+    // --- 模式A: FixedGrid (固定位置) 参数 ---
+    pub start_x: i32,
+    pub start_y: i32,
+    pub cell_width: u32,
+    pub cell_height: u32,
+    pub col_count: u32,
+    pub row_count: u32,
+    pub col_gap: i32,
+    pub row_gap: i32,
+
+    // --- 模式B: Projection (投影) 参数 ---
+    pub split_rows: bool,         // 是否切行 (Y轴投影)
+    pub split_cols: bool,         // 是否切列 (X轴投影)
+    pub projection_threshold: u8, // 判定为“有内容”的亮度阈值 (0~255, 通常二值图设为128)
+}
