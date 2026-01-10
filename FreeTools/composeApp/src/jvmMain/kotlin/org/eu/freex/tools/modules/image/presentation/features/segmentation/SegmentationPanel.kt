@@ -1,10 +1,10 @@
 package org.eu.freex.tools.modules.image.presentation.features.segmentation
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -16,50 +16,48 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.FilterQuality
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.toComposeImageBitmap
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
-// [关键] 引入 Domain 模型
+// 请确保引用路径正确
 import org.eu.freex.tools.modules.image.domain.model.SegmentationConfig
 import org.eu.freex.tools.modules.image.domain.model.SegmentationMode
 import org.eu.freex.tools.modules.image.domain.model.SegmentationRect
-// [关键] 引入 UI 交互状态
 import org.eu.freex.tools.modules.image.presentation.core.SegmentationInteraction
 import java.awt.image.BufferedImage
 
 @Composable
 fun SegmentationPanel(
     modifier: Modifier = Modifier,
-    // 数据源 (来自 Domain / Workspace)
     config: SegmentationConfig,
     results: List<SegmentationRect>,
     labels: Map<Int, String>,
-    // 交互状态 (来自 UI State)
     interaction: SegmentationInteraction,
-    // 图像源
     sourceImage: BufferedImage?,
-    // 回调
     onConfigChange: (SegmentationConfig) -> Unit,
     onSelectChar: (Int) -> Unit,
     onSubmitLabel: (String) -> Unit,
     onStopLabeling: () -> Unit
 ) {
-    // 将 AWT BufferedImage 转换为 Compose ImageBitmap 用于渲染
-    // 使用 remember 缓存转换结果，避免重绘时重复转换
+    // [性能关键] 缓存 ImageBitmap，避免每次重绘都转换
     val composeBitmap = remember(sourceImage) { sourceImage?.toComposeImageBitmap() }
 
     Column(modifier = modifier.padding(8.dp)) {
-        // 1. 配置区域
         ConfigSection(config, onConfigChange)
 
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
 
-        // 2. 结果网格
         if (results.isEmpty()) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Text("暂无切割结果", style = MaterialTheme.typography.bodySmall)
@@ -74,7 +72,7 @@ fun SegmentationPanel(
             )
         }
 
-        // 3. 标注弹窗 (浮层)
+        // 标注弹窗
         if (interaction.isLabeling && interaction.selectedIndex in results.indices && composeBitmap != null) {
             val rect = results[interaction.selectedIndex]
             val initialText = labels[interaction.selectedIndex] ?: ""
@@ -95,7 +93,6 @@ fun ConfigSection(config: SegmentationConfig, onChange: (SegmentationConfig) -> 
     var expanded by remember { mutableStateOf(false) }
 
     Column {
-        // 模式选择
         Box {
             OutlinedButton(onClick = { expanded = true }, modifier = Modifier.fillMaxWidth()) {
                 Text("模式: ${config.mode.name}")
@@ -116,7 +113,6 @@ fun ConfigSection(config: SegmentationConfig, onChange: (SegmentationConfig) -> 
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        // 参数面板
         when (config.mode) {
             SegmentationMode.FIXED_GRID -> {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -149,6 +145,10 @@ fun ConfigSection(config: SegmentationConfig, onChange: (SegmentationConfig) -> 
     }
 }
 
+// ==========================================
+// 🚀 核心优化区域：列表性能优化 v2
+// ==========================================
+
 @Composable
 fun CharGridSection(
     results: List<SegmentationRect>,
@@ -159,7 +159,7 @@ fun CharGridSection(
 ) {
     val gridState = rememberLazyGridState()
 
-    // 自动跟随游标滚动
+    // 自动滚动到选中项
     LaunchedEffect(selectedIndex) {
         if (selectedIndex != -1) {
             gridState.animateScrollToItem(selectedIndex)
@@ -173,62 +173,117 @@ fun CharGridSection(
         horizontalArrangement = Arrangement.spacedBy(4.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
-        itemsIndexed(results) { index, rect ->
-            val isSelected = index == selectedIndex
-            val label = labels[index]
-
-            Card(
-                colors = CardDefaults.cardColors(
-                    containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface
-                ),
-                border = if (isSelected) BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null,
-                modifier = Modifier
-                    .aspectRatio(1f)
-                    .clickable { onSelectChar(index) }
-            ) {
-                Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                    // 虚拟切片渲染：只绘制 Rect 区域
-                    if (sourceImage != null) {
-                        VirtualSliceCanvas(sourceImage, rect, modifier = Modifier.padding(2.dp))
-                    }
-                    // 标签显示
-                    if (!label.isNullOrEmpty()) {
-                        Text(
-                            text = label,
-                            style = MaterialTheme.typography.labelSmall,
-                            modifier = Modifier
-                                .align(Alignment.BottomCenter)
-                                .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.7f))
-                                .fillMaxWidth(),
-                            textAlign = TextAlign.Center
-                        )
-                    }
-                }
-            }
+        itemsIndexed(
+            items = results,
+            // [优化1] 必须加 key！防止列表重排
+            key = { index, _ -> index }
+        ) { index, rect ->
+            // [优化2] 使用 Canvas 合并绘制的 Item，减少 Modifier 层级
+            CharGridItemUnified(
+                index = index,
+                rect = rect,
+                label = labels[index],
+                isSelected = index == selectedIndex,
+                sourceImage = sourceImage,
+                onClick = { onSelectChar(index) }
+            )
         }
     }
 }
 
 /**
- * 虚拟切片画布：核心性能组件
- * 不创建新的 Bitmap，直接从大图中绘制指定区域
+ * 🎨 统一绘制组件 (Canvas-Only)
+ * 移除了 Box, background, border, clip 等所有 Modifier，全部在 Canvas 内一次性画完。
+ * 这是 Compose 中性能最高的绘制方式。
  */
 @Composable
-fun VirtualSliceCanvas(image: ImageBitmap, rect: SegmentationRect, modifier: Modifier = Modifier) {
-    Canvas(modifier = modifier.fillMaxSize()) {
-        val srcOffset = IntOffset(rect.left, rect.top)
-        // Rect 中的 width/height 是 UInt，需要转 Int
-        val srcSize = IntSize(rect.width.toInt(), rect.height.toInt())
-        val dstSize = IntSize(size.width.toInt(), size.height.toInt())
+private fun CharGridItemUnified(
+    index: Int,
+    rect: SegmentationRect,
+    label: String?,
+    isSelected: Boolean,
+    sourceImage: ImageBitmap?,
+    onClick: () -> Unit
+) {
+    // 预取颜色
+    val primaryColor = MaterialTheme.colorScheme.primary
+    val outlineColor = MaterialTheme.colorScheme.outlineVariant
+    val primaryContainer = MaterialTheme.colorScheme.primaryContainer
+    val surfaceContainer = MaterialTheme.colorScheme.surfaceContainerLow
+    val labelBgColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.75f)
 
-        // 简单绘制，填满格子
-        drawImage(
-            image = image,
-            srcOffset = srcOffset,
-            srcSize = srcSize,
-            dstOffset = IntOffset.Zero,
-            dstSize = dstSize
-        )
+    // 布局容器：Box 仅用于提供尺寸和点击事件，不参与绘制
+    Box(
+        modifier = Modifier
+            .aspectRatio(1f)
+            // 点击事件放在这里
+            .pointerInput(Unit) {
+                detectTapGestures(onTap = { onClick() })
+            }
+    ) {
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val w = size.width
+            val h = size.height
+            val cornerRadius = 4.dp.toPx() // 圆角半径
+
+            // 1. 绘制背景 (替代 .background)
+            val bgColor = if (isSelected) primaryContainer else surfaceContainer
+            drawRoundRect(
+                color = bgColor,
+                cornerRadius = CornerRadius(cornerRadius, cornerRadius)
+            )
+
+            // 2. 绘制图片切片 (替代 VirtualSliceCanvas)
+            if (sourceImage != null) {
+                // 计算内缩 (Padding)
+                val padding = 3.dp.toPx()
+                val imgDstW = w - padding * 2
+                val imgDstH = h - padding * 2
+
+                // 简单的居中计算
+                if (imgDstW > 0 && imgDstH > 0) {
+                    val srcOffset = IntOffset(rect.left, rect.top)
+                    val srcSize = IntSize(rect.width.toInt(), rect.height.toInt())
+
+                    drawImage(
+                        image = sourceImage,
+                        srcOffset = srcOffset,
+                        srcSize = srcSize,
+                        dstOffset = IntOffset(padding.toInt(), padding.toInt()),
+                        dstSize = IntSize(imgDstW.toInt(), imgDstH.toInt()),
+                        // [关键] 必须使用 None，双线性插值(Low/Medium)在小图缩放时极慢
+                        filterQuality = FilterQuality.None
+                    )
+                }
+            }
+
+            // 3. 绘制边框 (替代 .border)
+            val borderColor = if (isSelected) primaryColor else outlineColor
+            val borderWidth = if (isSelected) 2.dp.toPx() else 1.dp.toPx()
+
+            // 边框居中绘制，需要偏移半个边框宽度
+            drawRoundRect(
+                color = borderColor,
+                cornerRadius = CornerRadius(cornerRadius, cornerRadius),
+                style = Stroke(width = borderWidth)
+            )
+        }
+
+        // 4. 文字标签 (仅文字使用 Composable，因为它在 Canvas 里很难画)
+        if (!label.isNullOrEmpty()) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                textAlign = TextAlign.Center,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .background(labelBgColor)
+                    .padding(vertical = 2.dp)
+            )
+        }
     }
 }
 
@@ -244,6 +299,20 @@ fun RowScope.CompactNumInput(label: String, value: Int, onValueChange: (Int) -> 
     )
 }
 
+// 简单的 Canvas 包装器，用于弹窗内复用
+@Composable
+fun SimpleSliceCanvas(image: ImageBitmap, rect: SegmentationRect, modifier: Modifier = Modifier) {
+    Canvas(modifier = modifier) {
+        drawImage(
+            image = image,
+            srcOffset = IntOffset(rect.left, rect.top),
+            srcSize = IntSize(rect.width.toInt(), rect.height.toInt()),
+            dstSize = IntSize(size.width.toInt(), size.height.toInt()),
+            filterQuality = FilterQuality.None
+        )
+    }
+}
+
 @Composable
 fun LabelingDialog(
     rect: SegmentationRect,
@@ -252,22 +321,20 @@ fun LabelingDialog(
     onConfirm: (String) -> Unit,
     onDismiss: () -> Unit
 ) {
-    // 每次 initialText 变化时（比如按回车切到下一个字），重置输入框内容
     var text by remember(initialText) { mutableStateOf(initialText) }
 
     Dialog(onDismissRequest = onDismiss) {
+        // 弹窗这种低频界面用 Card 没问题
         Card(modifier = Modifier.padding(16.dp)) {
             Column(
                 modifier = Modifier.padding(16.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                // 放大预览
                 Box(modifier = Modifier.size(120.dp).border(1.dp, Color.Gray)) {
-                    VirtualSliceCanvas(sourceImage, rect)
+                    SimpleSliceCanvas(sourceImage, rect, Modifier.fillMaxSize())
                 }
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // 输入框
                 OutlinedTextField(
                     value = text,
                     onValueChange = { text = it },
@@ -276,7 +343,6 @@ fun LabelingDialog(
                 )
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // 确认按钮
                 Button(onClick = { onConfirm(text) }) {
                     Text("确认 (Enter)")
                 }
