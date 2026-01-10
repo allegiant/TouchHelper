@@ -45,7 +45,6 @@ import uniffi.touch_core.RemoveNoiseFilter as RustRemoveNoiseFilter
 import uniffi.touch_core.RemoveLinesFilter as RustRemoveLinesFilter
 import uniffi.touch_core.MorphologyMode as RustMorphologyMode
 import uniffi.touch_core.AutoCropMode as RustAutoCropMode
-import uniffi.touch_core.scanComponents as rustScanComponents
 
 class LayerRepositoryImpl : LayerRepository {
 
@@ -291,33 +290,72 @@ class LayerRepositoryImpl : LayerRepository {
             ImageUtils.fromRgbaPixels(w, h, resultPixels)
         }
 
-    override suspend fun segment(source: BufferedImage, segmentation: Segmentation): List<Rect> =
-        withContext(Dispatchers.Default) {
-            val pixels = ImageUtils.toRgbaPixels(source)
-            val w = source.width
-            val h = source.height
-
-            val rustRects = when (segmentation) {
-                is GridSegmentation -> rustScanComponents(
-                    pixels,
-                    w,
-                    h,
-                    emptyList(),
-                    true,
-                    segmentation.rowCount,
-                    segmentation.colCount
-                )
-
-                is AutoSegmentation -> rustScanComponents(pixels, w, h, emptyList(), false, null, null)
-            }
-
-            // 【修复】显式转换为 Int，因为 Rust 返回的可能是 Long (u32/i64)
-            rustRects.map {
-                Rect(it.left.toFloat(), it.top.toFloat(), it.width.toFloat(), it.height.toFloat())
-            }
-        }
-
     override suspend fun crop(source: BufferedImage, rect: Rect): BufferedImage = withContext(Dispatchers.Default) {
         ImageUtils.cropImage(source, rect)
+    }
+
+    override suspend fun performSegmentation(
+        image: BufferedImage,
+        config: SegmentationConfig
+    ): Result<List<SegmentationRect>> = withContext(Dispatchers.Default) {
+        runCatching {
+            // 1. 图像转换: BufferedImage -> RGBA ByteArray
+            val width = image.width
+            val height = image.height
+            val pixels = IntArray(width * height)
+            // 获取 ARGB 数据
+            image.getRGB(0, 0, width, height, pixels, 0, width)
+
+            // [修正] 使用 ByteArray 而不是 ArrayList<Byte>
+            val byteArray = ByteArray(width * height * 4)
+            var index = 0
+
+            for (argb in pixels) {
+                // Java getRGB 返回 ARGB，我们需要 RGBA
+                byteArray[index++] = ((argb shr 16) and 0xFF).toByte() // R
+                byteArray[index++] = ((argb shr 8) and 0xFF).toByte()  // G
+                byteArray[index++] = (argb and 0xFF).toByte()          // B
+                byteArray[index++] = ((argb shr 24) and 0xFF).toByte() // A
+            }
+
+            // 2. 配置转换: Domain Config -> Rust Config
+            val rustMode = when (config.mode) {
+                SegmentationMode.FIXED_GRID -> uniffi.touch_core.SegmentationMode.FIXED_GRID
+                SegmentationMode.PROJECTION -> uniffi.touch_core.SegmentationMode.PROJECTION
+                SegmentationMode.CONNECTED_COMP -> uniffi.touch_core.SegmentationMode.CONNECTED_COMP
+            }
+
+            val rustConfig = uniffi.touch_core.SegmentationConfig(
+                mode = rustMode,
+                padding = config.padding,
+                minWidth = config.minWidth,
+                minHeight = config.minHeight,
+                startX = config.startX,
+                startY = config.startY,
+                cellWidth = config.cellWidth,
+                cellHeight = config.cellHeight,
+                colCount = config.colCount,
+                rowCount = config.rowCount,
+                colGap = config.colGap,
+                rowGap = config.rowGap,
+                splitRows = config.splitRows,
+                splitCols = config.splitCols,
+                projectionThreshold = config.projectionThreshold
+            )
+
+            // 3. 调用 Rust 接口
+            // 现在 byteArray 的类型是 ByteArray，符合 UniFFI 生成代码的要求
+            val rustRects = uniffi.touch_core.performSegmentation(byteArray, width, height, rustConfig)
+
+            // 4. 结果转换: Rust Rects -> Domain Rects
+            rustRects.map { r ->
+                SegmentationRect(
+                    left = r.left,
+                    top = r.top,
+                    width = r.width,
+                    height = r.height
+                )
+            }
+        }
     }
 }

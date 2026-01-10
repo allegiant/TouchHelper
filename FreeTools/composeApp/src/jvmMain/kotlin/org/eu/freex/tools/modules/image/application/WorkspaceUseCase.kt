@@ -4,18 +4,16 @@ import androidx.compose.ui.geometry.Rect
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
-import org.eu.freex.tools.modules.image.domain.model.GridSegmentation
 import org.eu.freex.tools.modules.image.domain.model.ImageFilter
 import org.eu.freex.tools.modules.image.domain.model.ImageLayer
 import org.eu.freex.tools.modules.image.domain.model.ImageWorkspace
 import org.eu.freex.tools.modules.image.domain.model.LayerConfig
 import org.eu.freex.tools.modules.image.domain.model.Pipeline
-import org.eu.freex.tools.modules.image.domain.model.font.FontGenerator
-import org.eu.freex.tools.modules.image.domain.model.font.FontRect
-import org.eu.freex.tools.modules.image.domain.model.font.Glyph
+import org.eu.freex.tools.modules.image.domain.model.SegmentationConfig
+import org.eu.freex.tools.modules.image.domain.model.SegmentationRect
 import org.eu.freex.tools.modules.image.domain.repository.LayerRepository
+import java.awt.image.BufferedImage
 import java.io.File
-import java.util.UUID
 
 class WorkspaceUseCase(
     private val repository: LayerRepository
@@ -51,7 +49,6 @@ class WorkspaceUseCase(
         return workspace.copy(
             assets = newAssets,
             pipeline = newChain,
-            fontGenerator = if (workspace.pipeline?.inputAssetId == assetId) null else workspace.fontGenerator
         )
     }
 
@@ -204,30 +201,6 @@ class WorkspaceUseCase(
         )
     }
 
-    // --- 字库 ---
-    suspend fun startFontGeneration(workspace: ImageWorkspace): Result<ImageWorkspace> = runCatching {
-        val chain = workspace.pipeline ?: throw IllegalStateException("No chain")
-        val finalLayer = chain.getFinalLayer(workspace.assets) ?: throw IllegalStateException("No layer")
-        val finalImage = finalLayer.image ?: throw IllegalStateException("No data")
-
-        val seg = GridSegmentation(3, 3)
-        val rects = repository.segment(finalImage, seg)
-        val glyphs = rects.map { r ->
-            val sub = repository.crop(finalImage, r)
-            Glyph(
-                id = UUID.randomUUID().toString(),
-                char = null,
-                layer = ImageLayer(
-                    name = "Glyph",
-                    image = sub,
-                    config = LayerConfig.Origin("sub")
-                ),
-                bounds = FontRect(r.left.toInt(), r.top.toInt(), r.width.toInt(), r.height.toInt())
-            )
-        }
-        workspace.copy(fontGenerator = FontGenerator(finalLayer, seg, glyphs))
-    }
-
     // --- 持久化 (修复：确保恢复所有 Asset 的图片数据) ---
     suspend fun saveWorkspace(file: File, workspace: ImageWorkspace): Result<Unit> = runCatching {
         // 在保存前可以做一些清理，比如只保存有路径的资源
@@ -281,25 +254,10 @@ class WorkspaceUseCase(
         )
     }
 
-    /**
-     * 辅助函数：根据滤镜配置重新计算流水线中每一步的图片
-     */
-    private suspend fun restoreChainImages(assets: List<ImageLayer>, chain: Pipeline): Pipeline {
-        val baseLayer = assets.find { it.id == chain.inputAssetId } ?: return chain
-        var currentImage = baseLayer.image ?: return chain
-
-        val restoredSteps = chain.steps.map { step ->
-            if (step.config is LayerConfig.Filter) {
-                val filter = step.config.filter
-                // 重新执行滤镜计算
-                val resultImage = repository.applyFilter(currentImage, filter)
-                currentImage = resultImage
-                step.copy(image = resultImage)
-            } else {
-                step
-            }
-        }
-
-        return chain.copy(steps = restoredSteps)
+    suspend fun performSegmentation(
+        image: BufferedImage,
+        config: SegmentationConfig
+    ): Result<List<SegmentationRect>> {
+        return repository.performSegmentation(image, config)
     }
 }

@@ -66,6 +66,8 @@ fun ImageWorkbench(
                     modifier = Modifier.weight(1f),
                     displayLayer = state.displayImage,
                     isPicking = state.isColorPicking,
+                    segmentationResults = state.segmentationProject?.results ?: emptyList(),
+                    showSegmentationOverlay = state.activeTab == WorkbenchTab.SEGMENTATION,
                     // 当点击取色时，发送 TriggerColorPick 事件
                     onPick = { color ->
                         viewModel.handleEvent(TriggerColorPick(color))
@@ -88,7 +90,8 @@ fun ImageWorkbench(
             // 右侧
             InspectorPanel(
                 modifier = Modifier.width(320.dp).fillMaxHeight(),
-                uiState = state
+                uiState = state,
+                onEvent = viewModel::handleEvent
             )
         }
     }

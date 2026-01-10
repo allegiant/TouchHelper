@@ -3,10 +3,17 @@ package org.eu.freex.tools.modules.image.presentation.viewmodel
 import androidx.compose.ui.graphics.Color
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.consumeEach
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import org.eu.freex.tools.modules.image.application.WorkspaceUseCase
@@ -14,6 +21,7 @@ import org.eu.freex.tools.modules.image.domain.model.ImageFilter
 import org.eu.freex.tools.modules.image.domain.model.ImageLayer
 import org.eu.freex.tools.modules.image.domain.model.ImageWorkspace
 import org.eu.freex.tools.modules.image.domain.model.LayerConfig
+import org.eu.freex.tools.modules.image.domain.model.SegmentationProject
 import org.eu.freex.tools.modules.image.presentation.core.ApplyFilterStep
 import org.eu.freex.tools.modules.image.presentation.core.CancelColorPick
 import org.eu.freex.tools.modules.image.presentation.core.CancelPreview
@@ -29,11 +37,16 @@ import org.eu.freex.tools.modules.image.presentation.core.PreviewFilter
 import org.eu.freex.tools.modules.image.presentation.core.RemoveAsset
 import org.eu.freex.tools.modules.image.presentation.core.SaveProject
 import org.eu.freex.tools.modules.image.presentation.core.SelectAsset
+import org.eu.freex.tools.modules.image.presentation.core.SelectChar
 import org.eu.freex.tools.modules.image.presentation.core.SelectStep
-import org.eu.freex.tools.modules.image.presentation.core.StartFontMaker
 import org.eu.freex.tools.modules.image.presentation.core.StartScreenCapture
+import org.eu.freex.tools.modules.image.presentation.core.StopLabeling
+import org.eu.freex.tools.modules.image.presentation.core.SubmitLabelAndNext
+import org.eu.freex.tools.modules.image.presentation.core.SwitchTab
 import org.eu.freex.tools.modules.image.presentation.core.TriggerColorPick
 import org.eu.freex.tools.modules.image.presentation.core.UpdateFilterStep
+import org.eu.freex.tools.modules.image.presentation.core.UpdateSegmentationConfig
+import org.eu.freex.tools.modules.image.presentation.core.WorkbenchTab
 
 class ImageViewModel(
     private val useCase: WorkspaceUseCase
@@ -86,12 +99,48 @@ class ImageViewModel(
                 }
             }
         }
+
+        setupReactiveSegmentation()
+    }
+
+    @OptIn(FlowPreview::class)
+    private fun setupReactiveSegmentation() {
+        // 监听显示的图片
+        val imageFlow = _uiState.map { it.displayImage }.distinctUntilChanged()
+
+        // 监听 Domain 中的配置 (通过 uiState 间接监听)
+        val configFlow = _uiState
+            .map { it.segmentationProject?.config }
+            .distinctUntilChanged()
+            .debounce(200)
+
+        val tabFlow = _uiState.map { it.activeTab }.distinctUntilChanged()
+
+        combine(imageFlow, configFlow, tabFlow) { layer, config, tab ->
+            Triple(layer, config, tab)
+        }.onEach { (layer, config, tab) ->
+            // 只有在 切割Tab 且有图 且有配置 时才执行
+            if (tab == WorkbenchTab.SEGMENTATION && layer?.image != null && config != null) {
+                // 调用 UseCase (不接触 Rust)
+                useCase.performSegmentation(layer.image, config)
+                    .onSuccess { rects ->
+                        // 更新 Workspace
+                        val currentProject = workspace.segmentation ?: SegmentationProject(config = config)
+                        workspace = workspace.copy(
+                            segmentation = currentProject.copy(results = rects)
+                        )
+                        refreshUiState()
+                    }
+                    .onFailure { it.printStackTrace() }
+            }
+        }.launchIn(viewModelScope)
     }
 
     fun handleEvent(event: ImageUiEvent) {
         viewModelScope.launch {
             // Loading 状态处理... 预览和取色不触发Loading
-            if (event !is PreviewFilter && event !is TriggerColorPick) {
+            if (event !is PreviewFilter && event !is TriggerColorPick
+                && event !is SwitchTab && event !is UpdateSegmentationConfig && event !is SelectChar) {
                 _uiState.update { it.copy(isLoading = true) }
             }
 
@@ -241,7 +290,62 @@ class ImageViewModel(
                         _uiState.update { s -> s.copy(previewLayer = null) }
                     }
 
-                    is StartFontMaker -> useCase.startFontGeneration(workspace).onSuccess { workspace = it }
+                    // [新增] 切换 Tab
+                    is SwitchTab -> {
+                        // 初始化数据
+                        if (event.tab == WorkbenchTab.SEGMENTATION && workspace.segmentation == null) {
+                            workspace = workspace.copy(segmentation = SegmentationProject())
+                        }
+                        _uiState.update { it.copy(activeTab = event.tab) }
+                    }
+
+                    // [新增] 更新配置 -> 更新 Workspace -> 触发 Flow 计算
+                    is UpdateSegmentationConfig -> {
+                        val current = workspace.segmentation ?: SegmentationProject()
+                        workspace = workspace.copy(
+                            segmentation = current.copy(config = event.config)
+                        )
+                    }
+
+                    // [新增] 选中字符 -> 更新 UI 瞬时状态
+                    is SelectChar -> {
+                        _uiState.update {
+                            it.copy(segmentationInteraction = it.segmentationInteraction.copy(
+                                selectedIndex = event.index,
+                                isLabeling = true
+                            ))
+                        }
+                    }
+
+                    // [新增] 提交标注
+                    is SubmitLabelAndNext -> {
+                        val currentProject = workspace.segmentation
+                        val currentIndex = _uiState.value.segmentationInteraction.selectedIndex
+
+                        if (currentProject != null && currentIndex != -1) {
+                            // 1. 更新业务数据
+                            val newLabels = currentProject.labels.toMutableMap()
+                            newLabels[currentIndex] = event.text
+                            workspace = workspace.copy(
+                                segmentation = currentProject.copy(labels = newLabels)
+                            )
+
+                            // 2. 更新 UI 交互 (游标移动)
+                            val nextIndex = (currentIndex + 1).coerceAtMost(currentProject.results.size - 1)
+                            _uiState.update {
+                                it.copy(segmentationInteraction = it.segmentationInteraction.copy(
+                                    selectedIndex = nextIndex,
+                                    isLabeling = true
+                                ))
+                            }
+                        }
+                    }
+
+                    is StopLabeling -> {
+                        _uiState.update {
+                            it.copy(segmentationInteraction = it.segmentationInteraction.copy(isLabeling = false))
+                        }
+                    }
                 }
             }.onFailure { it.printStackTrace() }
 
@@ -255,7 +359,7 @@ class ImageViewModel(
                 isLoading = false,
                 assets = workspace.assets,
                 activeChain = workspace.pipeline,
-                fontGenerator = workspace.fontGenerator
+                segmentationProject = workspace.segmentation
             )
         }
     }

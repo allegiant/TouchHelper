@@ -41,6 +41,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import org.eu.freex.tools.modules.image.domain.model.ImageLayer
+import org.eu.freex.tools.modules.image.domain.model.SegmentationRect
 import java.awt.Cursor
 import java.awt.Color as AwtColor
 
@@ -49,6 +50,10 @@ fun EditorCanvasPanel(
     modifier: Modifier = Modifier,
     displayLayer: ImageLayer?,
     isPicking: Boolean,             // 参数保留
+    // [新增] 切割结果数据
+    segmentationResults: List<SegmentationRect> = emptyList(),
+    // [新增] 是否显示切割覆盖层 (只有在 切割Tab 时才传 true)
+    showSegmentationOverlay: Boolean = false,
     onPick: (Color) -> Unit,        // 参数保留
     onCancel: () -> Unit            // 参数保留
 ) {
@@ -181,6 +186,29 @@ fun EditorCanvasPanel(
                 clipRect(left = dstLeft, top = dstTop, right = dstLeft + imgWidth, bottom = dstTop + imgHeight) {
                     drawRect(Color.White, topLeft = Offset(dstLeft, dstTop), size = Size(imgWidth, imgHeight))
                     drawImage(bitmap, topLeft = Offset(dstLeft, dstTop))
+
+                    // ==============================
+                    // [修改点] 绘制切割结果覆盖层
+                    // ==============================
+                    if (showSegmentationOverlay) {
+                        segmentationResults.forEach { rect ->
+                            // rect 的坐标是相对于图片左上角的 (0,0)
+                            // 绘制时需要加上图片的偏移量 (dstLeft, dstTop)
+                            drawRect(
+                                color = Color.Red,
+                                topLeft = Offset(
+                                    dstLeft + rect.left.toFloat(),
+                                    dstTop + rect.top.toFloat()
+                                ),
+                                size = Size(
+                                    width = rect.width.toInt().toFloat(),
+                                    height = rect.height.toInt().toFloat()
+                                ),
+                                // 线宽随缩放反向调整，保持视觉上的细线效果
+                                style = Stroke(width = 2f / scale)
+                            )
+                        }
+                    }
                 }
 
                 // 网格线

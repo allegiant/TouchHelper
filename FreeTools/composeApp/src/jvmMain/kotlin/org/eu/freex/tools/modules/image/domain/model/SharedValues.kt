@@ -246,22 +246,53 @@ data class ResizeScaleFilter(
     override val name = "智能缩放"
 }
 
-// --- 切割 ---
+// ==========================================
+// [新增] 切割与识别 - 领域模型
+// ==========================================
+
+// ... (保留原有的 ImageFilter 等定义)
+
+// ==========================================
+// [新增] 切割与识别 - 领域模型
+// ==========================================
+
 @Serializable
-sealed interface Segmentation {
-    val name: String
+data class SegmentationRect(
+    val left: Int,
+    val top: Int,
+    val width: UInt,
+    val height: UInt
+)
+
+@Serializable
+enum class SegmentationMode {
+    FIXED_GRID,      // 固定网格
+    PROJECTION,      // 投影切割
+    CONNECTED_COMP   // 连通区域
 }
 
 @Serializable
-@SerialName("GRID")
-data class GridSegmentation(
-    val rowCount: Int = 1, val colCount: Int = 1
-) : Segmentation {
-    override val name = "网格切割"
-}
+data class SegmentationConfig(
+    val mode: SegmentationMode = SegmentationMode.FIXED_GRID,
 
-@Serializable
-@SerialName("AUTO")
-object AutoSegmentation : Segmentation {
-    override val name = "自动识别"
-}
+    // --- 通用参数 ---
+    val padding: Int = 0,
+    val minWidth: UInt = 10u,
+    val minHeight: UInt = 10u,
+
+    // --- FixedGrid 参数 ---
+    val startX: Int = 0,
+    val startY: Int = 0,
+    val cellWidth: UInt = 32u,
+    val cellHeight: UInt = 32u,
+    val colCount: UInt = 1u,
+    val rowCount: UInt = 1u,
+    val colGap: Int = 0,
+    val rowGap: Int = 0,
+
+    // --- Projection 参数 ---
+    val splitRows: Boolean = true,
+    val splitCols: Boolean = true,
+    val projectionThreshold: UByte = 128u
+)
+
