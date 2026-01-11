@@ -65,17 +65,12 @@ fun ImageWorkbench(
                 EditorCanvasPanel(
                     modifier = Modifier.weight(1f),
                     displayLayer = state.displayImage,
-                    isPicking = state.isColorPicking,
+                    pickingType = state.pickingType,
                     segmentationResults = state.segmentationProject?.results ?: emptyList(),
                     showSegmentationOverlay = state.activeTab == WorkbenchTab.SEGMENTATION,
-                    // 当点击取色时，发送 TriggerColorPick 事件
-                    onPick = { color ->
-                        viewModel.handleEvent(TriggerColorPick(color))
-                    },
-                    // 当取消取色时，发送 CancelColorPick 事件
-                    onCancel = {
-                        viewModel.handleEvent(CancelColorPick)
-                    }
+                    onPickColor = { viewModel.handleEvent(TriggerColorPick(it)) }, // 传出颜色
+                    onPickPoint = { viewModel.handleEvent(TriggerPointPick(it)) }, // 传出坐标
+                    onCancel = { viewModel.handleEvent(CancelPick) } // 通用取消
                 )
 
                 // 2. 流水线：固定高度，不再抢占空间

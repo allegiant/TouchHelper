@@ -4,6 +4,12 @@ import org.eu.freex.tools.modules.image.domain.model.ImageLayer
 import org.eu.freex.tools.modules.image.domain.model.Pipeline
 import org.eu.freex.tools.modules.image.domain.model.SegmentationProject
 
+// [新增] 定义拾取类型
+enum class PickingType {
+    NONE,   // 普通浏览模式
+    COLOR,  // 取色模式
+    POINT   // 取点模式 (坐标)
+}
 
 data class SegmentationInteraction(
     val selectedIndex: Int = -1,    // 游标
@@ -23,8 +29,7 @@ data class ImageUiState(
     // 临时状态
     val cropperLayer: ImageLayer? = null,
     val previewLayer: ImageLayer? = null,
-    val isColorPicking: Boolean = false,
-    // [新增] 界面状态
+    val pickingType: PickingType = PickingType.NONE,
     val activeTab: WorkbenchTab = WorkbenchTab.FILTER,
     val segmentationInteraction: SegmentationInteraction = SegmentationInteraction()
 ) {

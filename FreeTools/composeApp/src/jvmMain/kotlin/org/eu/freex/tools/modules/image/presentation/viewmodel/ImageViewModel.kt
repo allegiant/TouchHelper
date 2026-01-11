@@ -1,6 +1,7 @@
 package org.eu.freex.tools.modules.image.presentation.viewmodel
 
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.IntOffset
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.FlowPreview
@@ -23,7 +24,7 @@ import org.eu.freex.tools.modules.image.domain.model.ImageWorkspace
 import org.eu.freex.tools.modules.image.domain.model.LayerConfig
 import org.eu.freex.tools.modules.image.domain.model.SegmentationProject
 import org.eu.freex.tools.modules.image.presentation.core.ApplyFilterStep
-import org.eu.freex.tools.modules.image.presentation.core.CancelColorPick
+import org.eu.freex.tools.modules.image.presentation.core.CancelPick
 import org.eu.freex.tools.modules.image.presentation.core.CancelPreview
 import org.eu.freex.tools.modules.image.presentation.core.ConfirmCrop
 import org.eu.freex.tools.modules.image.presentation.core.DismissCropper
@@ -33,6 +34,7 @@ import org.eu.freex.tools.modules.image.presentation.core.ImageUiEvent
 import org.eu.freex.tools.modules.image.presentation.core.ImageUiState
 import org.eu.freex.tools.modules.image.presentation.core.LoadFile
 import org.eu.freex.tools.modules.image.presentation.core.LoadProject
+import org.eu.freex.tools.modules.image.presentation.core.PickingType
 import org.eu.freex.tools.modules.image.presentation.core.PreviewFilter
 import org.eu.freex.tools.modules.image.presentation.core.RemoveAsset
 import org.eu.freex.tools.modules.image.presentation.core.SaveProject
@@ -44,6 +46,7 @@ import org.eu.freex.tools.modules.image.presentation.core.StopLabeling
 import org.eu.freex.tools.modules.image.presentation.core.SubmitLabelAndNext
 import org.eu.freex.tools.modules.image.presentation.core.SwitchTab
 import org.eu.freex.tools.modules.image.presentation.core.TriggerColorPick
+import org.eu.freex.tools.modules.image.presentation.core.TriggerPointPick
 import org.eu.freex.tools.modules.image.presentation.core.UpdateFilterStep
 import org.eu.freex.tools.modules.image.presentation.core.UpdateSegmentationConfig
 import org.eu.freex.tools.modules.image.presentation.core.WorkbenchTab
@@ -63,6 +66,9 @@ class ImageViewModel(
 
     // 用于在挂起函数和事件处理之间传递颜色的通道
     private val colorPickChannel = Channel<Color>(Channel.RENDEZVOUS)
+
+    // 坐标拾取通道
+    private val pointPickChannel = Channel<IntOffset>(Channel.RENDEZVOUS)
 
     init {
         viewModelScope.launch {
@@ -139,8 +145,10 @@ class ImageViewModel(
     fun handleEvent(event: ImageUiEvent) {
         viewModelScope.launch {
             // Loading 状态处理... 预览和取色不触发Loading
-            if (event !is PreviewFilter && event !is TriggerColorPick
-                && event !is SwitchTab && event !is UpdateSegmentationConfig && event !is SelectChar) {
+            if (event !is PreviewFilter
+                && event !is TriggerColorPick && event !is TriggerPointPick
+                && event !is SwitchTab && event !is UpdateSegmentationConfig && event !is SelectChar
+            ) {
                 _uiState.update { it.copy(isLoading = true) }
             }
 
@@ -178,6 +186,7 @@ class ImageViewModel(
                     is SaveProject -> {
                         useCase.saveWorkspace(event.file, workspace).onFailure { it.printStackTrace() }
                     }
+
                     is LoadProject -> {
                         useCase.loadWorkspace(event.file).onSuccess { loadedWorkspace ->
                             workspace = loadedWorkspace
@@ -221,18 +230,22 @@ class ImageViewModel(
                         _uiState.update { s -> s.copy(previewLayer = null) }
                     }
 
-                    // --- 取色事件处理 ---
+                    // --- [修改] 拾取器事件处理 ---
                     is TriggerColorPick -> {
-                        // 收到 Canvas 的点击颜色，发送到通道，唤醒 awaitColorPick
                         colorPickChannel.send(event.color)
-                        // UI 状态的 isColorPicking = false 会在 awaitColorPick 的 finally 块中自动处理
                     }
 
-                    is CancelColorPick -> {
-                        // 关闭通道或发送空，这里简单处理为取消当前的协程等待
-                        // 在 awaitColorPick 中并未直接处理 cancel，但 UI 可以通过 Job 取消
-                        // 简单做法：重置 UI 状态即可，awaitColorPick 会因为超时或界面销毁而结束
-                        _uiState.update { it.copy(isColorPicking = false) }
+                    is TriggerPointPick -> {
+                        pointPickChannel.send(event.point)
+                    }
+
+                    is CancelPick -> {
+                        // 如果用户取消，我们在 await 方法中通常会通过 UI 状态变化或超时来处理
+                        // 这里最重要的是重置 UI 状态，让视图层退出取色模式
+                        _uiState.update { it.copy(pickingType = PickingType.NONE) }
+
+                        // 可选：如果需要在协程侧抛出取消异常，可以在这里 close channel，
+                        // 但简单的做法是让 UI 状态驱动视图，协程侧自然结束或挂起等待下一次
                     }
 
                     is PreviewFilter -> {
@@ -310,10 +323,12 @@ class ImageViewModel(
                     // [新增] 选中字符 -> 更新 UI 瞬时状态
                     is SelectChar -> {
                         _uiState.update {
-                            it.copy(segmentationInteraction = it.segmentationInteraction.copy(
-                                selectedIndex = event.index,
-                                isLabeling = true
-                            ))
+                            it.copy(
+                                segmentationInteraction = it.segmentationInteraction.copy(
+                                    selectedIndex = event.index,
+                                    isLabeling = true
+                                )
+                            )
                         }
                     }
 
@@ -333,10 +348,12 @@ class ImageViewModel(
                             // 2. 更新 UI 交互 (游标移动)
                             val nextIndex = (currentIndex + 1).coerceAtMost(currentProject.results.size - 1)
                             _uiState.update {
-                                it.copy(segmentationInteraction = it.segmentationInteraction.copy(
-                                    selectedIndex = nextIndex,
-                                    isLabeling = true
-                                ))
+                                it.copy(
+                                    segmentationInteraction = it.segmentationInteraction.copy(
+                                        selectedIndex = nextIndex,
+                                        isLabeling = true
+                                    )
+                                )
                             }
                         }
                     }
@@ -371,7 +388,7 @@ class ImageViewModel(
      */
     suspend fun awaitColorPick(): Color? {
         // 1. 进入取色模式：通知 Canvas 显示十字准星
-        _uiState.update { it.copy(isColorPicking = true) }
+        _uiState.update { it.copy(pickingType = PickingType.COLOR) }
 
         return try {
             // 2. 挂起，等待 handleEvent(TriggerColorPick) 往通道里塞数据
@@ -380,8 +397,22 @@ class ImageViewModel(
             // 协程被取消（如组件销毁、界面切换）
             null
         } finally {
-            // 3. 无论成功还是异常退出，都自动恢复 UI 状态
-            _uiState.update { it.copy(isColorPicking = false) }
+            _uiState.update { it.copy(pickingType = PickingType.NONE) }
+        }
+    }
+
+    /**
+     * 挂起函数：等待取点
+     * UI 组件(如 Renderer) 调用此方法后会挂起，直到用户在画布上点击或取消。
+     */
+    suspend fun awaitPointPick(): IntOffset? {
+        _uiState.update { it.copy(pickingType = PickingType.POINT) }
+        return try {
+            pointPickChannel.receive()
+        } catch (e: Exception) {
+            null
+        } finally {
+            _uiState.update { it.copy(pickingType = PickingType.NONE) }
         }
     }
 }

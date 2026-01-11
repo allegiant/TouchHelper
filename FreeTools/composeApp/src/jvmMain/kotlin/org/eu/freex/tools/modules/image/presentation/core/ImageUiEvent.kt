@@ -2,6 +2,7 @@ package org.eu.freex.tools.modules.image.presentation.core
 
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.IntOffset
 import org.eu.freex.tools.modules.image.domain.model.ImageFilter
 import org.eu.freex.tools.modules.image.domain.model.ImageLayer
 import org.eu.freex.tools.modules.image.domain.model.SegmentationConfig
@@ -27,9 +28,12 @@ object StartScreenCapture : ImageUiEvent
 data class ConfirmCrop(val sourceLayer: ImageLayer, val rect: Rect) : ImageUiEvent
 object DismissCropper : ImageUiEvent
 
-// --- 取色器 ---
+// --- 通用拾取器事件 ---
+// 触发颜色拾取
 data class TriggerColorPick(val color: Color) : ImageUiEvent
-object CancelColorPick : ImageUiEvent
+// 触发坐标拾取
+data class TriggerPointPick(val point: IntOffset) : ImageUiEvent
+object CancelPick : ImageUiEvent
 
 // --- 流水线 ---
 data class SelectStep(val index: Int) : ImageUiEvent

@@ -42,6 +42,7 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import org.eu.freex.tools.modules.image.domain.model.ImageLayer
 import org.eu.freex.tools.modules.image.domain.model.SegmentationRect
+import org.eu.freex.tools.modules.image.presentation.core.PickingType
 import java.awt.Cursor
 import java.awt.Color as AwtColor
 
@@ -49,13 +50,14 @@ import java.awt.Color as AwtColor
 fun EditorCanvasPanel(
     modifier: Modifier = Modifier,
     displayLayer: ImageLayer?,
-    isPicking: Boolean,             // 参数保留
-    // [新增] 切割结果数据
+    pickingType: PickingType = PickingType.NONE,
+    // 切割结果数据
     segmentationResults: List<SegmentationRect> = emptyList(),
-    // [新增] 是否显示切割覆盖层 (只有在 切割Tab 时才传 true)
+    //是否显示切割覆盖层 (只有在 切割Tab 时才传 true)
     showSegmentationOverlay: Boolean = false,
-    onPick: (Color) -> Unit,        // 参数保留
-    onCancel: () -> Unit            // 参数保留
+    onPickColor: (Color) -> Unit = {},
+    onPickPoint: (IntOffset) -> Unit = {},
+    onCancel: () -> Unit
 ) {
     val backgroundColor = MaterialTheme.colorScheme.surfaceContainerLow
     val gridColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
@@ -82,6 +84,8 @@ fun EditorCanvasPanel(
         var hoverPixel by remember { mutableStateOf<IntOffset?>(null) }
         var hoverColor by remember { mutableStateOf<AwtColor?>(null) }
 
+        val isPicking = pickingType != PickingType.NONE
+
         LaunchedEffect(displayLayer.id) {
             scale = 1f
             offset = Offset.Zero
@@ -96,7 +100,7 @@ fun EditorCanvasPanel(
                     if (isPicking) PointerIcon(Cursor.getPredefinedCursor(Cursor.CROSSHAIR_CURSOR))
                     else PointerIcon.Default
                 )
-                // 1. 鼠标移动与滚轮 (保持不变)
+                // 1. 鼠标移动与滚轮
                 .pointerInput(Unit) {
                     awaitPointerEventScope {
                         while (true) {
@@ -135,7 +139,7 @@ fun EditorCanvasPanel(
                         }
                     }
                 }
-                // 2. 触摸板手势 (保持不变)
+                // 2. 触摸板手势
                 .pointerInput(Unit) {
                     detectTransformGestures { _, pan, zoom, _ ->
                         scale = (scale * zoom).coerceIn(0.1f, 50f)
@@ -143,7 +147,7 @@ fun EditorCanvasPanel(
                     }
                 }
                 // 3. 点击事件 (根据 isPicking 切换)
-                .pointerInput(isPicking) {
+                .pointerInput(pickingType) {
                     if (isPicking) {
                         detectTapGestures(
                             onTap = { tapOffset ->
@@ -157,8 +161,16 @@ fun EditorCanvasPanel(
                                 val pixelY = (unscaledRelative.y + imgHeight / 2f).toInt()
 
                                 if (pixelX in 0 until imgWidth && pixelY in 0 until imgHeight) {
-                                    val rgb = bufferedImage.getRGB(pixelX, pixelY)
-                                    onPick(Color(rgb)) // 触发回调
+                                    // 分发事件
+                                    when (pickingType) {
+                                        PickingType.COLOR -> {
+                                            val rgb = bufferedImage.getRGB(pixelX, pixelY)
+                                            onPickColor(Color(rgb))
+                                        }
+                                        PickingType.POINT -> {
+                                            onPickPoint(IntOffset(pixelX, pixelY))
+                                        }
+                                    }
                                 }
                             },
                             onLongPress = { onCancel() } // 长按取消
@@ -170,7 +182,6 @@ fun EditorCanvasPanel(
                     }
                 }
         ) {
-            // ... (绘图逻辑保持不变，为了节省篇幅这里省略) ...
             val canvasWidth = size.width
             val canvasHeight = size.height
             val imgWidth = bitmap.width.toFloat()
@@ -238,8 +249,12 @@ fun EditorCanvasPanel(
             imgSize = IntSize(displayLayer.image.width, displayLayer.image.height)
         )
 
-        // 取色提示横幅
+        // 拾取器提示横幅
         if (isPicking) {
+            val promptText = when (pickingType) {
+                PickingType.COLOR -> "正在取色... 点击图片选取"
+                PickingType.POINT -> "正在拾取坐标... 点击图片确定起点"
+            }
             Box(
                 modifier = Modifier
                     .align(Alignment.TopCenter)
@@ -248,7 +263,7 @@ fun EditorCanvasPanel(
                     .padding(horizontal = 12.dp, vertical = 6.dp)
             ) {
                 Text(
-                    "正在取色... 点击图片选取 (长按取消)",
+                    text = "$promptText (长按取消)",
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onPrimaryContainer
                 )
