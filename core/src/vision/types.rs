@@ -257,18 +257,27 @@ pub enum SegmentationMode {
     ConnectedComp, // 智能连通域 (Blob)
 }
 
-// [新增] 统一的切割参数配置
-// 为了方便前端调用，我们将三种模式的参数合并到一个结构体中
+// 统一的切割参数配置
 #[derive(Debug, Clone, Serialize, Deserialize, uniffi::Record)]
 pub struct SegmentationConfig {
     pub mode: SegmentationMode,
 
     // --- 通用参数 ---
-    pub padding: i32,    // 切割后的微调留白 (正数扩大，负数缩小)
-    pub min_width: u32,  // 最小宽度过滤 (像素)
-    pub min_height: u32, // 最小高度过滤 (像素)
+    pub padding: i32, // 结果微调留白
 
-    // --- 模式A: FixedGrid (固定位置) 参数 ---
+    // [逻辑变更] 这里的 min/max 现在作用于 "最终目标"，而不是 "中间连通块"
+    pub min_width: u32,
+    pub min_height: u32,
+
+    // [新增] 最大尺寸限制 (0 表示不限制)
+    pub max_width: u32,
+    pub max_height: u32,
+
+    // [新增] 合并距离 (0 表示不开启合并)
+    // 如果两个框的距离小于此值，它们会被合并为一个大框
+    pub merge_distance: u32,
+
+    // --- 模式A: FixedGrid 参数 ---
     pub start_x: i32,
     pub start_y: i32,
     pub cell_width: u32,
@@ -278,8 +287,8 @@ pub struct SegmentationConfig {
     pub col_gap: i32,
     pub row_gap: i32,
 
-    // --- 模式B: Projection (投影) 参数 ---
-    pub split_rows: bool,         // 是否切行 (Y轴投影)
-    pub split_cols: bool,         // 是否切列 (X轴投影)
-    pub projection_threshold: u8, // 判定为“有内容”的亮度阈值 (0~255, 通常二值图设为128)
+    // --- 模式B: Projection 参数 ---
+    pub split_rows: bool,
+    pub split_cols: bool,
+    pub projection_threshold: u8,
 }

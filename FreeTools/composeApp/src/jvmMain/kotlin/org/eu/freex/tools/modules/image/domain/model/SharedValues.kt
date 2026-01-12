@@ -279,6 +279,10 @@ data class SegmentationConfig(
     val padding: Int = 0,
     val minWidth: UInt = 10u,
     val minHeight: UInt = 10u,
+    val maxWidth: UInt = 0u,
+    val maxHeight: UInt = 0u,
+
+    val mergeDistance: UInt = 0u,            // 新增：0代表不合并
 
     // --- FixedGrid 参数 ---
     val startX: Int = 0,

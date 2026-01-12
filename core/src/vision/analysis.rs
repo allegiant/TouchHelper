@@ -1,18 +1,131 @@
 use crate::vision::types::{Rect, SegmentationConfig, SegmentationMode};
 use image::{DynamicImage, GenericImageView};
+use std::cmp::{max, min};
 
 /// 核心入口：执行分割分析
-/// 注意：输入的 img 应该是已经经过滤镜处理（二值化/反色）后的图像
 pub fn perform_segmentation(img: &DynamicImage, config: &SegmentationConfig) -> Vec<Rect> {
-    // 1. 根据模式分发算法
+    // 1. 执行原始分割 (Raw Segmentation)
+    // 注意：这里的子算法不再执行严格的 config.min_width 过滤，
+    // 而是仅执行基本的噪点过滤 (如 < 2px)，保留尽可能多的碎片以供后续合并。
     let raw_rects = match config.mode {
         SegmentationMode::FixedGrid => segment_grid(img, config),
         SegmentationMode::Projection => segment_projection(img, config),
         SegmentationMode::ConnectedComp => segment_connected_components(img, config),
     };
 
-    // 2. 统一后期处理（Padding + 边界安全修正）
-    apply_padding_and_clamp(raw_rects, img.width(), img.height(), config.padding)
+    // 2. [新增] 策略 A: 合并邻近矩形 (Merge Strategy)
+    // 如果碎片之间距离很近，说明它们属于同一个视觉元素（如一整行字）
+    let merged_rects = if config.merge_distance > 0 && !raw_rects.is_empty() {
+        merge_nearby_rects(raw_rects, config.merge_distance)
+    } else {
+        raw_rects
+    };
+
+    // 3. [新增] 尺寸过滤 (Size Filter)
+    // 此时的 rects 已经是合并后的完整形态，可以严格应用用户的 min/max 限制了
+    let filtered_rects = merged_rects
+        .into_iter()
+        .filter(|r| {
+            // 检查最小尺寸
+            if r.width < config.min_width || r.height < config.min_height {
+                return false;
+            }
+            // 检查最大尺寸 (0 代表不限制)
+            if config.max_width > 0 && r.width > config.max_width {
+                return false;
+            }
+            if config.max_height > 0 && r.height > config.max_height {
+                return false;
+            }
+            true
+        })
+        .collect();
+
+    // 4. 后期处理（Padding + 边界安全修正）
+    apply_padding_and_clamp(filtered_rects, img.width(), img.height(), config.padding)
+}
+
+// ==========================================
+// [新增算法] 合并邻近矩形
+// ==========================================
+fn merge_nearby_rects(rects: Vec<Rect>, max_dist: u32) -> Vec<Rect> {
+    if rects.is_empty() {
+        return rects;
+    }
+
+    // 简单的迭代合并算法：
+    // 1. 将所有矩形视为独立的集合
+    // 2. 两两检查，如果距离 < max_dist，则合并它们
+    // 3. 重复直到没有可以合并的为止
+    // (为了性能，这里使用简化的并查集思路，或者直接多轮迭代)
+
+    let mut current_rects = rects;
+    let mut changed = true;
+
+    // 循环直到稳定（不再发生合并）
+    while changed {
+        changed = false;
+        let mut next_rects = Vec::new();
+        let mut merged_indices = vec![false; current_rects.len()];
+
+        for i in 0..current_rects.len() {
+            if merged_indices[i] {
+                continue;
+            }
+
+            let mut base = current_rects[i];
+            merged_indices[i] = true; // 标记自己已处理
+
+            // 尝试将 base 与后续所有未处理的矩形合并
+            for j in (i + 1)..current_rects.len() {
+                if merged_indices[j] {
+                    continue;
+                }
+
+                let target = current_rects[j];
+                if is_nearby(&base, &target, max_dist) {
+                    // 合并两个矩形
+                    base = union_rect(&base, &target);
+                    merged_indices[j] = true; // 标记 target 已被吸纳
+                    changed = true; // 发生了变更，需要再跑一轮以防连锁反应
+                }
+            }
+            next_rects.push(base);
+        }
+        current_rects = next_rects;
+    }
+
+    current_rects
+}
+
+// 判断两个矩形是否足够靠近
+fn is_nearby(r1: &Rect, r2: &Rect, dist: u32) -> bool {
+    // 扩展 r1 的边界 dist 大小，看是否与 r2 相交
+    let r1_left = r1.left - dist as i32;
+    let r1_top = r1.top - dist as i32;
+    let r1_right = r1.left + r1.width as i32 + dist as i32;
+    let r1_bottom = r1.top + r1.height as i32 + dist as i32;
+
+    let r2_right = r2.left + r2.width as i32;
+    let r2_bottom = r2.top + r2.height as i32;
+
+    // 矩形相交判定：!(r2在r1左边 || r2在r1右边 || r2在r1上边 || r2在r1下边)
+    !(r2.left > r1_right || r2_right < r1_left || r2.top > r1_bottom || r2_bottom < r1_top)
+}
+
+// 合并两个矩形为包围盒
+fn union_rect(r1: &Rect, r2: &Rect) -> Rect {
+    let left = min(r1.left, r2.left);
+    let top = min(r1.top, r2.top);
+    let right = max(r1.left + r1.width as i32, r2.left + r2.width as i32);
+    let bottom = max(r1.top + r1.height as i32, r2.top + r2.height as i32);
+
+    Rect {
+        left,
+        top,
+        width: (right - left) as u32,
+        height: (bottom - top) as u32,
+    }
 }
 
 // ==========================================
@@ -147,33 +260,28 @@ fn segment_projection(img: &DynamicImage, config: &SegmentationConfig) -> Vec<Re
 }
 
 // ==========================================
-// 算法 3: 连通域分析 (Connected Components)
-// 重构自你原有的 scan_connected_components
+// 算法 3: 连通域分析 (已修改)
 // ==========================================
-fn segment_connected_components(img: &DynamicImage, config: &SegmentationConfig) -> Vec<Rect> {
+fn segment_connected_components(img: &DynamicImage, _config: &SegmentationConfig) -> Vec<Rect> {
     let width = img.width();
     let height = img.height();
-    let gray = img.to_luma8(); // 确保拿到灰度数据
+    let gray = img.to_luma8();
 
-    // 访问标记数组
     let mut visited = vec![false; (width * height) as usize];
     let mut rects = Vec::new();
 
-    // 使用配置中的最小宽高
-    let min_w = config.min_width;
-    let min_h = config.min_height;
+    // [变更] 这里不再使用 config.min_width，而是使用硬编码的最小值 (比如 2)
+    // 目的：即使是碎裂的字符笔画(如 'i' 的点)也要先切出来，交给 Merge 步骤去组装。
+    // 如果这里直接过滤掉，Merge 步骤就拿不到数据了。
+    let noise_min_w = 2;
+    let noise_min_h = 2;
 
-    // 遍历所有像素
     for y in 0..height {
         for x in 0..width {
             let idx = (y * width + x) as usize;
-
-            // 核心判定：直接根据灰度值判断前景 (大于128视为亮色前景)
-            // 这样不再依赖 ColorRule，而是依赖上游滤镜的结果
             let is_foreground = gray.get_pixel(x, y)[0] > 128;
 
             if is_foreground && !visited[idx] {
-                // 发现新区域，开始 BFS 搜索
                 let mut min_x = x;
                 let mut max_x = x;
                 let mut min_y = y;
@@ -183,7 +291,6 @@ fn segment_connected_components(img: &DynamicImage, config: &SegmentationConfig)
                 visited[idx] = true;
 
                 while let Some((cx, cy)) = stack.pop() {
-                    // 更新包围盒
                     if cx < min_x {
                         min_x = cx;
                     }
@@ -197,23 +304,20 @@ fn segment_connected_components(img: &DynamicImage, config: &SegmentationConfig)
                         max_y = cy;
                     }
 
-                    // 8-邻域搜索 (上下左右 + 对角线)
-                    // 使用 wrapping_sub 防止 usize 下溢出，但在比较时需注意范围
                     let neighbors = [
-                        (cx.wrapping_sub(1), cy),                 // 左
-                        (cx + 1, cy),                             // 右
-                        (cx, cy.wrapping_sub(1)),                 // 上
-                        (cx, cy + 1),                             // 下
-                        (cx.wrapping_sub(1), cy.wrapping_sub(1)), // 左上
-                        (cx + 1, cy + 1),                         // 右下
-                        (cx.wrapping_sub(1), cy + 1),             // 左下
-                        (cx + 1, cy.wrapping_sub(1)),             // 右上
+                        (cx.wrapping_sub(1), cy),
+                        (cx + 1, cy),
+                        (cx, cy.wrapping_sub(1)),
+                        (cx, cy + 1),
+                        (cx.wrapping_sub(1), cy.wrapping_sub(1)),
+                        (cx + 1, cy + 1),
+                        (cx.wrapping_sub(1), cy + 1),
+                        (cx + 1, cy.wrapping_sub(1)),
                     ];
 
                     for &(nx, ny) in &neighbors {
                         if nx < width && ny < height {
                             let n_idx = (ny * width + nx) as usize;
-                            // 检查邻居：必须也是前景且未访问过
                             if !visited[n_idx] && gray.get_pixel(nx, ny)[0] > 128 {
                                 visited[n_idx] = true;
                                 stack.push((nx, ny));
@@ -222,11 +326,11 @@ fn segment_connected_components(img: &DynamicImage, config: &SegmentationConfig)
                     }
                 }
 
-                // 连通块搜索结束，计算尺寸
                 let w_rect = max_x - min_x + 1;
                 let h_rect = max_y - min_y + 1;
 
-                if w_rect >= min_w && h_rect >= min_h {
+                // 仅过滤极小的噪点
+                if w_rect >= noise_min_w && h_rect >= noise_min_h {
                     rects.push(Rect {
                         left: min_x as i32,
                         top: min_y as i32,
@@ -237,7 +341,6 @@ fn segment_connected_components(img: &DynamicImage, config: &SegmentationConfig)
             }
         }
     }
-
     rects
 }
 
@@ -291,3 +394,4 @@ fn apply_padding_and_clamp(mut rects: Vec<Rect>, w: u32, h: u32, padding: i32) -
         .filter(|r| r.width > 0 && r.height > 0)
         .collect()
 }
+

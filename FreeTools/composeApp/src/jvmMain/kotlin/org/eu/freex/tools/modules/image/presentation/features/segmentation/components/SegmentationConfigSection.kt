@@ -174,10 +174,10 @@ fun SegmentationConfigSection(
             }
         }
 
-        // --- 模式 3: 连通域 ---
+        // --- 模式 3: 连通域 (Updated) ---
         ModeSelectionRow(
             text = "连通域切分 (Blob)",
-            description = "基于像素的连通性分析，自动提取独立的文字或图形块。",
+            description = "自动提取连通块，支持合并邻近碎片以识别完整目标。",
             selected = config.mode == SegmentationMode.CONNECTED_COMP,
             onClick = { onChange(config.copy(mode = SegmentationMode.CONNECTED_COMP)) }
         )
@@ -187,25 +187,69 @@ fun SegmentationConfigSection(
             enter = expandVertically() + fadeIn(),
             exit = shrinkVertically() + fadeOut()
         ) {
-            Row(
+            Column(
                 modifier = Modifier.padding(start = 32.dp, bottom = 8.dp).fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(16.dp)
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Box(modifier = Modifier.weight(1f)) {
-                    CompactNumericInput(
-                        label = "最小宽度",
-                        value = config.minWidth,
-                        onValueChange = { it?.let { v -> onChange(config.copy(minWidth = v)) } },
-                        unit = "px"
-                    )
+                // 第一行：宽度限制
+                Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    Box(modifier = Modifier.weight(1f)) {
+                        CompactNumericInput(
+                            label = "最小宽度",
+                            value = config.minWidth,
+                            onValueChange = { it?.let { v -> onChange(config.copy(minWidth = v)) } },
+                            unit = "px"
+                        )
+                    }
+                    Box(modifier = Modifier.weight(1f)) {
+                        CompactNumericInput(
+                            label = "最大宽度 (0不限)",
+                            value = config.maxWidth,
+                            onValueChange = { it?.let { v -> onChange(config.copy(maxWidth = v)) } },
+                            unit = "px"
+                        )
+                    }
                 }
-                Box(modifier = Modifier.weight(1f)) {
-                    CompactNumericInput(
-                        label = "最小高度",
-                        value = config.minHeight,
-                        onValueChange = { it?.let { v -> onChange(config.copy(minHeight = v)) } },
-                        unit = "px"
-                    )
+
+                // 第二行：高度限制
+                Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    Box(modifier = Modifier.weight(1f)) {
+                        CompactNumericInput(
+                            label = "最小高度",
+                            value = config.minHeight,
+                            onValueChange = { it?.let { v -> onChange(config.copy(minHeight = v)) } },
+                            unit = "px"
+                        )
+                    }
+                    Box(modifier = Modifier.weight(1f)) {
+                        CompactNumericInput(
+                            label = "最大高度 (0不限)",
+                            value = config.maxHeight,
+                            onValueChange = { it?.let { v -> onChange(config.copy(maxHeight = v)) } },
+                            unit = "px"
+                        )
+                    }
+                }
+
+                // 第三行：合并策略
+                Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    Box(modifier = Modifier.weight(1f)) {
+                        CompactNumericInput(
+                            label = "合并距离",
+                            value = config.mergeDistance,
+                            onValueChange = { it?.let { v -> onChange(config.copy(mergeDistance = v)) } },
+                            unit = "px"
+                        )
+                    }
+                    // 占位，保持排版对齐
+                    Box(modifier = Modifier.weight(1f)) {
+                        Text(
+                            "碎片间距小于此值将被合并",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.outline,
+                            modifier = Modifier.align(Alignment.CenterStart)
+                        )
+                    }
                 }
             }
         }
