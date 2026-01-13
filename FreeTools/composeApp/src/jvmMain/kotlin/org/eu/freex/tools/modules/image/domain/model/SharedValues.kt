@@ -246,6 +246,25 @@ data class ResizeScaleFilter(
     override val name = "智能缩放"
 }
 
+/**
+ * 延伸裁剪滤镜参数
+ */
+@Serializable
+@SerialName("ExtendCropFilter")
+data class ExtendCropFilter (
+    val x1: Int = -1,
+    val y1: Int = -1,
+    val x2: Int = -1,
+    val y2: Int = -1,
+    // 状态标记：0=未开始, 1=已定左上, 2=已定右下(完成)
+    val status: Int = 0
+) : ImageFilter {
+    override val name: String = "延伸裁剪"
+
+    // 辅助属性：判断是否已经是一个有效的矩形
+    val isValid: Boolean get() = status == 2 && x1 != -1 && x2 != -1
+}
+
 // ==========================================
 // [新增] 切割与识别 - 领域模型
 // ==========================================

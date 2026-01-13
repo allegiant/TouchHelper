@@ -1562,3 +1562,34 @@ pub fn resize_by_scale(img: &DynamicImage, scale: f32, high_quality: bool) -> Dy
     // 4. 执行缩放 (强制使用计算出的尺寸)
     img.resize_exact(new_width, new_height, filter)
 }
+
+/// [新增] 两点裁剪 (Two Points Crop)
+/// 用户指定任意两个对角点（通常是左上和右下），裁剪出矩形区域
+pub fn crop_by_points(
+    img: &DynamicImage,
+    p1_x: u32,
+    p1_y: u32,
+    p2_x: u32,
+    p2_y: u32,
+) -> DynamicImage {
+    let (w, h) = img.dimensions();
+
+    // 1. 自动计算 min/max，允许用户先点右下再点左上
+    let x_min = p1_x.min(p2_x).clamp(0, w);
+    let y_min = p1_y.min(p2_y).clamp(0, h);
+    let x_max = p1_x.max(p2_x).clamp(0, w);
+    let y_max = p1_y.max(p2_y).clamp(0, h);
+
+    // 2. 计算宽高
+    let crop_w = x_max - x_min;
+    let crop_h = y_max - y_min;
+
+    // 3. 避免裁剪出 0x0 的图片导致报错
+    if crop_w == 0 || crop_h == 0 {
+        return img.clone();
+    }
+
+    // 4. 执行裁剪
+    let cropped = image::imageops::crop_imm(img, x_min, y_min, crop_w, crop_h).to_image();
+    DynamicImage::ImageRgba8(cropped)
+}

@@ -6,6 +6,7 @@ import org.eu.freex.tools.modules.image.domain.model.BinarizationFilter
 import org.eu.freex.tools.modules.image.domain.model.BlackWhiteInvertFilter
 import org.eu.freex.tools.modules.image.domain.model.DenoiseFilter
 import org.eu.freex.tools.modules.image.domain.model.DeskewFilter
+import org.eu.freex.tools.modules.image.domain.model.ExtendCropFilter
 import org.eu.freex.tools.modules.image.domain.model.ExtractBlobsFilter
 import org.eu.freex.tools.modules.image.domain.model.ExtractContoursFilter
 import org.eu.freex.tools.modules.image.domain.model.GrayscaleFilter
@@ -46,6 +47,7 @@ object FilterUIRegistry {
         AutoCropFilter::class to AutoCropRenderer,
 
         ResizeScaleFilter::class to ResizeScaleRenderer,
+        ExtendCropFilter::class to ExtendCropRenderer,
     )
 
     /**

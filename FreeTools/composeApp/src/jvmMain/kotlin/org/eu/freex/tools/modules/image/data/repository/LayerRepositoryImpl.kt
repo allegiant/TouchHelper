@@ -17,6 +17,7 @@ import uniffi.touch_core.applyBinarization
 import uniffi.touch_core.applyBlackwhiteInvert
 import uniffi.touch_core.applyDenoise
 import uniffi.touch_core.applyDeskew
+import uniffi.touch_core.applyExtendCrop
 import uniffi.touch_core.applyExtractBlobs
 import uniffi.touch_core.applyExtractContours
 import uniffi.touch_core.applyGrayscale
@@ -275,6 +276,15 @@ class LayerRepositoryImpl : LayerRepository {
                     is ResizeScaleFilter -> {
                         val rustFilter = uniffi.touch_core.ResizeScaleFilter(filter.scaleFactor, filter.highQuality)
                         val result = applyResizeScale(pixels, w, h, rustFilter)
+                        return@withContext ImageUtils.fromRgbaPixels(
+                            result.width,
+                            result.height,
+                            result.pixels
+                        )
+                    }
+                    is ExtendCropFilter -> {
+                        val rustFilter = uniffi.touch_core.ExtendCropFilter(filter.x1,filter.y1, filter.x2,filter.y2)
+                        val result = applyExtendCrop(pixels, w, h, rustFilter)
                         return@withContext ImageUtils.fromRgbaPixels(
                             result.width,
                             result.height,

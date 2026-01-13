@@ -236,6 +236,15 @@ pub struct ResizeScaleFilter {
     pub high_quality: bool, // true=Lanczos3(平滑), false=Nearest(硬边)
 }
 
+// 延伸裁剪滤镜参数
+#[derive(Debug, Clone, Serialize, Deserialize, uniffi::Record)]
+pub struct ExtendCropFilter {
+    pub x1: i32,
+    pub y1: i32,
+    pub x2: i32,
+    pub y2: i32,
+}
+
 // 【新增】定义错误类型
 #[derive(Debug, thiserror::Error, uniffi::Error)]
 pub enum VisionError {

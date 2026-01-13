@@ -51,6 +51,7 @@ import org.eu.freex.tools.modules.image.domain.model.BinarizationFilter
 import org.eu.freex.tools.modules.image.domain.model.BlackWhiteInvertFilter
 import org.eu.freex.tools.modules.image.domain.model.DenoiseFilter
 import org.eu.freex.tools.modules.image.domain.model.DeskewFilter
+import org.eu.freex.tools.modules.image.domain.model.ExtendCropFilter
 import org.eu.freex.tools.modules.image.domain.model.ExtractBlobsFilter
 import org.eu.freex.tools.modules.image.domain.model.ExtractContoursFilter
 import org.eu.freex.tools.modules.image.domain.model.GrayscaleFilter
@@ -97,7 +98,8 @@ fun FilterSelectionList(
     }
     val commonFilters = remember {
         listOf(
-            ResizeScaleFilter()
+            ResizeScaleFilter(),
+            ExtendCropFilter(),
         )
     }
 

@@ -2,10 +2,10 @@ use image::{DynamicImage, ImageBuffer, Rgba};
 
 use crate::vision::types::{
     AutoCropFilter, AutoCropMode, BinarizationFilter, BinarizationMode, BlackWhiteInvertFilter,
-    DenoiseFilter, DeskewFilter, ExtractBlobsFilter, ExtractContoursFilter, GrayscaleFilter,
-    InvertMode, MorphologyFilter, MultiColorFilter, PosterizationFilter, ProcessedImage,
-    RemoveLinesFilter, RemoveNoiseFilter, ResizeScaleFilter, RotationFilter, SmartLayoutFilter,
-    VisionError,
+    DenoiseFilter, DeskewFilter, ExtendCropFilter, ExtractBlobsFilter, ExtractContoursFilter,
+    GrayscaleFilter, InvertMode, MorphologyFilter, MultiColorFilter, PosterizationFilter,
+    ProcessedImage, RemoveLinesFilter, RemoveNoiseFilter, ResizeScaleFilter, RotationFilter,
+    SmartLayoutFilter, VisionError,
 };
 use crate::vision::{colors, filters};
 
@@ -445,6 +445,48 @@ pub fn apply_resize_scale(
     let result_img = filters::resize_by_scale(&img, filter.scale_factor, filter.high_quality);
 
     // 3. 返回新尺寸和新数据
+    Ok(ProcessedImage {
+        width: result_img.width() as i32,
+        height: result_img.height() as i32,
+        pixels: result_img.to_rgba8().into_raw(),
+    })
+}
+
+// [新增] 应用延伸裁剪
+/// 返回 ProcessedImage，因为裁剪后图片尺寸会发生变化
+#[uniffi::export]
+pub fn apply_extend_crop(
+    pixels: Vec<u8>,
+    width: i32,
+    height: i32,
+    filter: ExtendCropFilter,
+) -> Result<ProcessedImage, VisionError> {
+    log::info!("Executing Extend Crop: {:?}", filter);
+
+    // 1. 标准图片加载流程 (将 Vec<u8> 转为 DynamicImage)
+    let width_u32 = width as u32;
+    let height_u32 = height as u32;
+    let expected_len = (width_u32 * height_u32 * 4) as usize;
+
+    if pixels.len() != expected_len {
+        return Err(VisionError::LoadError("Pixel data mismatch".into()));
+    }
+
+    let img_buffer = ImageBuffer::<Rgba<u8>, Vec<u8>>::from_raw(width_u32, height_u32, pixels)
+        .ok_or_else(|| VisionError::LoadError("Failed to create image buffer".into()))?;
+    let img = DynamicImage::ImageRgba8(img_buffer);
+
+    // 2. 参数转换与安全处理
+    // 前端传来的坐标可能是 -1 (未设置) 或负数，这里做防卫性编程转为 0
+    let p1_x = filter.x1.max(0) as u32;
+    let p1_y = filter.y1.max(0) as u32;
+    let p2_x = filter.x2.max(0) as u32;
+    let p2_y = filter.y2.max(0) as u32;
+
+    // 3. 调用核心算法 (filters.rs 中定义的 crop_by_points)
+    let result_img = filters::crop_by_points(&img, p1_x, p1_y, p2_x, p2_y);
+
+    // 4. 返回新尺寸和像素数据
     Ok(ProcessedImage {
         width: result_img.width() as i32,
         height: result_img.height() as i32,
