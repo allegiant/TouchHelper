@@ -4,376 +4,71 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.IntOffset
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import kotlinx.coroutines.FlowPreview
-import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.channels.consumeEach
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.debounce
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.launchIn
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import org.eu.freex.tools.modules.image.application.WorkspaceUseCase
-import org.eu.freex.tools.modules.image.domain.model.ImageFilter
-import org.eu.freex.tools.modules.image.domain.model.ImageLayer
 import org.eu.freex.tools.modules.image.domain.model.ImageWorkspace
-import org.eu.freex.tools.modules.image.domain.model.LayerConfig
-import org.eu.freex.tools.modules.image.domain.model.SegmentationProject
-import org.eu.freex.tools.modules.image.presentation.core.ApplyFilterStep
-import org.eu.freex.tools.modules.image.presentation.core.CancelPick
-import org.eu.freex.tools.modules.image.presentation.core.CancelPreview
-import org.eu.freex.tools.modules.image.presentation.core.ConfirmCrop
-import org.eu.freex.tools.modules.image.presentation.core.DismissCropper
-import org.eu.freex.tools.modules.image.presentation.core.ExportDisplayImage
-import org.eu.freex.tools.modules.image.presentation.core.ExportImage
-import org.eu.freex.tools.modules.image.presentation.core.ImageUiEvent
-import org.eu.freex.tools.modules.image.presentation.core.ImageUiState
-import org.eu.freex.tools.modules.image.presentation.core.LoadFile
-import org.eu.freex.tools.modules.image.presentation.core.LoadProject
-import org.eu.freex.tools.modules.image.presentation.core.PickingType
-import org.eu.freex.tools.modules.image.presentation.core.PreviewFilter
-import org.eu.freex.tools.modules.image.presentation.core.RemoveAsset
-import org.eu.freex.tools.modules.image.presentation.core.SaveProject
-import org.eu.freex.tools.modules.image.presentation.core.SelectAsset
-import org.eu.freex.tools.modules.image.presentation.core.SelectChar
-import org.eu.freex.tools.modules.image.presentation.core.SelectStep
-import org.eu.freex.tools.modules.image.presentation.core.StartScreenCapture
-import org.eu.freex.tools.modules.image.presentation.core.StopLabeling
-import org.eu.freex.tools.modules.image.presentation.core.SubmitLabelAndNext
-import org.eu.freex.tools.modules.image.presentation.core.SwitchTab
-import org.eu.freex.tools.modules.image.presentation.core.TriggerColorPick
-import org.eu.freex.tools.modules.image.presentation.core.TriggerPointPick
-import org.eu.freex.tools.modules.image.presentation.core.UpdateFilterStep
-import org.eu.freex.tools.modules.image.presentation.core.UpdateSegmentationConfig
-import org.eu.freex.tools.modules.image.presentation.core.WorkbenchTab
+import org.eu.freex.tools.modules.image.presentation.core.*
 
 class ImageViewModel(
-    private val useCase: WorkspaceUseCase
-) : ViewModel() {
+    override val useCase: WorkspaceUseCase
+) : ViewModel(), ViewModelContext {
 
+    // --- State ---
     private var workspace = ImageWorkspace()
     private val _uiState = MutableStateFlow(ImageUiState())
-    val uiState = _uiState.asStateFlow()
 
-    private data class PreviewRequest(val baseLayer: ImageLayer, val filter: ImageFilter)
+    override val uiState = _uiState.asStateFlow()
+    override val scope = viewModelScope
 
-    // 使用 CONFLATED 通道解决积压
-    private val previewChannel = Channel<PreviewRequest>(Channel.CONFLATED)
+    // --- Delegates ---
+    // 按顺序初始化，某些 Delegate (如 Pipeline/Segmentation) 初始化时会启动协程
+    private val assetDelegate = AssetDelegate(this)
+    private val interactionDelegate = InteractionDelegate(this)
+    private val pipelineDelegate = PipelineDelegate(this)
+    private val segmentationDelegate = SegmentationDelegate(this)
 
-    // 用于在挂起函数和事件处理之间传递颜色的通道
-    private val colorPickChannel = Channel<Color>(Channel.RENDEZVOUS)
-
-    // 坐标拾取通道
-    private val pointPickChannel = Channel<IntOffset>(Channel.RENDEZVOUS)
-
-    init {
-        viewModelScope.launch {
-            previewChannel.consumeEach { request ->
-                try {
-                    // 执行耗时计算
-                    val resultLayer = useCase.calculatePreview(request.baseLayer, request.filter)
-
-                    if (resultLayer != null) {
-                        _uiState.update { currentState ->
-                            val currentPreview = currentState.previewLayer
-
-                            // 1. 校验：如果当前已经退出了预览模式，就丢弃结果
-                            if (currentPreview == null) return@update currentState
-
-                            // 2. 防抖动与乐观更新校验
-                            val resultFilter = resultLayer.activeFilter
-                            val currentFilter = currentPreview.activeFilter
-
-                            if (resultFilter != null && currentFilter != null &&
-                                resultFilter::class == currentFilter::class
-                            ) {
-                                // 保留当前 UI 的 config (因为用户可能又拖动了滑块)，只更新图像数据
-                                currentState.copy(
-                                    previewLayer = resultLayer.copy(config = currentPreview.config)
-                                )
-                            } else {
-                                currentState.copy(previewLayer = resultLayer)
-                            }
-                        }
-                    }
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                }
-            }
-        }
-
-        setupReactiveSegmentation()
-    }
-
-    @OptIn(FlowPreview::class)
-    private fun setupReactiveSegmentation() {
-        // 监听显示的图片
-        val imageFlow = _uiState.map { it.displayImage }.distinctUntilChanged()
-
-        // 监听 Domain 中的配置 (通过 uiState 间接监听)
-        val configFlow = _uiState
-            .map { it.segmentationProject?.config }
-            .distinctUntilChanged()
-            .debounce(200)
-
-        val tabFlow = _uiState.map { it.activeTab }.distinctUntilChanged()
-
-        combine(imageFlow, configFlow, tabFlow) { layer, config, tab ->
-            Triple(layer, config, tab)
-        }.onEach { (layer, config, tab) ->
-            // 只有在 切割Tab 且有图 且有配置 时才执行
-            if (tab == WorkbenchTab.SEGMENTATION && layer?.image != null && config != null) {
-                // 调用 UseCase (不接触 Rust)
-                useCase.performSegmentation(layer.image, config)
-                    .onSuccess { rects ->
-                        // 更新 Workspace
-                        val currentProject = workspace.segmentation ?: SegmentationProject(config = config)
-                        workspace = workspace.copy(
-                            segmentation = currentProject.copy(results = rects)
-                        )
-                        refreshUiState()
-                    }
-                    .onFailure { it.printStackTrace() }
-            }
-        }.launchIn(viewModelScope)
-    }
-
+    // --- Main Event Router ---
     fun handleEvent(event: ImageUiEvent) {
         viewModelScope.launch {
-            // Loading 状态处理... 预览和取色不触发Loading
-            if (event !is PreviewFilter
-                && event !is TriggerColorPick && event !is TriggerPointPick
-                && event !is SwitchTab && event !is UpdateSegmentationConfig && event !is SelectChar
-            ) {
+            // 1. Loading Indicator Logic
+            if (shouldShowLoading(event)) {
                 _uiState.update { it.copy(isLoading = true) }
             }
 
+            // 2. Delegate Routing using Sealed Interfaces
             runCatching {
                 when (event) {
-                    is LoadFile -> {
-                        useCase.importAsset(event.file).onSuccess { layer ->
-                            var newWorkspace = workspace.copy(assets = workspace.assets + layer)
-                            useCase.activateAsset(newWorkspace, layer.id)
-                                .onSuccess { finalWorkspace ->
-                                    workspace = finalWorkspace
-                                    _uiState.update { s -> s.copy(previewLayer = null) }
-                                }
-                                .onFailure {
-                                    workspace = newWorkspace
-                                    it.printStackTrace()
-                                }
-                        }
-                    }
-
-                    is SelectAsset -> {
-                        useCase.activateAsset(workspace, event.assetId)
-                            .onSuccess {
-                                workspace = it
-                                _uiState.update { s -> s.copy(previewLayer = null) }
-                            }
-                            .onFailure { it.printStackTrace() }
-                    }
-
-                    is RemoveAsset -> {
-                        workspace = useCase.removeAsset(workspace, event.assetId)
-                        _uiState.update { s -> s.copy(previewLayer = null) }
-                    }
-
-                    is SaveProject -> {
-                        useCase.saveWorkspace(event.file, workspace).onFailure { it.printStackTrace() }
-                    }
-
-                    is LoadProject -> {
-                        useCase.loadWorkspace(event.file).onSuccess { loadedWorkspace ->
-                            workspace = loadedWorkspace
-                            _uiState.update { s -> s.copy(previewLayer = null) }
-                            refreshUiState()
-                        }.onFailure { it.printStackTrace() }
-                    }
-
-                    is ExportDisplayImage -> {
-                        _uiState.value.displayImage?.let { useCase.exportImage(it, event.file) }
-                    }
-
-                    is ExportImage -> useCase.exportImage(event.layer, event.file)
-
-                    is StartScreenCapture -> useCase.captureScreen().onSuccess {
-                        _uiState.update { s -> s.copy(cropperLayer = it, isLoading = false) }
-                        return@launch
-                    }
-
-                    is ConfirmCrop -> useCase.cropImage(event.sourceLayer, event.rect).onSuccess { croppedLayer ->
-                        val workspaceWithAsset = workspace.copy(assets = workspace.assets + croppedLayer)
-                        useCase.activateAsset(workspaceWithAsset, croppedLayer.id)
-                            .onSuccess { finalWorkspace ->
-                                workspace = finalWorkspace
-                                _uiState.update { s -> s.copy(cropperLayer = null) }
-                            }
-                            .onFailure { e ->
-                                e.printStackTrace()
-                                workspace = workspaceWithAsset
-                                _uiState.update { s -> s.copy(cropperLayer = null) }
-                            }
-                    }
-
-                    is DismissCropper -> {
-                        _uiState.update { s -> s.copy(cropperLayer = null) }
-                        return@launch
-                    }
-
-                    // --- 预览逻辑 ---
-                    is CancelPreview -> {
-                        _uiState.update { s -> s.copy(previewLayer = null) }
-                    }
-
-                    // --- [修改] 拾取器事件处理 ---
-                    is TriggerColorPick -> {
-                        colorPickChannel.send(event.color)
-                    }
-
-                    is TriggerPointPick -> {
-                        pointPickChannel.send(event.point)
-                    }
-
-                    is CancelPick -> {
-                        // 如果用户取消，我们在 await 方法中通常会通过 UI 状态变化或超时来处理
-                        // 这里最重要的是重置 UI 状态，让视图层退出取色模式
-                        _uiState.update { it.copy(pickingType = PickingType.NONE) }
-
-                        // 可选：如果需要在协程侧抛出取消异常，可以在这里 close channel，
-                        // 但简单的做法是让 UI 状态驱动视图，协程侧自然结束或挂起等待下一次
-                    }
-
-                    is PreviewFilter -> {
-                        val chain = workspace.pipeline
-                        if (chain != null) {
-                            val idx = chain.activeIndex
-                            val baseLayer = if (idx <= 0) {
-                                workspace.assets.find { it.id == chain.inputAssetId }
-                            } else {
-                                chain.steps.getOrNull(idx - 1)
-                            }
-
-                            if (baseLayer?.image != null) {
-                                // 乐观更新：立即设置 Config 以响应 UI 拖动，图片复用旧的或当前的
-                                val currentImage = _uiState.value.previewLayer?.image
-                                    ?: chain.getActiveLayer(workspace.assets)?.image
-                                    ?: baseLayer.image
-
-                                _uiState.update {
-                                    it.copy(
-                                        previewLayer = ImageLayer(
-                                            name = "Previewing...",
-                                            image = currentImage,
-                                            config = LayerConfig.Filter(event.filter)
-                                        ),
-                                        isLoading = false
-                                    )
-                                }
-                                previewChannel.trySend(PreviewRequest(baseLayer, event.filter))
-                                return@launch
-                            }
-                        }
-                    }
-
-                    // 【新增】应用指定 Filter 到新步骤
-                    is ApplyFilterStep -> {
-                        useCase.addFilterStep(workspace, event.filter).onSuccess {
-                            workspace = it
-                            _uiState.update { s -> s.copy(previewLayer = null) }
-                        }
-                    }
-
-                    // 【新增】更新当前步骤为指定 Filter
-                    is UpdateFilterStep -> {
-                        useCase.updateFilterStep(workspace, event.filter).onSuccess {
-                            workspace = it
-                            _uiState.update { s -> s.copy(previewLayer = null) }
-                        }
-                    }
-
-                    is SelectStep -> {
-                        workspace.pipeline?.let {
-                            workspace = workspace.copy(pipeline = it.copy(activeIndex = event.index))
-                        }
-                        _uiState.update { s -> s.copy(previewLayer = null) }
-                    }
-
-                    // [新增] 切换 Tab
-                    is SwitchTab -> {
-                        // 初始化数据
-                        if (event.tab == WorkbenchTab.SEGMENTATION && workspace.segmentation == null) {
-                            workspace = workspace.copy(segmentation = SegmentationProject())
-                        }
-                        _uiState.update { it.copy(activeTab = event.tab) }
-                    }
-
-                    // [新增] 更新配置 -> 更新 Workspace -> 触发 Flow 计算
-                    is UpdateSegmentationConfig -> {
-                        val current = workspace.segmentation ?: SegmentationProject()
-                        workspace = workspace.copy(
-                            segmentation = current.copy(config = event.config)
-                        )
-                    }
-
-                    // [新增] 选中字符 -> 更新 UI 瞬时状态
-                    is SelectChar -> {
-                        _uiState.update {
-                            it.copy(
-                                segmentationInteraction = it.segmentationInteraction.copy(
-                                    selectedIndex = event.index,
-                                    isLabeling = true
-                                )
-                            )
-                        }
-                    }
-
-                    // [新增] 提交标注
-                    is SubmitLabelAndNext -> {
-                        val currentProject = workspace.segmentation
-                        val currentIndex = _uiState.value.segmentationInteraction.selectedIndex
-
-                        if (currentProject != null && currentIndex != -1) {
-                            // 1. 更新业务数据
-                            val newLabels = currentProject.labels.toMutableMap()
-                            newLabels[currentIndex] = event.text
-                            workspace = workspace.copy(
-                                segmentation = currentProject.copy(labels = newLabels)
-                            )
-
-                            // 2. 更新 UI 交互 (游标移动)
-                            val nextIndex = (currentIndex + 1).coerceAtMost(currentProject.results.size - 1)
-                            _uiState.update {
-                                it.copy(
-                                    segmentationInteraction = it.segmentationInteraction.copy(
-                                        selectedIndex = nextIndex,
-                                        isLabeling = true
-                                    )
-                                )
-                            }
-                        }
-                    }
-
-                    is StopLabeling -> {
-                        _uiState.update {
-                            it.copy(segmentationInteraction = it.segmentationInteraction.copy(isLabeling = false))
-                        }
-                    }
+                    is AssetEvent -> assetDelegate.handle(event)
+                    is InteractionEvent -> interactionDelegate.handle(event)
+                    is PipelineEvent -> pipelineDelegate.handle(event)
+                    is SegmentationEvent -> segmentationDelegate.handle(event)
                 }
             }.onFailure { it.printStackTrace() }
 
-            refreshUiState()
+            // 3. Ensure UI consistency (Turn off loading)
+            _uiState.update { it.copy(isLoading = false) }
         }
+    }
+
+    // --- ViewModelContext Implementation ---
+
+    override fun updateWorkspace(transform: (ImageWorkspace) -> ImageWorkspace) {
+        workspace = transform(workspace)
+        refreshUiState()
+    }
+
+    override fun getWorkspaceSnapshot(): ImageWorkspace = workspace
+
+    override fun updateUiState(transform: (ImageUiState) -> ImageUiState) {
+        _uiState.update(transform)
     }
 
     private fun refreshUiState() {
         _uiState.update {
             it.copy(
-                isLoading = false,
                 assets = workspace.assets,
                 activeChain = workspace.pipeline,
                 segmentationProject = workspace.segmentation
@@ -381,38 +76,25 @@ class ImageViewModel(
         }
     }
 
-    /**
-     * 【核心改动】挂起函数等待取色结果
-     * UI 组件(如 Renderer) 调用此方法后会挂起，直到用户在画布上点击或取消。
-     * * @return 选中的颜色，如果取消则返回 null
-     */
-    suspend fun awaitColorPick(): Color? {
-        // 1. 进入取色模式：通知 Canvas 显示十字准星
-        _uiState.update { it.copy(pickingType = PickingType.COLOR) }
+    // --- Exposed Helpers (For UI Components) ---
 
-        return try {
-            // 2. 挂起，等待 handleEvent(TriggerColorPick) 往通道里塞数据
-            colorPickChannel.receive()
-        } catch (e: Exception) {
-            // 协程被取消（如组件销毁、界面切换）
-            null
-        } finally {
-            _uiState.update { it.copy(pickingType = PickingType.NONE) }
-        }
-    }
+    suspend fun awaitColorPick(): Color? = interactionDelegate.awaitColorPick()
+    suspend fun awaitPointPick(): IntOffset? = interactionDelegate.awaitPointPick()
 
-    /**
-     * 挂起函数：等待取点
-     * UI 组件(如 Renderer) 调用此方法后会挂起，直到用户在画布上点击或取消。
-     */
-    suspend fun awaitPointPick(): IntOffset? {
-        _uiState.update { it.copy(pickingType = PickingType.POINT) }
-        return try {
-            pointPickChannel.receive()
-        } catch (e: Exception) {
-            null
-        } finally {
-            _uiState.update { it.copy(pickingType = PickingType.NONE) }
+    // --- Utility ---
+
+    private fun shouldShowLoading(event: ImageUiEvent): Boolean {
+        // 白名单机制：如果事件是交互型的或瞬时型的，不需要显示全屏 Loading
+        return when (event) {
+            is PreviewFilter,
+            is TriggerColorPick,
+            is TriggerPointPick,
+            is CancelPick,
+            is SwitchTab,
+            is UpdateSegmentationConfig,
+            is SelectChar,
+            is StopLabeling -> false
+            else -> true
         }
     }
 }

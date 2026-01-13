@@ -10,43 +10,38 @@ import java.io.File
 
 sealed interface ImageUiEvent
 
-// --- 文件与资源 ---
-data class LoadFile(val file: File) : ImageUiEvent
-data class SaveProject(val file: File) : ImageUiEvent
-data class LoadProject(val file: File) : ImageUiEvent
+// --- 1. 资源与项目事件组 (AssetEvent) ---
+sealed interface AssetEvent : ImageUiEvent
 
-// 导出
-data class ExportDisplayImage(val file: File) : ImageUiEvent
-data class ExportImage(val layer: ImageLayer, val file: File) : ImageUiEvent
+data class LoadFile(val file: File) : AssetEvent
+data class SaveProject(val file: File) : AssetEvent
+data class LoadProject(val file: File) : AssetEvent
+data class ExportDisplayImage(val file: File) : AssetEvent
+data class ExportImage(val layer: ImageLayer, val file: File) : AssetEvent
+data class SelectAsset(val assetId: String) : AssetEvent
+data class RemoveAsset(val assetId: String) : AssetEvent
 
-// 资源管理
-data class SelectAsset(val assetId: String) : ImageUiEvent
-data class RemoveAsset(val assetId: String) : ImageUiEvent
+// --- 2. 交互与工具事件组 (InteractionEvent) ---
+sealed interface InteractionEvent : ImageUiEvent
+object StartScreenCapture : InteractionEvent
+data class ConfirmCrop(val sourceLayer: ImageLayer, val rect: Rect) : InteractionEvent
+object DismissCropper : InteractionEvent
+data class TriggerColorPick(val color: Color) : InteractionEvent
+data class TriggerPointPick(val point: IntOffset) : InteractionEvent
+object CancelPick : InteractionEvent
 
-// --- 截图与裁剪 ---
-object StartScreenCapture : ImageUiEvent
-data class ConfirmCrop(val sourceLayer: ImageLayer, val rect: Rect) : ImageUiEvent
-object DismissCropper : ImageUiEvent
+// --- 3. 流水线与滤镜事件组 (PipelineEvent) ---
+sealed interface PipelineEvent : ImageUiEvent
+data class SelectStep(val index: Int) : PipelineEvent
+data class PreviewFilter(val filter: ImageFilter) : PipelineEvent
+object CancelPreview : PipelineEvent // 取消/清除预览
+data class ApplyFilterStep(val filter: ImageFilter) : PipelineEvent
+data class UpdateFilterStep(val filter: ImageFilter) : PipelineEvent
 
-// --- 通用拾取器事件 ---
-// 触发颜色拾取
-data class TriggerColorPick(val color: Color) : ImageUiEvent
-// 触发坐标拾取
-data class TriggerPointPick(val point: IntOffset) : ImageUiEvent
-object CancelPick : ImageUiEvent
-
-// --- 流水线 ---
-data class SelectStep(val index: Int) : ImageUiEvent
-data class PreviewFilter(val filter: ImageFilter) : ImageUiEvent
-object CancelPreview : ImageUiEvent // 取消/清除预览
-
-
-data class ApplyFilterStep(val filter: ImageFilter) : ImageUiEvent
-data class UpdateFilterStep(val filter: ImageFilter) : ImageUiEvent
-
-// --- [新增] 切割交互事件 ---
-data class SwitchTab(val tab: WorkbenchTab) : ImageUiEvent
-data class UpdateSegmentationConfig(val config: SegmentationConfig) : ImageUiEvent
-data class SelectChar(val index: Int) : ImageUiEvent
-data class SubmitLabelAndNext(val text: String) : ImageUiEvent
-data object StopLabeling : ImageUiEvent
+// --- 4. 切割与标注事件组 (SegmentationEvent) ---
+sealed interface SegmentationEvent : ImageUiEvent
+data class SwitchTab(val tab: WorkbenchTab) : SegmentationEvent
+data class UpdateSegmentationConfig(val config: SegmentationConfig) : SegmentationEvent
+data class SelectChar(val index: Int) : SegmentationEvent
+data class SubmitLabelAndNext(val text: String) : SegmentationEvent
+data object StopLabeling : SegmentationEvent
