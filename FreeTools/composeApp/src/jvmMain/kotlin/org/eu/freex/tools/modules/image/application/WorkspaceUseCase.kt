@@ -336,30 +336,27 @@ class WorkspaceUseCase(
 
     /**
      * 辅助方法：将 01 字符串转换为 Compose ImageBitmap (用于预览)
-     * 1 -> 红色/黑色 (前景)
-     * 0 -> 透明/白色 (背景)
      */
     private fun reconstructBitmapFromBinary(binary: String, width: Int, height: Int): androidx.compose.ui.graphics.ImageBitmap {
-        // 创建一个空的 BufferedImage
         val bufferedImage = BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB)
 
-        // 遍历 binary 字符串填充像素
-        // 注意：要防止 binary 长度和 width*height 不匹配导致的越界
+        // 限制长度防止越界
         val length = minOf(binary.length, width * height)
+
+        // 定义颜色 (使用 java.awt.Color 常量更安全)
+        val colorRed = java.awt.Color.RED.rgb      // 前景：红色
+        val colorTransparent = 0x00000000          // 背景：全透明
 
         for (i in 0 until length) {
             val x = i % width
             val y = i / width
             val char = binary[i]
 
-            // 简单着色：'1' 为红色(FF0000)，'0' 为透明或者半透明白
-            // 这里使用了 ARGB 格式
-            val color = if (char == '1') {
-                0xFFFF0000.toInt() // 纯红，不透明
+            if (char == '1') {
+                bufferedImage.setRGB(x, y, colorRed)
             } else {
-                0x00FFFFFF.toInt() // 完全透明 (或者 0xFFFFFFFF 白色)
+                bufferedImage.setRGB(x, y, colorTransparent)
             }
-            bufferedImage.setRGB(x, y, color)
         }
         return bufferedImage.toComposeImageBitmap()
     }
