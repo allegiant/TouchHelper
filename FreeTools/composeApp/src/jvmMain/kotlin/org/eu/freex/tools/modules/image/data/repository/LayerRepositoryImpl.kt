@@ -34,6 +34,8 @@ import java.awt.GraphicsEnvironment
 import java.awt.Rectangle
 import java.awt.Robot
 import java.awt.Window
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 import uniffi.touch_core.BinarizationMode as RustBinarizationMode
 import uniffi.touch_core.BinarizationFilter as RustBinarizationFilter
 import uniffi.touch_core.PosterizationFilter as RustPosterizationFilter
@@ -296,17 +298,12 @@ class LayerRepositoryImpl(
             // 获取 ARGB 数据
             image.getRGB(0, 0, width, height, pixels, 0, width)
 
-            // [修正] 使用 ByteArray 而不是 ArrayList<Byte>
-            val byteArray = ByteArray(width * height * 4)
-            var index = 0
+            // 创建 ByteBuffer
+            val byteBuffer = ByteBuffer.allocate(pixels.size * 4)
+                .order(ByteOrder.LITTLE_ENDIAN) // 设为 Little Endian 以便直接映射 BGRA
+            byteBuffer.asIntBuffer().put(pixels)
+            val byteArray = byteBuffer.array()
 
-            for (argb in pixels) {
-                // Java getRGB 返回 ARGB，我们需要 RGBA
-                byteArray[index++] = ((argb shr 16) and 0xFF).toByte() // R
-                byteArray[index++] = ((argb shr 8) and 0xFF).toByte()  // G
-                byteArray[index++] = (argb and 0xFF).toByte()          // B
-                byteArray[index++] = ((argb shr 24) and 0xFF).toByte() // A
-            }
 
             // 2. 配置转换: Domain Config -> Rust Config
             val rustMode = when (config.mode) {
