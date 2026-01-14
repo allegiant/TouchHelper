@@ -37,7 +37,6 @@ fun App(window: androidx.compose.ui.awt.ComposeWindow?) {
 
     val imageViewModel = koinInject<ImageViewModel>()
     val state by imageViewModel.uiState.collectAsState()
-    val workspace by imageViewModel.workspace.collectAsState()
 
     // 拖拽相关代码保持不变...
     if (window != null) {
@@ -97,7 +96,7 @@ fun App(window: androidx.compose.ui.awt.ComposeWindow?) {
                             }
                             AppModule.FONT_MANAGER -> {
                                 FontManagerPanel(
-                                    library = workspace.fontLibrary,
+                                    library = state.fontLibrary,
                                     onDelete = { id -> imageViewModel.fontLibraryDelegate.deleteItem(id) },
                                     onSort = { imageViewModel.fontLibraryDelegate.sortLibrary() },
                                     onClear = { imageViewModel.fontLibraryDelegate.clearLibrary() },

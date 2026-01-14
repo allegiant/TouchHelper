@@ -1,5 +1,6 @@
 package org.eu.freex.tools.modules.image.presentation.core
 
+import org.eu.freex.tools.modules.image.domain.model.FontLibItem
 import org.eu.freex.tools.modules.image.domain.model.ImageLayer
 import org.eu.freex.tools.modules.image.domain.model.Pipeline
 import org.eu.freex.tools.modules.image.domain.model.SegmentationProject
@@ -26,12 +27,13 @@ data class ImageUiState(
     val activeChain: Pipeline? = null,
     // [新增] 方便 UI 读取的快捷字段 (实际数据源在 Workspace)
     val segmentationProject: SegmentationProject? = null,
+    val fontLibrary: List<FontLibItem> = emptyList(),
     // 临时状态
     val cropperLayer: ImageLayer? = null,
     val previewLayer: ImageLayer? = null,
     val pickingType: PickingType = PickingType.NONE,
     val activeTab: WorkbenchTab = WorkbenchTab.FILTER,
-    val segmentationInteraction: SegmentationInteraction = SegmentationInteraction()
+    val segmentationInteraction: SegmentationInteraction = SegmentationInteraction(),
 ) {
     val displayImage: ImageLayer?
         get() {
