@@ -5,6 +5,7 @@ import androidx.compose.ui.graphics.toComposeImageBitmap
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
+import org.eu.freex.tools.modules.image.data.repository.LayerRepositoryImpl
 import org.eu.freex.tools.modules.image.domain.model.ImageFilter
 import org.eu.freex.tools.modules.image.domain.model.ImageLayer
 import org.eu.freex.tools.modules.image.domain.model.ImageWorkspace
@@ -93,47 +94,42 @@ class WorkspaceUseCase(
     // 修改：改为 suspend，因为需要重新跑滤镜
     // 逻辑：保留当前滤镜链的 Config，只替换 Input Source，并重新计算所有步骤
     suspend fun activateAsset(workspace: ImageWorkspace, assetId: String): Result<ImageWorkspace> = runCatching {
-        // 1. 如果切的是同一张图，直接返回
         if (workspace.pipeline?.inputAssetId == assetId) return@runCatching workspace
 
-        // 2. 找到新的底图
         val newBaseLayer = workspace.assets.find { it.id == assetId }
             ?: throw IllegalStateException("Asset not found")
-
-        var currentImage = newBaseLayer.image
+        val baseImage = newBaseLayer.image
             ?: throw IllegalStateException("Base image is empty")
 
-        // 3. 获取旧的滤镜链配置
         val oldSteps = workspace.pipeline?.steps ?: emptyList()
-        val newSteps = mutableListOf<ImageLayer>()
 
-        // 4. 在 IO 线程中重新计算流水线
-        withContext(Dispatchers.Default) {
-            for (step in oldSteps) {
-                // 只迁移滤镜类型的步骤
-                if (step.config is LayerConfig.Filter) {
-                    val filter = step.config.filter
-                    // 对新图应用滤镜
-                    val resultImage = repository.applyFilter(currentImage, filter)
+        // 1. 提取所有滤镜配置
+        val filtersToApply = oldSteps.mapNotNull { (it.config as? LayerConfig.Filter)?.filter }
 
-                    // 生成新层（保留原有配置）
-                    newSteps.add(
-                        step.copy(
-                            image = resultImage,
-                            config = LayerConfig.Filter(filter)
-                        )
-                    )
-                    // 传递给下一步
-                    currentImage = resultImage
-                }
+        // 2. [优化] 调用 Rust 批量处理
+        // 此时 baseImage 只上传一次，所有滤镜在 Rust 内部连续执行
+        val resultImages = if (filtersToApply.isNotEmpty()) {
+            // 注意：这里需要强转 Repository 类型，或者在接口里定义该方法
+            (repository as LayerRepositoryImpl).applyPipeline(baseImage, filtersToApply)
+        } else {
+            emptyList()
+        }
+
+        // 3. 组装新的 Steps
+        // 我们利用 resultImages 的下标与 oldSteps 对应
+        var resultIndex = 0
+        val newSteps = oldSteps.map { step ->
+            if (step.config is LayerConfig.Filter) {
+                val newImage = resultImages[resultIndex++]
+                step.copy(image = newImage, config = LayerConfig.Filter(step.config.filter))
+            } else {
+                step // 非滤镜层保持原样
             }
         }
 
-        // 5. 构建新的 Chain
         val newChain = Pipeline(
             inputAssetId = assetId,
             steps = newSteps,
-            // 保持选中最后一步，或者如果原来就在中间，这里简化为选中最后一步
             activeIndex = if (newSteps.isNotEmpty()) newSteps.lastIndex else -1
         )
 
@@ -158,37 +154,54 @@ class WorkspaceUseCase(
         workspace.copy(pipeline = chain.copy(steps = newSteps, activeIndex = newSteps.lastIndex))
     }
 
+    // 修改 updateFilterStep 方法
     suspend fun updateFilterStep(workspace: ImageWorkspace, filter: ImageFilter): Result<ImageWorkspace> = runCatching {
         val chain = workspace.pipeline ?: throw IllegalStateException("No active chain")
         val activeIndex = chain.activeIndex
-
         if (activeIndex == -1) throw IllegalStateException("Cannot modify origin layer")
 
-        val firstInputLayer = if (activeIndex == 0) {
+        // 1. 确定“重算起点”的输入图
+        // 如果改的是第 N 步，那么第 N-1 步的结果就是本次批处理的“底图”
+        val baseInputLayer = if (activeIndex == 0) {
             workspace.assets.find { it.id == chain.inputAssetId }
         } else {
             chain.steps.getOrNull(activeIndex - 1)
         } ?: throw IllegalStateException("Base input layer not found")
 
-        var currentImage = firstInputLayer.image ?: throw IllegalStateException("Base image data missing")
+        val baseImage = baseInputLayer.image ?: throw IllegalStateException("Base image data missing")
+
+        // 2. 准备从 activeIndex 开始的所有滤镜
+        // 注意：当前这一步(activeIndex) 使用传入的新 filter，后续步骤使用原本的 filter
+        val filtersToApply = mutableListOf<ImageFilter>()
+        filtersToApply.add(filter) // 当前这步的新滤镜
+
+        for (i in (activeIndex + 1) until chain.steps.size) {
+            val nextStepConfig = chain.steps[i].config as? LayerConfig.Filter
+            if (nextStepConfig != null) {
+                filtersToApply.add(nextStepConfig.filter)
+            }
+        }
+
+        // 3. [优化] 调用 Rust 批量处理
+        val resultImages = (repository as LayerRepositoryImpl).applyPipeline(baseImage, filtersToApply)
+
+        // 4. 更新 Steps 列表
         val newSteps = chain.steps.toMutableList()
 
-        for (i in activeIndex until chain.steps.size) {
-            val oldLayer = chain.steps[i]
-            val filterToUse = if (i == activeIndex) filter else (oldLayer.config as? LayerConfig.Filter)?.filter
-                ?: throw IllegalStateException("Step $i is not a filter layer")
+        // 回填结果
+        // i 是 steps 中的绝对下标，j 是 resultImages 中的相对下标
+        for ((j, resultImage) in resultImages.withIndex()) {
+            val stepIndex = activeIndex + j
+            val targetFilter = filtersToApply[j]
 
-            val resultImage = repository.applyFilter(currentImage, filterToUse)
-
-            val updatedLayer = oldLayer.copy(
-                name = filterToUse.name,
+            val oldLayer = newSteps[stepIndex]
+            newSteps[stepIndex] = oldLayer.copy(
+                name = targetFilter.name,
                 image = resultImage,
-                config = LayerConfig.Filter(filterToUse)
+                config = LayerConfig.Filter(targetFilter)
             )
-
-            newSteps[i] = updatedLayer
-            currentImage = resultImage
         }
+
         workspace.copy(pipeline = chain.copy(steps = newSteps))
     }
 
@@ -274,60 +287,51 @@ class WorkspaceUseCase(
         return repository.performSegmentation(image, config)
     }
 
+    // 修改 removeStep 方法
     suspend fun removeStep(workspace: ImageWorkspace, index: Int): Result<ImageWorkspace> = runCatching {
         val chain = workspace.pipeline ?: throw IllegalStateException("No active chain")
+        if (index !in chain.steps.indices) throw IllegalArgumentException("Invalid index")
 
-        // 1. 边界检查
-        if (index !in chain.steps.indices) {
-            throw IllegalArgumentException("Invalid step index: $index")
-        }
-
-        val oldSteps = chain.steps
-
-        // 2. 确定“重算起点”的输入图
-        // 如果删除的是 index=0，则输入是原始 Asset
-        // 如果删除的是 index>0，则输入是 steps[index-1] 的结果
+        // 1. 确定“重算起点”
+        // 删除的是 index，那么 index-1 的结果不受影响，作为新的底图
         val baseInputLayer = if (index == 0) {
             workspace.assets.find { it.id == chain.inputAssetId }
         } else {
-            oldSteps[index - 1]
+            chain.steps[index - 1]
         } ?: throw IllegalStateException("Base input layer not found")
 
-        var currentImage = baseInputLayer.image
-            ?: throw IllegalStateException("Base image data missing")
+        val baseImage = baseInputLayer.image ?: throw IllegalStateException("Base image missing")
 
-        // 3. 构建新列表（先移除目标，再重算后续）
-        val newSteps = oldSteps.toMutableList()
-        newSteps.removeAt(index)
-
-        // 从被删除位置的下标开始（因为后面的元素前移了，下标就是 i），重新应用滤镜
-        // 注意：newSteps.size 已经变小了
-        for (i in index until newSteps.size) {
-            val layerToRecalculate = newSteps[i]
-            val filterConfig = layerToRecalculate.config as? LayerConfig.Filter
-                ?: continue // 如果不是滤镜层（理论上不应发生），跳过
-
-            // 使用上一轮的 currentImage 作为输入，应用当前层的滤镜参数
-            val resultImage = repository.applyFilter(currentImage, filterConfig.filter)
-
-            // 更新层数据
-            newSteps[i] = layerToRecalculate.copy(image = resultImage)
-
-            // 传递给下一轮
-            currentImage = resultImage
+        // 2. 准备需要保留的后续滤镜
+        // 从 index+1 开始的所有滤镜都需要重算
+        val filtersToApply = mutableListOf<ImageFilter>()
+        for (i in (index + 1) until chain.steps.size) {
+            val cfg = chain.steps[i].config as? LayerConfig.Filter
+            if (cfg != null) filtersToApply.add(cfg.filter)
         }
 
-        // 4. 修正 activeIndex
-        // 如果删除的是当前选中的步骤，或者选中的步骤在被删除步骤之后，需要调整
+        // 3. [优化] 调用 Rust 批量处理
+        // 如果后面没有步骤了(删除的是最后一步)，applyPipeline 会直接返回 emptyList，逻辑也是对的
+        val resultImages = (repository as LayerRepositoryImpl).applyPipeline(baseImage, filtersToApply)
+
+        // 4. 构建新列表
+        val newSteps = chain.steps.toMutableList()
+        newSteps.removeAt(index) // 先删掉目标
+
+        // 回填后续结果
+        // 现在的 newSteps[index] 其实就是原来的 steps[index+1]
+        for ((j, resultImage) in resultImages.withIndex()) {
+            val stepIndex = index + j
+            val oldLayer = newSteps[stepIndex]
+            newSteps[stepIndex] = oldLayer.copy(image = resultImage)
+        }
+
+        // 5. 修正 activeIndex (保持原逻辑)
         val currentActive = chain.activeIndex
         val newActiveIndex = when {
-            // 如果列表空了
             newSteps.isEmpty() -> -1
-            // 如果删除的是当前选中项，选中前一项（如果前一项没了就选第一项或 -1）
             currentActive == index -> (index - 1).coerceAtLeast(if (newSteps.isNotEmpty()) 0 else -1)
-            // 如果选中的在被删除的后面，减 1
             currentActive > index -> currentActive - 1
-            // 如果选中的在被删除的前面，保持不变
             else -> currentActive
         }
 

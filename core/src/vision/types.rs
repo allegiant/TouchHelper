@@ -3,6 +3,29 @@
 
 use serde::{Deserialize, Serialize};
 
+// 统一滤镜包装器 (Union Wrapper)
+/// 这允许我们在单次调用中传递任意类型的滤镜
+#[derive(Debug, Clone, Serialize, Deserialize, uniffi::Enum)]
+pub enum ImageFilterWrapper {
+    Binarization(BinarizationFilter),
+    Posterization(PosterizationFilter),
+    MultiColor(MultiColorFilter),
+    Grayscale(GrayscaleFilter),
+    RemoveNoise(RemoveNoiseFilter),
+    RemoveLines(RemoveLinesFilter),
+    ExtractContours(ExtractContoursFilter),
+    ExtractBlobs(ExtractBlobsFilter),
+    Deskew(DeskewFilter),
+    Rotation(RotationFilter),
+    BlackWhiteInvert(BlackWhiteInvertFilter),
+    Morphology(MorphologyFilter),
+    SmartLayout(SmartLayoutFilter),
+    AutoCrop(AutoCropFilter),
+    ResizeScale(ResizeScaleFilter),
+    ExtendCrop(ExtendCropFilter),
+    Denoise(DenoiseFilter),
+}
+
 // [新增] 模式枚举
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, uniffi::Enum)]
 pub enum PosterizationMode {
@@ -203,7 +226,7 @@ pub struct ProcessedImage {
 }
 
 /// 智能重排滤镜参数
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, uniffi::Record)]
+#[derive(Debug, Clone, Serialize, Deserialize, uniffi::Record)]
 pub struct SmartLayoutFilter {
     pub padding: i32,
     pub min_width: i32,
