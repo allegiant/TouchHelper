@@ -260,4 +260,64 @@ class WorkspaceUseCase(
     ): Result<List<SegmentationRect>> {
         return repository.performSegmentation(image, config)
     }
+
+    suspend fun removeStep(workspace: ImageWorkspace, index: Int): Result<ImageWorkspace> = runCatching {
+        val chain = workspace.pipeline ?: throw IllegalStateException("No active chain")
+
+        // 1. 边界检查
+        if (index !in chain.steps.indices) {
+            throw IllegalArgumentException("Invalid step index: $index")
+        }
+
+        val oldSteps = chain.steps
+
+        // 2. 确定“重算起点”的输入图
+        // 如果删除的是 index=0，则输入是原始 Asset
+        // 如果删除的是 index>0，则输入是 steps[index-1] 的结果
+        val baseInputLayer = if (index == 0) {
+            workspace.assets.find { it.id == chain.inputAssetId }
+        } else {
+            oldSteps[index - 1]
+        } ?: throw IllegalStateException("Base input layer not found")
+
+        var currentImage = baseInputLayer.image
+            ?: throw IllegalStateException("Base image data missing")
+
+        // 3. 构建新列表（先移除目标，再重算后续）
+        val newSteps = oldSteps.toMutableList()
+        newSteps.removeAt(index)
+
+        // 从被删除位置的下标开始（因为后面的元素前移了，下标就是 i），重新应用滤镜
+        // 注意：newSteps.size 已经变小了
+        for (i in index until newSteps.size) {
+            val layerToRecalculate = newSteps[i]
+            val filterConfig = layerToRecalculate.config as? LayerConfig.Filter
+                ?: continue // 如果不是滤镜层（理论上不应发生），跳过
+
+            // 使用上一轮的 currentImage 作为输入，应用当前层的滤镜参数
+            val resultImage = repository.applyFilter(currentImage, filterConfig.filter)
+
+            // 更新层数据
+            newSteps[i] = layerToRecalculate.copy(image = resultImage)
+
+            // 传递给下一轮
+            currentImage = resultImage
+        }
+
+        // 4. 修正 activeIndex
+        // 如果删除的是当前选中的步骤，或者选中的步骤在被删除步骤之后，需要调整
+        val currentActive = chain.activeIndex
+        val newActiveIndex = when {
+            // 如果列表空了
+            newSteps.isEmpty() -> -1
+            // 如果删除的是当前选中项，选中前一项（如果前一项没了就选第一项或 -1）
+            currentActive == index -> (index - 1).coerceAtLeast(if (newSteps.isNotEmpty()) 0 else -1)
+            // 如果选中的在被删除的后面，减 1
+            currentActive > index -> currentActive - 1
+            // 如果选中的在被删除的前面，保持不变
+            else -> currentActive
+        }
+
+        workspace.copy(pipeline = chain.copy(steps = newSteps, activeIndex = newActiveIndex))
+    }
 }

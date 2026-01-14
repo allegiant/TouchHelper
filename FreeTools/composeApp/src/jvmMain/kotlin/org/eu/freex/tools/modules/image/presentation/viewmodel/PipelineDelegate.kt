@@ -30,6 +30,7 @@ class PipelineDelegate(private val context: ViewModelContext) {
             is ApplyFilterStep -> applyFilterStep(event.filter)
             is UpdateFilterStep -> updateFilterStep(event.filter)
             is SelectStep -> selectStep(event.index)
+            is RemoveStep -> removeStep(event.index)
         }
     }
 
@@ -108,5 +109,17 @@ class PipelineDelegate(private val context: ViewModelContext) {
             } ?: this
         }
         context.updateUiState { s -> s.copy(previewLayer = null) }
+    }
+
+    private suspend fun removeStep(index: Int) {
+        // 调用 UseCase 执行删除和重算逻辑
+        context.useCase.removeStep(context.getWorkspaceSnapshot(), index)
+            .onSuccess { newWorkspace ->
+                // 更新 Workspace
+                context.updateWorkspace { newWorkspace }
+                // 退出可能存在的预览状态
+                context.updateUiState { s -> s.copy(previewLayer = null) }
+            }
+            .onFailure { it.printStackTrace() }
     }
 }

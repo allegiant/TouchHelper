@@ -33,6 +33,7 @@ object CancelPick : InteractionEvent
 // --- 3. 流水线与滤镜事件组 (PipelineEvent) ---
 sealed interface PipelineEvent : ImageUiEvent
 data class SelectStep(val index: Int) : PipelineEvent
+data class RemoveStep(val index: Int) : PipelineEvent
 data class PreviewFilter(val filter: ImageFilter) : PipelineEvent
 object CancelPreview : PipelineEvent // 取消/清除预览
 data class ApplyFilterStep(val filter: ImageFilter) : PipelineEvent
