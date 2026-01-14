@@ -7,6 +7,7 @@ import kotlinx.coroutines.withContext
 import org.eu.freex.tools.common.utils.ImageUtils
 import org.eu.freex.tools.modules.image.domain.model.*
 import org.eu.freex.tools.modules.image.domain.repository.LayerRepository
+import org.eu.freex.tools.platform.ScreenCaptureService
 import uniffi.touch_core.applyAutoCrop
 import java.awt.image.BufferedImage
 import java.io.File
@@ -47,7 +48,9 @@ import uniffi.touch_core.RemoveLinesFilter as RustRemoveLinesFilter
 import uniffi.touch_core.MorphologyMode as RustMorphologyMode
 import uniffi.touch_core.AutoCropMode as RustAutoCropMode
 
-class LayerRepositoryImpl : LayerRepository {
+class LayerRepositoryImpl(
+    private val captureService: ScreenCaptureService
+) : LayerRepository {
 
     override suspend fun loadFromFile(file: File): BufferedImage = withContext(Dispatchers.IO) {
         ImageUtils.read(file) ?: throw Exception("Read failed: ${file.name}")
@@ -58,47 +61,7 @@ class LayerRepositoryImpl : LayerRepository {
     }
 
     override suspend fun captureScreen(): BufferedImage {
-        // 1. 【UI 操作】在主线程隐藏窗口
-        val visibleWindows = withContext(Dispatchers.Main) {
-            val windows = Window.getWindows().filter { it.isVisible }
-            windows.forEach { it.isVisible = false }
-            windows
-        }
-
-        return try {
-            // 给窗口隐藏一点时间动画
-            delay(300)
-
-            withContext(Dispatchers.IO) {
-                val ge = GraphicsEnvironment.getLocalGraphicsEnvironment()
-                val screens = ge.screenDevices
-                var logicalBounds = Rectangle()
-
-                // 计算所有屏幕的逻辑总大小
-                for (screen in screens) {
-                    logicalBounds = logicalBounds.union(screen.defaultConfiguration.bounds)
-                }
-
-                val robot = Robot()
-
-                // 使用多分辨率截图 (适配高分屏)
-                val mri = robot.createMultiResolutionScreenCapture(logicalBounds)
-                val variants = mri.resolutionVariants
-
-                // 获取最高清的物理像素图
-                val bestVariant = variants.maxByOrNull { it.getWidth(null) }
-
-                bestVariant as? BufferedImage ?: robot.createScreenCapture(logicalBounds)
-            }
-        } finally {
-            // 2. 【UI 操作】恢复窗口显示
-            withContext(Dispatchers.Main) {
-                visibleWindows.forEach {
-                    it.isVisible = true
-                    it.toFront()
-                }
-            }
-        }
+        return captureService.captureFullscreen()
     }
 
 
@@ -129,9 +92,10 @@ class LayerRepositoryImpl : LayerRepository {
                         )
                         applyBinarization(pixels, w, h, rustFilter)
                     }
+
                     is PosterizationFilter -> {
                         // 映射枚举 Kotlin -> Rust
-                        val rustMode = when(filter.mode) {
+                        val rustMode = when (filter.mode) {
                             PosterizationMode.RGB -> uniffi.touch_core.PosterizationMode.RGB
                             PosterizationMode.HSV -> uniffi.touch_core.PosterizationMode.HSV
                         }
@@ -163,6 +127,7 @@ class LayerRepositoryImpl : LayerRepository {
                         )
                         applyMultiColorFilter(pixels, w, h, rustFilter)
                     }
+
                     is GrayscaleFilter -> {
                         // 1. 映射枚举 (Kotlin -> Rust)
                         val rustMode = when (filter.mode) {
@@ -178,14 +143,18 @@ class LayerRepositoryImpl : LayerRepository {
                         // 3. 调用底层
                         applyGrayscale(pixels, w, h, rustFilter)
                     }
+
                     is RemoveNoiseFilter -> {
                         val rustFilter = RustRemoveNoiseFilter(filter.minArea, filter.gap, filter.removeWhite)
                         applyRemoveNoise(pixels, w, h, rustFilter)
                     }
+
                     is RemoveLinesFilter -> {
-                        val rustFilter = RustRemoveLinesFilter(filter.minLength, filter.removeHorizontal, filter.removeVertical)
+                        val rustFilter =
+                            RustRemoveLinesFilter(filter.minLength, filter.removeHorizontal, filter.removeVertical)
                         applyRemoveLines(pixels, w, h, rustFilter)
                     }
+
                     is ExtractContoursFilter -> {
                         val rustFilter = uniffi.touch_core.ExtractContoursFilter(
                             filter.isCanny,
@@ -195,6 +164,7 @@ class LayerRepositoryImpl : LayerRepository {
                         )
                         applyExtractContours(pixels, w, h, rustFilter)
                     }
+
                     is ExtractBlobsFilter -> {
                         val rustFilter = uniffi.touch_core.ExtractBlobsFilter(
                             filter.minWidth.toUInt(),
@@ -207,10 +177,13 @@ class LayerRepositoryImpl : LayerRepository {
                         )
                         applyExtractBlobs(pixels, w, h, rustFilter)
                     }
+
                     is DeskewFilter -> {
-                        val rustFilter = uniffi.touch_core.DeskewFilter(filter.angle, filter.isAuto,filter.bgColor.toUByte())
+                        val rustFilter =
+                            uniffi.touch_core.DeskewFilter(filter.angle, filter.isAuto, filter.bgColor.toUByte())
                         applyDeskew(pixels, w, h, rustFilter)
                     }
+
                     is RotationFilter -> {
                         val rustFilter = uniffi.touch_core.RotationFilter(
                             filter.isAuto,
@@ -221,9 +194,11 @@ class LayerRepositoryImpl : LayerRepository {
                         applyRotate(pixels, w, h, rustFilter)
 
                     }
+
                     is BlackWhiteInvertFilter -> {
                         applyBlackwhiteInvert(pixels, w, h, RustBlackWhiteInvertFilter(filter.mode))
                     }
+
                     is MorphologyFilter -> {
                         val mode = when (filter.mode) {
                             MorphologyMode.DILATE -> RustMorphologyMode.DILATE
@@ -235,6 +210,7 @@ class LayerRepositoryImpl : LayerRepository {
                         val rustFilter = uniffi.touch_core.MorphologyFilter(mode, filter.kernelSize, filter.iterations)
                         applyMorphologyFilter(pixels, w, h, rustFilter)
                     }
+
                     is SmartLayoutFilter -> {
                         val rustFilter = uniffi.touch_core.SmartLayoutFilter(
                             padding = filter.padding,
@@ -252,6 +228,7 @@ class LayerRepositoryImpl : LayerRepository {
                             result.pixels
                         )
                     }
+
                     is AutoCropFilter -> {
                         val mode = when (filter.mode) {
                             AutoCropMode.AUTO_CORNERS -> RustAutoCropMode.AUTO_CORNERS
@@ -266,13 +243,14 @@ class LayerRepositoryImpl : LayerRepository {
                             noiseThreshold = filter.noiseThreshold,
                             fixedColorHex = filter.fixedColorHex
                         )
-                        val result = applyAutoCrop(pixels,w,h,rustFilter)
+                        val result = applyAutoCrop(pixels, w, h, rustFilter)
                         return@withContext ImageUtils.fromRgbaPixels(
                             result.width,
                             result.height,
                             result.pixels
                         )
                     }
+
                     is ResizeScaleFilter -> {
                         val rustFilter = uniffi.touch_core.ResizeScaleFilter(filter.scaleFactor, filter.highQuality)
                         val result = applyResizeScale(pixels, w, h, rustFilter)
@@ -282,8 +260,9 @@ class LayerRepositoryImpl : LayerRepository {
                             result.pixels
                         )
                     }
+
                     is ExtendCropFilter -> {
-                        val rustFilter = uniffi.touch_core.ExtendCropFilter(filter.x1,filter.y1, filter.x2,filter.y2)
+                        val rustFilter = uniffi.touch_core.ExtendCropFilter(filter.x1, filter.y1, filter.x2, filter.y2)
                         val result = applyExtendCrop(pixels, w, h, rustFilter)
                         return@withContext ImageUtils.fromRgbaPixels(
                             result.width,
@@ -291,6 +270,7 @@ class LayerRepositoryImpl : LayerRepository {
                             result.pixels
                         )
                     }
+
                     is DenoiseFilter -> applyDenoise(pixels, w, h, RustDenoiseFilter(filter.radius))
                 }
             } catch (e: Exception) {
