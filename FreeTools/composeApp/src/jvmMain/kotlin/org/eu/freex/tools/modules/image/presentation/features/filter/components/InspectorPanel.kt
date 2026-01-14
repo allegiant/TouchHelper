@@ -187,9 +187,8 @@ private fun SegmentationTabContent(
             onSelectChar = { onEvent(SelectChar(it)) },
             onSubmitLabel = { onEvent(SubmitLabelAndNext(it)) },
             onStopLabeling = { onEvent(StopLabeling) },
-            onAddToLibrary = { rect, label ->
-                onEvent(AddToLibrary(rect, label))
-            }
+            onAddToLibrary = { onEvent(BatchAddToLibrary(it)) }
+
         )
     } else {
         // 如果数据未初始化 (理论上 ViewModel 在切换 Tab 时会初始化)

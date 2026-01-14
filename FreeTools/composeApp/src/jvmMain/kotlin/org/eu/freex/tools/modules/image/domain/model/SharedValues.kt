@@ -222,7 +222,7 @@ enum class AutoCropMode {
     FIXED_COLOR   // 固定颜色
 }
 @Serializable
-@SerialName("SmartLayoutFilter")
+@SerialName("AutoCropFilter")
 data class AutoCropFilter(
     val mode: AutoCropMode = AutoCropMode.AUTO_CORNERS,
     val tolerance: Float = 10f,      // 颜色容差 0-255

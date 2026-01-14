@@ -44,11 +44,13 @@ class ImageViewModel(
                     is InteractionEvent -> interactionDelegate.handle(event)
                     is PipelineEvent -> pipelineDelegate.handle(event)
                     is SegmentationEvent -> segmentationDelegate.handle(event)
-                    is AddToLibrary -> {
-                        // 获取当前用来做切割的原图
+                    is BatchAddToLibrary -> {
+                        println("ViewModel: 收到 BatchAddToLibrary 事件")
                         val sourceImage = uiState.value.displayImage?.image
                         if (sourceImage != null) {
-                            fontLibraryDelegate.addToLibrary(event.rect, sourceImage, event.label)
+                            fontLibraryDelegate.addBatchToLibrary(event.items, sourceImage)
+                        } else {
+                            println("CRITICAL ERROR: ViewModel 中 sourceImage 为 NULL！")
                         }
                     }
                 }

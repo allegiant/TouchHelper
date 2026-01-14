@@ -37,7 +37,7 @@ fun SegmentationPanel(
     onSelectChar: (Int) -> Unit,
     onSubmitLabel: (String) -> Unit,
     onStopLabeling: () -> Unit,
-    onAddToLibrary: (SegmentationRect, String) -> Unit
+    onAddToLibrary: (List<Pair<SegmentationRect, String>>) -> Unit
 ) {
     val viewModel = LocalImageViewModel.current
     val scope = rememberCoroutineScope()
@@ -131,34 +131,29 @@ fun SegmentationPanel(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // 左侧：批量操作
                 Button(
                     onClick = {
-                        // 遍历所有已标注的结果并入库
-                        // 注意：这里需要你将 fontLibraryDelegate 传递进来，或者通过 onAddToLibrary 回调传出
                         if (sourceImage != null) {
-                            var count = 0
-                            results.forEachIndexed { index, rect ->
+                            // 1. 收集所有有效数据
+                            val batchItems = results.mapIndexedNotNull { index, rect ->
                                 val label = labels[index]
                                 if (!label.isNullOrBlank()) {
-                                    // 调用回调，具体逻辑在 ViewModel 中
-                                    onAddToLibrary(rect, label)
-                                    count++
-                                }
+                                    rect to label
+                                } else null
                             }
-                            // 可以弹个 Toast: "成功入库 $count 个字符"
+
+                            println("UI: 准备发送 ${batchItems.size} 个字符到字库") // <--- 调试日志
+
+                            // 2. 发送一次批量请求
+                            if (batchItems.isNotEmpty()) {
+                                onAddToLibrary(batchItems)
+                            }
                         }
                     },
                     enabled = labels.isNotEmpty()
                 ) {
                     Text("保存已识别字符到字库")
                 }
-
-                Text(
-                    text = "共切割出 ${results.size} 个字符",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.secondary
-                )
             }
         }
 

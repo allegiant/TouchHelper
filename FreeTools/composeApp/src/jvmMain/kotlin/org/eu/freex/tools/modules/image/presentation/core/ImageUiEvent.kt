@@ -48,9 +48,5 @@ data class SelectChar(val index: Int) : SegmentationEvent
 data class SubmitLabelAndNext(val text: String) : SegmentationEvent
 data object StopLabeling : SegmentationEvent
 
-// [新增] 添加到字库事件
-// 我们需要传入切割框 (Rect)、原图 (sourceImage) 和 字符名称 (charName)
-// 但为了简化传输，我们可以只传 index，让 ViewModel 去拿数据；
-// 或者直接传数据对象。
-// 方案 A (推荐): 传数据对象 (需确保导入 SegmentationRect)
-data class AddToLibrary(val rect: SegmentationRect, val label: String) : ImageUiEvent
+// 【新增】批量添加事件
+data class BatchAddToLibrary(val items: List<Pair<SegmentationRect, String>>) : ImageUiEvent
