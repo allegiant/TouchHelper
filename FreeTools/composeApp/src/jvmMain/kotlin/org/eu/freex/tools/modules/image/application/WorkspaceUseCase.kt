@@ -1,6 +1,7 @@
 package org.eu.freex.tools.modules.image.application
 
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.toComposeImageBitmap
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
@@ -248,9 +249,21 @@ class WorkspaceUseCase(
             } else oldChain
         } else null
 
+        // 3.  恢复字库预览图 (从 binaryData 重建 ImageBitmap)
+        val restoredLibrary = workspace.fontLibrary.map { item ->
+            if (item.displayBitmap == null && item.binaryData.isNotEmpty()) {
+                // 调用下方的重建函数
+                val bitmap = reconstructBitmapFromBinary(item.binaryData, item.width, item.height)
+                item.copy(displayBitmap = bitmap)
+            } else {
+                item
+            }
+        }
+
         workspace.copy(
             assets = restoredAssets,
-            pipeline = restoredActiveChain
+            pipeline = restoredActiveChain,
+            fontLibrary = restoredLibrary
         )
     }
 
@@ -319,5 +332,35 @@ class WorkspaceUseCase(
         }
 
         workspace.copy(pipeline = chain.copy(steps = newSteps, activeIndex = newActiveIndex))
+    }
+
+    /**
+     * 辅助方法：将 01 字符串转换为 Compose ImageBitmap (用于预览)
+     * 1 -> 红色/黑色 (前景)
+     * 0 -> 透明/白色 (背景)
+     */
+    private fun reconstructBitmapFromBinary(binary: String, width: Int, height: Int): androidx.compose.ui.graphics.ImageBitmap {
+        // 创建一个空的 BufferedImage
+        val bufferedImage = BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB)
+
+        // 遍历 binary 字符串填充像素
+        // 注意：要防止 binary 长度和 width*height 不匹配导致的越界
+        val length = minOf(binary.length, width * height)
+
+        for (i in 0 until length) {
+            val x = i % width
+            val y = i / width
+            val char = binary[i]
+
+            // 简单着色：'1' 为红色(FF0000)，'0' 为透明或者半透明白
+            // 这里使用了 ARGB 格式
+            val color = if (char == '1') {
+                0xFFFF0000.toInt() // 纯红，不透明
+            } else {
+                0x00FFFFFF.toInt() // 完全透明 (或者 0xFFFFFFFF 白色)
+            }
+            bufferedImage.setRGB(x, y, color)
+        }
+        return bufferedImage.toComposeImageBitmap()
     }
 }

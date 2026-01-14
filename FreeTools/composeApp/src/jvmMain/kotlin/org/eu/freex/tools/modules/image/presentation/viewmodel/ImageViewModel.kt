@@ -17,38 +17,46 @@ class ImageViewModel(
 ) : ViewModel(), ViewModelContext {
 
     // --- State ---
-    private var workspace = ImageWorkspace()
-    private val _uiState = MutableStateFlow(ImageUiState())
+    // [修改 1] 将 workspace 升级为 MutableStateFlow，作为事实来源
+    private val _workspace = MutableStateFlow(ImageWorkspace())
 
+    val workspace = _workspace.asStateFlow()
+
+    private val _uiState = MutableStateFlow(ImageUiState())
     override val uiState = _uiState.asStateFlow()
+
     override val scope = viewModelScope
 
     // --- Delegates ---
-    // 按顺序初始化，某些 Delegate (如 Pipeline/Segmentation) 初始化时会启动协程
     private val assetDelegate = AssetDelegate(this)
     private val interactionDelegate = InteractionDelegate(this)
     private val pipelineDelegate = PipelineDelegate(this)
     private val segmentationDelegate = SegmentationDelegate(this)
 
+    // [修改 3] 去掉 private 修饰符，供 App.kt 调用 (修复无法访问 delegate 的问题)
+    val fontLibraryDelegate = FontLibraryDelegate(this)
+
     // --- Main Event Router ---
     fun handleEvent(event: ImageUiEvent) {
         viewModelScope.launch {
-            // 1. Loading Indicator Logic
             if (shouldShowLoading(event)) {
                 _uiState.update { it.copy(isLoading = true) }
             }
-
-            // 2. Delegate Routing using Sealed Interfaces
             runCatching {
                 when (event) {
                     is AssetEvent -> assetDelegate.handle(event)
                     is InteractionEvent -> interactionDelegate.handle(event)
                     is PipelineEvent -> pipelineDelegate.handle(event)
                     is SegmentationEvent -> segmentationDelegate.handle(event)
+                    is AddToLibrary -> {
+                        // 获取当前用来做切割的原图
+                        val sourceImage = uiState.value.displayImage?.image
+                        if (sourceImage != null) {
+                            fontLibraryDelegate.addToLibrary(event.rect, sourceImage, event.label)
+                        }
+                    }
                 }
             }.onFailure { it.printStackTrace() }
-
-            // 3. Ensure UI consistency (Turn off loading)
             _uiState.update { it.copy(isLoading = false) }
         }
     }
@@ -56,22 +64,26 @@ class ImageViewModel(
     // --- ViewModelContext Implementation ---
 
     override fun updateWorkspace(transform: (ImageWorkspace) -> ImageWorkspace) {
-        workspace = transform(workspace)
+        // [修改 4] 使用 update 更新 StateFlow
+        _workspace.update(transform)
         refreshUiState()
     }
 
-    override fun getWorkspaceSnapshot(): ImageWorkspace = workspace
+    // [修改 5] 获取快照时取 value
+    override fun getWorkspaceSnapshot(): ImageWorkspace = _workspace.value
 
     override fun updateUiState(transform: (ImageUiState) -> ImageUiState) {
         _uiState.update(transform)
     }
 
     private fun refreshUiState() {
+        // [修改 6] 从 _workspace.value 获取最新数据同步给 uiState
+        val currentWs = _workspace.value
         _uiState.update {
             it.copy(
-                assets = workspace.assets,
-                activeChain = workspace.pipeline,
-                segmentationProject = workspace.segmentation
+                assets = currentWs.assets,
+                activeChain = currentWs.pipeline,
+                segmentationProject = currentWs.segmentation
             )
         }
     }
@@ -84,7 +96,6 @@ class ImageViewModel(
     // --- Utility ---
 
     private fun shouldShowLoading(event: ImageUiEvent): Boolean {
-        // 白名单机制：如果事件是交互型的或瞬时型的，不需要显示全屏 Loading
         return when (event) {
             is PreviewFilter,
             is TriggerColorPick,
@@ -93,6 +104,7 @@ class ImageViewModel(
             is SwitchTab,
             is UpdateSegmentationConfig,
             is SelectChar,
+            is SubmitLabelAndNext,
             is StopLabeling -> false
             else -> true
         }

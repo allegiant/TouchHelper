@@ -18,6 +18,7 @@ import org.eu.freex.tools.modules.image.presentation.ImageWorkbench
 import org.eu.freex.tools.common.theme.AppTheme
 import org.eu.freex.tools.common.theme.ThemeMode
 import org.eu.freex.tools.modules.image.presentation.core.LoadFile
+import org.eu.freex.tools.modules.image.presentation.features.library.FontManagerPanel
 import org.koin.compose.koinInject
 import java.awt.Component
 import java.awt.Container
@@ -35,6 +36,8 @@ fun App(window: androidx.compose.ui.awt.ComposeWindow?) {
     var themeMode by remember { mutableStateOf(ThemeMode.System) }
 
     val imageViewModel = koinInject<ImageViewModel>()
+    val state by imageViewModel.uiState.collectAsState()
+    val workspace by imageViewModel.workspace.collectAsState()
 
     // 拖拽相关代码保持不变...
     if (window != null) {
@@ -93,12 +96,14 @@ fun App(window: androidx.compose.ui.awt.ComposeWindow?) {
                                 ImageWorkbench(viewModel = imageViewModel)
                             }
                             AppModule.FONT_MANAGER -> {
-                                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                    Text(
-                                        "字库管理模块 - 开发中...",
-                                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)
-                                    )
-                                }
+                                FontManagerPanel(
+                                    library = workspace.fontLibrary,
+                                    onDelete = { id -> imageViewModel.fontLibraryDelegate.deleteItem(id) },
+                                    onSort = { imageViewModel.fontLibraryDelegate.sortLibrary() },
+                                    onClear = { imageViewModel.fontLibraryDelegate.clearLibrary() },
+                                    onImport = { file -> imageViewModel.fontLibraryDelegate.importLibrary(file) },
+                                    onExport = { file -> imageViewModel.fontLibraryDelegate.exportLibrary(file) }
+                                )
                             }
                         }
                     }
