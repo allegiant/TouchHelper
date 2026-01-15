@@ -1,7 +1,16 @@
 // 必须引入 uniffi，或者确保 Cargo.toml 中有 uniffi = { version = "...", features = ["derive"] }
 // 通常 lib.rs 中有 uniffi::setup_scaffolding!(); 就行
 
+use anyhow::Result;
+use image::DynamicImage;
 use serde::{Deserialize, Serialize};
+
+use super::filters::{
+    AutoCropFilter, BinarizationFilter, BlackWhiteInvertFilter, DenoiseFilter, DeskewFilter,
+    ExtendCropFilter, ExtractBlobsFilter, ExtractContoursFilter, GrayscaleFilter, ImageFilter,
+    MorphologyFilter, MultiColorFilter, PosterizationFilter, RemoveLinesFilter, RemoveNoiseFilter,
+    ResizeScaleFilter, RotationFilter, SmartLayoutFilter,
+};
 
 // 统一滤镜包装器 (Union Wrapper)
 /// 这允许我们在单次调用中传递任意类型的滤镜
@@ -24,6 +33,31 @@ pub enum ImageFilterWrapper {
     ResizeScale(ResizeScaleFilter),
     ExtendCrop(ExtendCropFilter),
     Denoise(DenoiseFilter),
+}
+
+impl ImageFilterWrapper {
+    pub fn apply(&self, img: &DynamicImage) -> Result<DynamicImage> {
+        match self {
+            // 将每个枚举变体映射到对应的 .apply() 方法
+            ImageFilterWrapper::Binarization(f) => f.apply(img),
+            ImageFilterWrapper::Posterization(f) => f.apply(img),
+            ImageFilterWrapper::MultiColor(f) => f.apply(img),
+            ImageFilterWrapper::Grayscale(f) => f.apply(img),
+            ImageFilterWrapper::RemoveNoise(f) => f.apply(img),
+            ImageFilterWrapper::RemoveLines(f) => f.apply(img),
+            ImageFilterWrapper::ExtractContours(f) => f.apply(img),
+            ImageFilterWrapper::ExtractBlobs(f) => f.apply(img),
+            ImageFilterWrapper::Deskew(f) => f.apply(img),
+            ImageFilterWrapper::Rotation(f) => f.apply(img),
+            ImageFilterWrapper::BlackWhiteInvert(f) => f.apply(img),
+            ImageFilterWrapper::Morphology(f) => f.apply(img),
+            ImageFilterWrapper::SmartLayout(f) => f.apply(img),
+            ImageFilterWrapper::AutoCrop(f) => f.apply(img),
+            ImageFilterWrapper::ResizeScale(f) => f.apply(img),
+            ImageFilterWrapper::ExtendCrop(f) => f.apply(img),
+            ImageFilterWrapper::Denoise(f) => f.apply(img),
+        }
+    }
 }
 
 // ==========================================

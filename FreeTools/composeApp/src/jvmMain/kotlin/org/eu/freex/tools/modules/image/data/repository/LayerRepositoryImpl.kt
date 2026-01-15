@@ -2,55 +2,44 @@ package org.eu.freex.tools.modules.image.data.repository
 
 import androidx.compose.ui.geometry.Rect
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import org.eu.freex.tools.common.utils.ImageUtils
-import org.eu.freex.tools.modules.image.domain.model.*
+import org.eu.freex.tools.modules.image.domain.model.AutoCropFilter
+import org.eu.freex.tools.modules.image.domain.model.AutoCropMode
+import org.eu.freex.tools.modules.image.domain.model.BinarizationFilter
+import org.eu.freex.tools.modules.image.domain.model.BinarizationMode
+import org.eu.freex.tools.modules.image.domain.model.BlackWhiteInvertFilter
+import org.eu.freex.tools.modules.image.domain.model.DenoiseFilter
+import org.eu.freex.tools.modules.image.domain.model.DeskewFilter
+import org.eu.freex.tools.modules.image.domain.model.ExtendCropFilter
+import org.eu.freex.tools.modules.image.domain.model.ExtractBlobsFilter
+import org.eu.freex.tools.modules.image.domain.model.ExtractContoursFilter
+import org.eu.freex.tools.modules.image.domain.model.GrayscaleFilter
+import org.eu.freex.tools.modules.image.domain.model.GrayscaleMode
+import org.eu.freex.tools.modules.image.domain.model.ImageFilter
+import org.eu.freex.tools.modules.image.domain.model.MorphologyFilter
+import org.eu.freex.tools.modules.image.domain.model.MorphologyMode
+import org.eu.freex.tools.modules.image.domain.model.MultiColorFilter
+import org.eu.freex.tools.modules.image.domain.model.PosterizationFilter
+import org.eu.freex.tools.modules.image.domain.model.PosterizationMode
+import org.eu.freex.tools.modules.image.domain.model.RemoveLinesFilter
+import org.eu.freex.tools.modules.image.domain.model.RemoveNoiseFilter
+import org.eu.freex.tools.modules.image.domain.model.ResizeScaleFilter
+import org.eu.freex.tools.modules.image.domain.model.RotationFilter
+import org.eu.freex.tools.modules.image.domain.model.SegmentationConfig
+import org.eu.freex.tools.modules.image.domain.model.SegmentationMode
+import org.eu.freex.tools.modules.image.domain.model.SegmentationRect
+import org.eu.freex.tools.modules.image.domain.model.SmartLayoutFilter
+import org.eu.freex.tools.modules.image.domain.model.ViewFilter
 import org.eu.freex.tools.modules.image.domain.repository.LayerRepository
 import org.eu.freex.tools.platform.ScreenCaptureService
 import uniffi.touch_core.ImageFilterWrapper
 import uniffi.touch_core.ImageSession
-import uniffi.touch_core.applyAutoCrop
+import uniffi.touch_core.processImage
 import java.awt.image.BufferedImage
 import java.io.File
-import kotlin.math.roundToInt
-
-// Rust Bindings
-import uniffi.touch_core.applyBinarization
-import uniffi.touch_core.applyBlackwhiteInvert
-import uniffi.touch_core.applyDenoise
-import uniffi.touch_core.applyDeskew
-import uniffi.touch_core.applyExtendCrop
-import uniffi.touch_core.applyExtractBlobs
-import uniffi.touch_core.applyExtractContours
-import uniffi.touch_core.applyGrayscale
-import uniffi.touch_core.applyMorphologyFilter
-import uniffi.touch_core.applyMultiColorFilter
-import uniffi.touch_core.applyPosterizationFilter
-import uniffi.touch_core.applyRemoveLines
-import uniffi.touch_core.applyRemoveNoise
-import uniffi.touch_core.applyResizeScale
-import uniffi.touch_core.applyRotate
-import uniffi.touch_core.applySmartLayout
-import java.awt.GraphicsEnvironment
-import java.awt.Rectangle
-import java.awt.Robot
-import java.awt.Window
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
-import uniffi.touch_core.BinarizationMode as RustBinarizationMode
-import uniffi.touch_core.BinarizationFilter as RustBinarizationFilter
-import uniffi.touch_core.PosterizationFilter as RustPosterizationFilter
-import uniffi.touch_core.MultiColorFilter as RustMultiColorFilter
-import uniffi.touch_core.ColorRule as RustColorRule
-import uniffi.touch_core.BlackWhiteInvertFilter as RustBlackWhiteInvertFilter
-import uniffi.touch_core.DenoiseFilter as RustDenoiseFilter
-import uniffi.touch_core.GrayscaleFilter as RustGrayscaleFilter
-import uniffi.touch_core.GrayscaleMode as RustGrayscaleMode
-import uniffi.touch_core.RemoveNoiseFilter as RustRemoveNoiseFilter
-import uniffi.touch_core.RemoveLinesFilter as RustRemoveLinesFilter
-import uniffi.touch_core.MorphologyMode as RustMorphologyMode
-import uniffi.touch_core.AutoCropMode as RustAutoCropMode
 
 class LayerRepositoryImpl(
     private val captureService: ScreenCaptureService
@@ -71,217 +60,29 @@ class LayerRepositoryImpl(
 
     override suspend fun applyFilter(source: BufferedImage, filter: ImageFilter): BufferedImage =
         withContext(Dispatchers.Default) {
-            val pixels = ImageUtils.toRgbaPixels(source)
-            val w = source.width
-            val h = source.height
 
-            val resultPixels = try {
-                when (filter) {
-                    is ViewFilter -> pixels
-                    is BinarizationFilter -> {
-                        val min = filter.min.roundToInt().coerceIn(0, 255)
-                        val max = filter.max.roundToInt().coerceIn(0, 255)
-                        val mode: RustBinarizationMode = when (filter.mode) {
-                            BinarizationMode.MANUAL -> RustBinarizationMode.MANUAL
-                            BinarizationMode.ADAPTIVE -> RustBinarizationMode.ADAPTIVE
-                            BinarizationMode.OTSU -> RustBinarizationMode.OTSU
-                        }
-                        val rustFilter = RustBinarizationFilter(
-                            mode,
-                            min,
-                            max,
-                            filter.isRgbAvg,
-                            filter.sauvolaK.toDouble(),
-                            filter.windowSize.toInt()
-                        )
-                        applyBinarization(pixels, w, h, rustFilter)
-                    }
-
-                    is PosterizationFilter -> {
-                        // 映射枚举 Kotlin -> Rust
-                        val rustMode = when (filter.mode) {
-                            PosterizationMode.RGB -> uniffi.touch_core.PosterizationMode.RGB
-                            PosterizationMode.HSV -> uniffi.touch_core.PosterizationMode.HSV
-                        }
-
-                        val rustFilter = RustPosterizationFilter(
-                            rustMode,
-                            filter.isMultiValue,
-                            filter.level,
-                            filter.channel1,
-                            filter.channel2,
-                            filter.channel3
-                        )
-                        applyPosterizationFilter(pixels, w, h, rustFilter)
-                    }
-
-                    is MultiColorFilter -> {
-                        val rustRules = filter.rules.map { rule ->
-                            RustColorRule(
-                                rule.id,
-                                rule.targetHex,
-                                rule.biasHex,
-                                rule.isEnabled
-                            )
-                        }
-                        val rustFilter = RustMultiColorFilter(
-                            rustRules,
-                            filter.isInvert,
-                            filter.keepOriginal
-                        )
-                        applyMultiColorFilter(pixels, w, h, rustFilter)
-                    }
-
-                    is GrayscaleFilter -> {
-                        // 1. 映射枚举 (Kotlin -> Rust)
-                        val rustMode = when (filter.mode) {
-                            GrayscaleMode.WEIGHTED -> RustGrayscaleMode.WEIGHTED
-                            GrayscaleMode.MAX -> RustGrayscaleMode.MAX
-                            GrayscaleMode.MIN -> RustGrayscaleMode.MIN
-                            GrayscaleMode.RED -> RustGrayscaleMode.RED
-                            GrayscaleMode.GREEN -> RustGrayscaleMode.GREEN
-                            GrayscaleMode.BLUE -> RustGrayscaleMode.BLUE
-                        }
-                        // 2. 创建 Rust 滤镜对象 (现在它接受 mode 参数了)
-                        val rustFilter = RustGrayscaleFilter(rustMode)
-                        // 3. 调用底层
-                        applyGrayscale(pixels, w, h, rustFilter)
-                    }
-
-                    is RemoveNoiseFilter -> {
-                        val rustFilter = RustRemoveNoiseFilter(filter.minArea, filter.gap, filter.removeWhite)
-                        applyRemoveNoise(pixels, w, h, rustFilter)
-                    }
-
-                    is RemoveLinesFilter -> {
-                        val rustFilter =
-                            RustRemoveLinesFilter(filter.minLength, filter.removeHorizontal, filter.removeVertical)
-                        applyRemoveLines(pixels, w, h, rustFilter)
-                    }
-
-                    is ExtractContoursFilter -> {
-                        val rustFilter = uniffi.touch_core.ExtractContoursFilter(
-                            filter.isCanny,
-                            filter.cannyLow,
-                            filter.cannyHigh,
-                            filter.morphKernel.toUByte()
-                        )
-                        applyExtractContours(pixels, w, h, rustFilter)
-                    }
-
-                    is ExtractBlobsFilter -> {
-                        val rustFilter = uniffi.touch_core.ExtractBlobsFilter(
-                            filter.minWidth.toUInt(),
-                            filter.maxWidth.toUInt(),
-                            filter.minHeight.toUInt(),
-                            filter.maxHeight.toUInt(),
-                            filter.minArea.toUInt(),
-                            filter.maxArea.toUInt(),
-                            filter.useEightConnectivity
-                        )
-                        applyExtractBlobs(pixels, w, h, rustFilter)
-                    }
-
-                    is DeskewFilter -> {
-                        val rustFilter =
-                            uniffi.touch_core.DeskewFilter(filter.angle, filter.isAuto, filter.bgColor.toUByte())
-                        applyDeskew(pixels, w, h, rustFilter)
-                    }
-
-                    is RotationFilter -> {
-                        val rustFilter = uniffi.touch_core.RotationFilter(
-                            filter.isAuto,
-                            filter.angle.toDouble(),
-                            filter.maxSearchRange.toDouble(),
-                            filter.precision.toDouble()
-                        )
-                        applyRotate(pixels, w, h, rustFilter)
-
-                    }
-
-                    is BlackWhiteInvertFilter -> {
-                        applyBlackwhiteInvert(pixels, w, h, RustBlackWhiteInvertFilter(filter.mode))
-                    }
-
-                    is MorphologyFilter -> {
-                        val mode = when (filter.mode) {
-                            MorphologyMode.DILATE -> RustMorphologyMode.DILATE
-                            MorphologyMode.ERODE -> RustMorphologyMode.ERODE
-                            MorphologyMode.OPEN -> RustMorphologyMode.OPEN
-                            MorphologyMode.CLOSE -> RustMorphologyMode.CLOSE
-                            MorphologyMode.GRADIENT -> RustMorphologyMode.GRADIENT
-                        }
-                        val rustFilter = uniffi.touch_core.MorphologyFilter(mode, filter.kernelSize, filter.iterations)
-                        applyMorphologyFilter(pixels, w, h, rustFilter)
-                    }
-
-                    is SmartLayoutFilter -> {
-                        val rustFilter = uniffi.touch_core.SmartLayoutFilter(
-                            padding = filter.padding,
-                            minWidth = filter.minWidth,
-                            minHeight = filter.minHeight,
-                            fixedHeight = filter.fixedHeight,
-                            alignCenter = filter.alignCenter
-                        )
-                        val result = applySmartLayout(pixels, w, h, rustFilter)
-
-                        // 使用新的宽高创建图片，解决花屏问题
-                        return@withContext ImageUtils.fromRgbaPixels(
-                            result.width,
-                            result.height,
-                            result.pixels
-                        )
-                    }
-
-                    is AutoCropFilter -> {
-                        val mode = when (filter.mode) {
-                            AutoCropMode.AUTO_CORNERS -> RustAutoCropMode.AUTO_CORNERS
-                            AutoCropMode.FIXED_COLOR -> RustAutoCropMode.FIXED_COLOR
-                        }
-
-
-                        val rustFilter = uniffi.touch_core.AutoCropFilter(
-                            mode = mode,
-                            tolerance = filter.tolerance,
-                            padding = filter.padding,
-                            noiseThreshold = filter.noiseThreshold,
-                            fixedColorHex = filter.fixedColorHex
-                        )
-                        val result = applyAutoCrop(pixels, w, h, rustFilter)
-                        return@withContext ImageUtils.fromRgbaPixels(
-                            result.width,
-                            result.height,
-                            result.pixels
-                        )
-                    }
-
-                    is ResizeScaleFilter -> {
-                        val rustFilter = uniffi.touch_core.ResizeScaleFilter(filter.scaleFactor, filter.highQuality)
-                        val result = applyResizeScale(pixels, w, h, rustFilter)
-                        return@withContext ImageUtils.fromRgbaPixels(
-                            result.width,
-                            result.height,
-                            result.pixels
-                        )
-                    }
-
-                    is ExtendCropFilter -> {
-                        val rustFilter = uniffi.touch_core.ExtendCropFilter(filter.x1, filter.y1, filter.x2, filter.y2)
-                        val result = applyExtendCrop(pixels, w, h, rustFilter)
-                        return@withContext ImageUtils.fromRgbaPixels(
-                            result.width,
-                            result.height,
-                            result.pixels
-                        )
-                    }
-
-                    is DenoiseFilter -> applyDenoise(pixels, w, h, RustDenoiseFilter(filter.radius))
-                }
-            } catch (e: Exception) {
-                e.printStackTrace()
+            // 1. 特殊处理 ViewFilter (它不需要 Rust 处理)
+            if (filter is ViewFilter) {
                 return@withContext source
             }
-            ImageUtils.fromRgbaPixels(w, h, resultPixels)
+            try {
+                val pixels = ImageUtils.toRgbaPixels(source)
+                val w = source.width
+                val h = source.height
+                val rustFilterWrapper = filter.toRustWrapper()
+                val result = processImage(pixels, w, h, rustFilterWrapper)
+                // 5. 重建图片
+                // 使用 result.width 和 result.height，这样能正确处理 Resize/Crop 等改变尺寸的滤镜
+                ImageUtils.fromRgbaPixels(
+                    result.width,
+                    result.height,
+                    result.pixels // 这里是 ByteArray，类型匹配正确
+                )
+            } catch (e: Exception) {
+                e.printStackTrace()
+                // 出错时返回原图
+                return@withContext source
+            }
         }
 
     override suspend fun crop(source: BufferedImage, rect: Rect): BufferedImage = withContext(Dispatchers.Default) {
@@ -352,7 +153,7 @@ class LayerRepositoryImpl(
     }
 
     /**
-     * [修改版] 批处理 Pipeline
+     * 批处理 Pipeline
      * 输入: 基础底图 + 滤镜列表
      * 输出: 每一步处理后的图片列表 (List<BufferedImage>)
      */
@@ -423,6 +224,7 @@ private fun ImageFilter.toRustWrapper(): ImageFilterWrapper {
             )
             ImageFilterWrapper.Binarization(f)
         }
+
         is GrayscaleFilter -> {
             val mode = when (this.mode) {
                 GrayscaleMode.WEIGHTED -> uniffi.touch_core.GrayscaleMode.WEIGHTED
@@ -434,6 +236,7 @@ private fun ImageFilter.toRustWrapper(): ImageFilterWrapper {
             }
             ImageFilterWrapper.Grayscale(uniffi.touch_core.GrayscaleFilter(mode))
         }
+
         is PosterizationFilter -> {
             val mode = when (this.mode) {
                 PosterizationMode.RGB -> uniffi.touch_core.PosterizationMode.RGB
@@ -444,6 +247,7 @@ private fun ImageFilter.toRustWrapper(): ImageFilterWrapper {
             )
             ImageFilterWrapper.Posterization(f)
         }
+
         is MultiColorFilter -> {
             val rustRules = this.rules.map { rule ->
                 uniffi.touch_core.ColorRule(rule.id, rule.targetHex, rule.biasHex, rule.isEnabled)
@@ -456,16 +260,19 @@ private fun ImageFilter.toRustWrapper(): ImageFilterWrapper {
             val f = uniffi.touch_core.RemoveNoiseFilter(minArea, gap, removeWhite)
             ImageFilterWrapper.RemoveNoise(f)
         }
+
         is RemoveLinesFilter -> {
             val f = uniffi.touch_core.RemoveLinesFilter(minLength, removeHorizontal, removeVertical)
             ImageFilterWrapper.RemoveLines(f)
         }
+
         is ExtractContoursFilter -> {
             val f = uniffi.touch_core.ExtractContoursFilter(
                 isCanny, cannyLow, cannyHigh, morphKernel.toUByte()
             )
             ImageFilterWrapper.ExtractContours(f)
         }
+
         is ExtractBlobsFilter -> {
             val f = uniffi.touch_core.ExtractBlobsFilter(
                 minWidth.toUInt(), maxWidth.toUInt(), minHeight.toUInt(), maxHeight.toUInt(),
@@ -473,20 +280,29 @@ private fun ImageFilter.toRustWrapper(): ImageFilterWrapper {
             )
             ImageFilterWrapper.ExtractBlobs(f)
         }
+
         is DeskewFilter -> {
             val f = uniffi.touch_core.DeskewFilter(angle, isAuto, bgColor.toUByte())
             ImageFilterWrapper.Deskew(f)
         }
+
         is RotationFilter -> {
             val f = uniffi.touch_core.RotationFilter(
                 isAuto, angle.toDouble(), maxSearchRange.toDouble(), precision.toDouble()
             )
             ImageFilterWrapper.Rotation(f)
         }
+
         is BlackWhiteInvertFilter -> {
-            val f = uniffi.touch_core.BlackWhiteInvertFilter(mode)
+            val rustMode = when(mode) {
+                0 -> uniffi.touch_core.InvertMode.AUTO_TO_WHITE_BG
+                1 -> uniffi.touch_core.InvertMode.AUTO_TO_BLACK_BG
+                else -> uniffi.touch_core.InvertMode.FORCE
+            }
+            val f = uniffi.touch_core.BlackWhiteInvertFilter(rustMode)
             ImageFilterWrapper.BlackWhiteInvert(f)
         }
+
         is MorphologyFilter -> {
             val mode = when (this.mode) {
                 MorphologyMode.DILATE -> uniffi.touch_core.MorphologyMode.DILATE
@@ -498,10 +314,12 @@ private fun ImageFilter.toRustWrapper(): ImageFilterWrapper {
             val f = uniffi.touch_core.MorphologyFilter(mode, kernelSize, iterations)
             ImageFilterWrapper.Morphology(f)
         }
+
         is SmartLayoutFilter -> {
             val f = uniffi.touch_core.SmartLayoutFilter(padding, minWidth, minHeight, fixedHeight, alignCenter)
             ImageFilterWrapper.SmartLayout(f)
         }
+
         is AutoCropFilter -> {
             val mode = when (this.mode) {
                 AutoCropMode.AUTO_CORNERS -> uniffi.touch_core.AutoCropMode.AUTO_CORNERS
@@ -510,18 +328,22 @@ private fun ImageFilter.toRustWrapper(): ImageFilterWrapper {
             val f = uniffi.touch_core.AutoCropFilter(mode, tolerance, padding, noiseThreshold, fixedColorHex)
             ImageFilterWrapper.AutoCrop(f)
         }
+
         is ResizeScaleFilter -> {
             val f = uniffi.touch_core.ResizeScaleFilter(scaleFactor, highQuality)
             ImageFilterWrapper.ResizeScale(f)
         }
+
         is ExtendCropFilter -> {
             val f = uniffi.touch_core.ExtendCropFilter(x1, y1, x2, y2)
             ImageFilterWrapper.ExtendCrop(f)
         }
+
         is DenoiseFilter -> {
             val f = uniffi.touch_core.DenoiseFilter(radius)
             ImageFilterWrapper.Denoise(f)
         }
+
         is ViewFilter -> throw IllegalArgumentException("ViewFilter cannot be applied in Rust pipeline")
     }
 }

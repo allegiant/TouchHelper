@@ -1,6 +1,6 @@
 use super::ImageFilter;
 use anyhow::Result;
-use image::{DynamicImage, GenericImageView, GrayImage, Luma};
+use image::{DynamicImage, GrayImage, Luma};
 use imageproc::region_labelling::{connected_components, Connectivity};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;

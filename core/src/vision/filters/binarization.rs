@@ -127,4 +127,3 @@ fn binarize_sauvola(img: &DynamicImage, window_size: u32, k: f64) -> Result<Dyna
     }
     Ok(DynamicImage::ImageLuma8(out))
 }
-
