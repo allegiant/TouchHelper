@@ -10,6 +10,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import org.eu.freex.tools.common.state.BaseEventDispatcher
+import org.eu.freex.tools.common.state.BaseViewModel
 import org.eu.freex.tools.modules.image.application.WorkspaceUseCase
 import org.eu.freex.tools.modules.image.domain.model.ImageFilter
 import org.eu.freex.tools.modules.image.domain.model.ImageLayer
@@ -20,12 +22,12 @@ import org.eu.freex.tools.modules.image.presentation.core.*
 internal data class PreviewRequest(val baseLayer: ImageLayer, val filter: ImageFilter)
 class ImageViewModel(
     internal val useCase: WorkspaceUseCase
-) : ViewModel() {
+) : BaseViewModel<ImageUiEvent, ImageUiState>(
+    initialState = ImageUiState(),
+    dispatcher = BaseEventDispatcher(emptyList()) // 传空，因为我们用扩展函数自己分发
+) {
 
     private var workspace = ImageWorkspace()
-    private val _uiState = MutableStateFlow(ImageUiState())
-    val uiState = _uiState.asStateFlow()
-
 
     private val colorPickChannel = Channel<Color>(Channel.RENDEZVOUS)
     private val pointPickChannel = Channel<IntOffset>(Channel.RENDEZVOUS)
@@ -46,10 +48,10 @@ class ImageViewModel(
 
 
     // --- Main Event Router ---
-    fun handleEvent(event: ImageUiEvent) {
+    override fun handleEvent(event: ImageUiEvent) {
         viewModelScope.launch {
             if (shouldShowLoading(event)) {
-                _uiState.update { it.copy(isLoading = true) }
+                updateUiState { it.copy(isLoading = true) }
             }
             runCatching {
                 when (event) {
@@ -59,19 +61,21 @@ class ImageViewModel(
                     is SegmentationEvent -> handleSegmentEvent(event)
                     is FontLibraryEvent -> handleFontLibraryEvent(event)
                 }
-            }.onFailure { it.printStackTrace() }
-            _uiState.update { it.copy(isLoading = false) }
+            }.onFailure {
+                it.printStackTrace()
+                sendEffect(it.message ?: "Unknown Error") // 使用基类的 Toast 发送能力
+            }
+            updateUiState {   it.copy(isLoading = false) }
         }
     }
 
     // --- ViewModelContext Implementation ---
 
+    internal fun getWorkspaceSnapshot(): ImageWorkspace = workspace
     internal fun updateWorkspace(transform: (ImageWorkspace) -> ImageWorkspace) {
         workspace = transform(workspace)
         refreshUiState()
     }
-
-    internal fun getWorkspaceSnapshot(): ImageWorkspace = workspace
 
     internal fun updateUiState(transform: (ImageUiState) -> ImageUiState) {
         _uiState.update(transform)

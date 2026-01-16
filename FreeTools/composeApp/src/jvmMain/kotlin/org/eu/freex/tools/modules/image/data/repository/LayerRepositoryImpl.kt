@@ -53,11 +53,6 @@ class LayerRepositoryImpl(
         ImageUtils.save(image, file)
     }
 
-    override suspend fun captureScreen(): BufferedImage {
-        return captureService.captureFullscreen()
-    }
-
-
     override suspend fun applyFilter(source: BufferedImage, filter: ImageFilter): BufferedImage =
         withContext(Dispatchers.Default) {
 
@@ -85,8 +80,54 @@ class LayerRepositoryImpl(
             }
         }
 
-    override suspend fun crop(source: BufferedImage, rect: Rect): BufferedImage = withContext(Dispatchers.Default) {
-        ImageUtils.cropImage(source, rect)
+    /**
+     * 批处理 Pipeline
+     * 输入: 基础底图 + 滤镜列表
+     * 输出: 每一步处理后的图片列表 (List<BufferedImage>)
+     */
+    override suspend fun applyPipeline(
+        baseImage: BufferedImage,
+        filters: List<ImageFilter>
+    ): List<BufferedImage> = withContext(Dispatchers.Default) {
+        if (filters.isEmpty()) return@withContext emptyList()
+
+        val results = mutableListOf<BufferedImage>()
+
+        // 1. 准备数据 (IntArray -> BGRA ByteBuffer)
+        val w = baseImage.width
+        val h = baseImage.height
+        val pixels = IntArray(w * h)
+        baseImage.getRGB(0, 0, w, h, pixels, 0, w)
+
+        val byteBuffer = ByteBuffer.allocate(pixels.size * 4).order(ByteOrder.LITTLE_ENDIAN)
+        byteBuffer.asIntBuffer().put(pixels)
+        val byteArray = byteBuffer.array()
+
+        // 2. 创建 Rust Session
+        // ImageSession 会接管 byteArray，在 Rust 内存中驻留
+        val session = ImageSession(byteArray, w, h)
+
+        try {
+            // 3. 依次应用滤镜，并收集每一步的结果
+            filters.forEach { filter ->
+                val rustFilter = filter.toRustWrapper()
+                session.applyFilter(rustFilter)
+
+                // 导出这一步的结果 (Native -> JVM)
+                // 虽然这里有一次拷贝，但省去了 "JVM -> Native" 的上传拷贝和解码开销
+                val resultData = session.getImage()
+                val resultImage = ImageUtils.fromRgbaPixels(
+                    resultData.width,
+                    resultData.height,
+                    resultData.pixels
+                )
+                results.add(resultImage)
+            }
+        } finally {
+            // Session 自动释放或依靠 GC
+        }
+
+        return@withContext results
     }
 
     override suspend fun performSegmentation(
@@ -152,55 +193,15 @@ class LayerRepositoryImpl(
         }
     }
 
-    /**
-     * 批处理 Pipeline
-     * 输入: 基础底图 + 滤镜列表
-     * 输出: 每一步处理后的图片列表 (List<BufferedImage>)
-     */
-    suspend fun applyPipeline(
-        baseImage: BufferedImage,
-        filters: List<ImageFilter>
-    ): List<BufferedImage> = withContext(Dispatchers.Default) {
-        if (filters.isEmpty()) return@withContext emptyList()
-
-        val results = mutableListOf<BufferedImage>()
-
-        // 1. 准备数据 (IntArray -> BGRA ByteBuffer)
-        val w = baseImage.width
-        val h = baseImage.height
-        val pixels = IntArray(w * h)
-        baseImage.getRGB(0, 0, w, h, pixels, 0, w)
-
-        val byteBuffer = ByteBuffer.allocate(pixels.size * 4).order(ByteOrder.LITTLE_ENDIAN)
-        byteBuffer.asIntBuffer().put(pixels)
-        val byteArray = byteBuffer.array()
-
-        // 2. 创建 Rust Session
-        // ImageSession 会接管 byteArray，在 Rust 内存中驻留
-        val session = ImageSession(byteArray, w, h)
-
-        try {
-            // 3. 依次应用滤镜，并收集每一步的结果
-            filters.forEach { filter ->
-                val rustFilter = filter.toRustWrapper()
-                session.applyFilter(rustFilter)
-
-                // 导出这一步的结果 (Native -> JVM)
-                // 虽然这里有一次拷贝，但省去了 "JVM -> Native" 的上传拷贝和解码开销
-                val resultData = session.getImage()
-                val resultImage = ImageUtils.fromRgbaPixels(
-                    resultData.width,
-                    resultData.height,
-                    resultData.pixels
-                )
-                results.add(resultImage)
-            }
-        } finally {
-            // Session 自动释放或依靠 GC
-        }
-
-        return@withContext results
+    override suspend fun captureScreen(): BufferedImage {
+        return captureService.captureFullscreen()
     }
+
+
+    override suspend fun crop(source: BufferedImage, rect: Rect): BufferedImage = withContext(Dispatchers.Default) {
+        ImageUtils.cropImage(source, rect)
+    }
+
 }
 
 // ==========================================
@@ -294,7 +295,7 @@ private fun ImageFilter.toRustWrapper(): ImageFilterWrapper {
         }
 
         is BlackWhiteInvertFilter -> {
-            val rustMode = when(mode) {
+            val rustMode = when (mode) {
                 0 -> uniffi.touch_core.InvertMode.AUTO_TO_WHITE_BG
                 1 -> uniffi.touch_core.InvertMode.AUTO_TO_BLACK_BG
                 else -> uniffi.touch_core.InvertMode.FORCE

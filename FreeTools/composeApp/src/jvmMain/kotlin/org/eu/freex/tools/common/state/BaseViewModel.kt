@@ -35,7 +35,7 @@ abstract class BaseViewModel<E, S>(
     }
 
     // 3. 统一的事件处理入口
-    fun handleEvent(event: E) {
+    open fun handleEvent(event: E) {
         viewModelScope.launch {
             // A. 自动开启 Loading (如果 State 支持)
             trySetLoading(true)

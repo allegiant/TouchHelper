@@ -111,7 +111,7 @@ class WorkspaceUseCase(
         // 此时 baseImage 只上传一次，所有滤镜在 Rust 内部连续执行
         val resultImages = if (filtersToApply.isNotEmpty()) {
             // 注意：这里需要强转 Repository 类型，或者在接口里定义该方法
-            (repository as LayerRepositoryImpl).applyPipeline(baseImage, filtersToApply)
+            repository.applyPipeline(baseImage, filtersToApply)
         } else {
             emptyList()
         }

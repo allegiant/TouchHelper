@@ -1,5 +1,6 @@
 package org.eu.freex.tools.modules.image.presentation.core
 
+import org.eu.freex.tools.common.state.LoadingAware
 import org.eu.freex.tools.modules.image.domain.model.FontLibItem
 import org.eu.freex.tools.modules.image.domain.model.ImageLayer
 import org.eu.freex.tools.modules.image.domain.model.Pipeline
@@ -34,7 +35,12 @@ data class ImageUiState(
     val pickingType: PickingType = PickingType.NONE,
     val activeTab: WorkbenchTab = WorkbenchTab.FILTER,
     val segmentationInteraction: SegmentationInteraction = SegmentationInteraction(),
-) {
+): LoadingAware<ImageUiState> {
+
+    // BaseViewModel 自动更新 loading 状态
+    override fun updateLoading(isLoading: Boolean): ImageUiState {
+        return copy(isLoading = isLoading)
+    }
     val displayImage: ImageLayer?
         get() {
             if (cropperLayer != null) return cropperLayer

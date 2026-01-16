@@ -10,12 +10,13 @@ import java.io.File
 interface LayerRepository {
     suspend fun loadFromFile(file: File): BufferedImage
     suspend fun saveToFile(image: BufferedImage, file: File)
-    suspend fun captureScreen(): BufferedImage
     suspend fun applyFilter(source: BufferedImage, filter: ImageFilter): BufferedImage
-    suspend fun crop(source: BufferedImage, rect: Rect): BufferedImage
 
-    // [新增] 切割计算接口
-    // 输入: BufferedImage (原图), Domain Config (领域配置)
-    // 输出: Domain Rects (领域坐标)
+    // 批量处理接口，用于优化性能
+    suspend fun applyPipeline(baseImage: BufferedImage, filters: List<ImageFilter>): List<BufferedImage>
+
+    // 切割计算接口
     suspend fun performSegmentation(image: BufferedImage, config: SegmentationConfig): Result<List<SegmentationRect>>
+    suspend fun captureScreen(): BufferedImage
+    suspend fun crop(source: BufferedImage, rect: Rect): BufferedImage
 }
