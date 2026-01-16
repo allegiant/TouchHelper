@@ -48,5 +48,15 @@ data class SelectChar(val index: Int) : SegmentationEvent
 data class SubmitLabelAndNext(val text: String) : SegmentationEvent
 data object StopLabeling : SegmentationEvent
 
-// 【新增】批量添加事件
-data class BatchAddToLibrary(val items: List<Pair<SegmentationRect, String>>) : ImageUiEvent
+// --- 5. 字体库事件组 (FontLibraryEvent) ---
+sealed interface FontLibraryEvent : ImageUiEvent
+
+// 原有的 BatchAddToLibrary 移到这里 (注意：如果你之前的代码里引用了它，需要更新引用)
+data class BatchAddToLibrary(val items: List<Pair<SegmentationRect, String>>) : FontLibraryEvent
+
+// 新增的操作事件 (对应原 Delegate 的方法)
+data class DeleteFontItem(val id: String) : FontLibraryEvent
+data object SortLibrary : FontLibraryEvent
+data object ClearLibrary : FontLibraryEvent
+data class ImportFontLibrary(val file: File) : FontLibraryEvent
+data class ExportFontLibrary(val file: File) : FontLibraryEvent

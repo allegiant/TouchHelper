@@ -17,7 +17,12 @@ import org.eu.freex.tools.modules.image.presentation.viewmodel.ImageViewModel //
 import org.eu.freex.tools.modules.image.presentation.ImageWorkbench
 import org.eu.freex.tools.common.theme.AppTheme
 import org.eu.freex.tools.common.theme.ThemeMode
+import org.eu.freex.tools.modules.image.presentation.core.ClearLibrary
+import org.eu.freex.tools.modules.image.presentation.core.DeleteFontItem
+import org.eu.freex.tools.modules.image.presentation.core.ExportFontLibrary
+import org.eu.freex.tools.modules.image.presentation.core.ImportFontLibrary
 import org.eu.freex.tools.modules.image.presentation.core.LoadFile
+import org.eu.freex.tools.modules.image.presentation.core.SortLibrary
 import org.eu.freex.tools.modules.image.presentation.features.library.FontManagerPanel
 import org.koin.compose.koinInject
 import java.awt.Component
@@ -50,7 +55,10 @@ fun App(window: androidx.compose.ui.awt.ComposeWindow?) {
                         list.firstOrNull()?.let {
                             val file = it as File
                             val name = file.name.lowercase()
-                            if (name.endsWith(".png") || name.endsWith(".jpg") || name.endsWith(".bmp") || name.endsWith(".webp")) {
+                            if (name.endsWith(".png") || name.endsWith(".jpg") || name.endsWith(".bmp") || name.endsWith(
+                                    ".webp"
+                                )
+                            ) {
                                 imageViewModel.handleEvent(LoadFile(file))
                             }
                         }
@@ -61,6 +69,7 @@ fun App(window: androidx.compose.ui.awt.ComposeWindow?) {
                 }
                 // ...
             }
+
             fun attachToAll(component: Component) {
                 component.dropTarget = dropTarget
                 if (component is Container) {
@@ -94,14 +103,15 @@ fun App(window: androidx.compose.ui.awt.ComposeWindow?) {
                             AppModule.IMAGE_PROCESSING -> {
                                 ImageWorkbench(viewModel = imageViewModel)
                             }
+
                             AppModule.FONT_MANAGER -> {
                                 FontManagerPanel(
                                     library = state.fontLibrary,
-                                    onDelete = { id -> imageViewModel.fontLibraryDelegate.deleteItem(id) },
-                                    onSort = { imageViewModel.fontLibraryDelegate.sortLibrary() },
-                                    onClear = { imageViewModel.fontLibraryDelegate.clearLibrary() },
-                                    onImport = { file -> imageViewModel.fontLibraryDelegate.importLibrary(file) },
-                                    onExport = { file -> imageViewModel.fontLibraryDelegate.exportLibrary(file) }
+                                    onDelete = { id -> imageViewModel.handleEvent(DeleteFontItem(id)) },
+                                    onSort = { imageViewModel.handleEvent(SortLibrary) },
+                                    onClear = { imageViewModel.handleEvent(ClearLibrary) },
+                                    onImport = { file -> imageViewModel.handleEvent(ImportFontLibrary(file)) },
+                                    onExport = { file -> imageViewModel.handleEvent(ExportFontLibrary(file)) }
                                 )
                             }
                         }

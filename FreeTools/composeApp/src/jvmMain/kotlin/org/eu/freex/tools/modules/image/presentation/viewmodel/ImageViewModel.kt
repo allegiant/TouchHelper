@@ -4,32 +4,45 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.IntOffset
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.channels.consumeEach
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import org.eu.freex.tools.modules.image.application.WorkspaceUseCase
+import org.eu.freex.tools.modules.image.domain.model.ImageFilter
+import org.eu.freex.tools.modules.image.domain.model.ImageLayer
 import org.eu.freex.tools.modules.image.domain.model.ImageWorkspace
 import org.eu.freex.tools.modules.image.presentation.core.*
 
-class ImageViewModel(
-    override val useCase: WorkspaceUseCase
-) : ViewModel(), ViewModelContext {
 
-    // --- State ---
+internal data class PreviewRequest(val baseLayer: ImageLayer, val filter: ImageFilter)
+class ImageViewModel(
+    internal val useCase: WorkspaceUseCase
+) : ViewModel() {
+
     private var workspace = ImageWorkspace()
     private val _uiState = MutableStateFlow(ImageUiState())
+    val uiState = _uiState.asStateFlow()
 
-    override val uiState = _uiState.asStateFlow()
-    override val scope = viewModelScope
 
-    // --- Delegates ---
-    // 按顺序初始化，某些 Delegate (如 Pipeline/Segmentation) 初始化时会启动协程
-    private val assetDelegate = AssetDelegate(this)
-    private val interactionDelegate = InteractionDelegate(this)
-    private val pipelineDelegate = PipelineDelegate(this)
-    private val segmentationDelegate = SegmentationDelegate(this)
-    val fontLibraryDelegate = FontLibraryDelegate(this)
+    private val colorPickChannel = Channel<Color>(Channel.RENDEZVOUS)
+    private val pointPickChannel = Channel<IntOffset>(Channel.RENDEZVOUS)
+    private val previewChannel = Channel<PreviewRequest>(Channel.CONFLATED)
+
+    init {
+        setupReactiveSegmentation()
+
+        viewModelScope.launch {
+            previewChannel.consumeEach { request ->
+                runCatching {
+                    val resultLayer = useCase.calculatePreview(request.baseLayer, request.filter)
+                    if (resultLayer != null) applyPreviewResult(resultLayer)
+                }.onFailure { it.printStackTrace() }
+            }
+        }
+    }
 
 
     // --- Main Event Router ---
@@ -40,19 +53,11 @@ class ImageViewModel(
             }
             runCatching {
                 when (event) {
-                    is AssetEvent -> assetDelegate.handle(event)
-                    is InteractionEvent -> interactionDelegate.handle(event)
-                    is PipelineEvent -> pipelineDelegate.handle(event)
-                    is SegmentationEvent -> segmentationDelegate.handle(event)
-                    is BatchAddToLibrary -> {
-                        println("ViewModel: 收到 BatchAddToLibrary 事件")
-                        val sourceImage = uiState.value.displayImage?.image
-                        if (sourceImage != null) {
-                            fontLibraryDelegate.addBatchToLibrary(event.items, sourceImage)
-                        } else {
-                            println("CRITICAL ERROR: ViewModel 中 sourceImage 为 NULL！")
-                        }
-                    }
+                    is AssetEvent -> handleAssetEvent(event)
+                    is InteractionEvent -> handleInteractionEvent(event)
+                    is PipelineEvent -> handlePipelineEvent(event)
+                    is SegmentationEvent -> handleSegmentEvent(event)
+                    is FontLibraryEvent -> handleFontLibraryEvent(event)
                 }
             }.onFailure { it.printStackTrace() }
             _uiState.update { it.copy(isLoading = false) }
@@ -61,14 +66,14 @@ class ImageViewModel(
 
     // --- ViewModelContext Implementation ---
 
-    override fun updateWorkspace(transform: (ImageWorkspace) -> ImageWorkspace) {
+    internal fun updateWorkspace(transform: (ImageWorkspace) -> ImageWorkspace) {
         workspace = transform(workspace)
         refreshUiState()
     }
 
-    override fun getWorkspaceSnapshot(): ImageWorkspace = workspace
+    internal fun getWorkspaceSnapshot(): ImageWorkspace = workspace
 
-    override fun updateUiState(transform: (ImageUiState) -> ImageUiState) {
+    internal fun updateUiState(transform: (ImageUiState) -> ImageUiState) {
         _uiState.update(transform)
     }
 
@@ -85,8 +90,41 @@ class ImageViewModel(
 
     // --- Exposed Helpers (For UI Components) ---
 
-    suspend fun awaitColorPick(): Color? = interactionDelegate.awaitColorPick()
-    suspend fun awaitPointPick(): IntOffset? = interactionDelegate.awaitPointPick()
+
+    suspend fun awaitColorPick(): Color? {
+        // 直接更新 UI 状态
+        updateUiState { it.copy(pickingType = PickingType.COLOR) }
+        return try {
+            colorPickChannel.receive()
+        } catch (e: Exception) {
+            null
+        } finally {
+            updateUiState { it.copy(pickingType = PickingType.NONE) }
+        }
+    }
+
+    suspend fun awaitPointPick(): IntOffset? {
+        updateUiState { it.copy(pickingType = PickingType.POINT) }
+        return try {
+            pointPickChannel.receive()
+        } catch (e: Exception) {
+            null
+        } finally {
+            updateUiState { it.copy(pickingType = PickingType.NONE) }
+        }
+    }
+
+    // --- Internal Helpers for Extension Functions ---
+
+    // [新增] 供扩展函数发送选取的颜色
+    internal suspend fun sendColorPick(color: Color) {
+        colorPickChannel.send(color)
+    }
+
+    // [新增] 供扩展函数发送选取的坐标
+    internal suspend fun sendPointPick(point: IntOffset) {
+        pointPickChannel.send(point)
+    }
 
     // --- Utility ---
 
@@ -102,7 +140,35 @@ class ImageViewModel(
             is SelectChar,
             is SubmitLabelAndNext,
             is StopLabeling -> false
+
             else -> true
+        }
+    }
+
+    // --- Internal Helpers ---
+
+    // [新增] 供扩展函数发送预览请求
+    internal fun sendPreviewRequest(baseLayer: ImageLayer, filter: ImageFilter) {
+        previewChannel.trySend(PreviewRequest(baseLayer, filter))
+    }
+
+    // [新增] 处理预览结果 (这是 consumer 调用的逻辑，放在主类里比较合适，也可以通过扩展函数拆分但没必要)
+    private fun applyPreviewResult(resultLayer: ImageLayer) {
+        _uiState.update { currentState ->
+            val currentPreview = currentState.previewLayer ?: return@update currentState
+
+            // 校验：防止结果回来时用户已经切换了滤镜类型
+            val resultFilter = resultLayer.activeFilter
+            val currentFilter = currentPreview.activeFilter
+
+            if (resultFilter != null && currentFilter != null &&
+                resultFilter::class == currentFilter::class
+            ) {
+                // 保留 UI 上的 Slider 配置
+                currentState.copy(previewLayer = resultLayer.copy(config = currentPreview.config))
+            } else {
+                currentState.copy(previewLayer = resultLayer)
+            }
         }
     }
 }
