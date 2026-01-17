@@ -1,5 +1,6 @@
 package org.eu.freex.tools.modules.image.presentation
 
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -10,84 +11,111 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Button
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import org.eu.freex.tools.modules.image.presentation.core.*
+import org.koin.compose.koinInject
+
+// 引入各模块组件
 import org.eu.freex.tools.modules.image.presentation.features.editor.EditorCanvasPanel
 import org.eu.freex.tools.modules.image.presentation.features.filter.components.InspectorPanel
 import org.eu.freex.tools.modules.image.presentation.features.pipeline.ProcessingPipeline
 import org.eu.freex.tools.modules.image.presentation.features.project.ProjectListPanel
 import org.eu.freex.tools.modules.image.presentation.features.tools.dialogs.ScreenCropperDialog
-import org.eu.freex.tools.modules.image.presentation.viewmodel.ImageViewModel
-import org.koin.compose.koinInject
+
+// 引入 ViewModels
+import org.eu.freex.tools.modules.image.presentation.viewmodel.EditorCanvasViewModel
+import org.eu.freex.tools.modules.image.presentation.viewmodel.MainViewModel
+import org.eu.freex.tools.modules.image.presentation.viewmodel.ProjectListViewModel
+import org.eu.freex.tools.common.components.LoadingOverlay // 假设你有这个通用组件
+import org.eu.freex.tools.common.components.ToastOverlay   // 假设你有这个通用组件
+import org.eu.freex.tools.common.model.WorkbenchTab
 
 @Composable
 fun ImageWorkbench(
-    viewModel: ImageViewModel = koinInject()
+    mainViewModel: MainViewModel = koinInject(),
+    projectListViewModel: ProjectListViewModel = koinInject(),
+    editorViewModel: EditorCanvasViewModel = koinInject()
 ) {
-    val state by viewModel.uiState.collectAsState()
+    // 1. 监听全局状态
+    val mainState by mainViewModel.uiState.collectAsState()
+    val editorState by editorViewModel.uiState.collectAsState()
 
-    CompositionLocalProvider(LocalImageViewModel provides viewModel) {
+    // 2. [关键] 状态提升：管理当前的 Tab (Filter vs Segmentation)
+    // 必须放在这里，因为 Canvas 需要知道是否显示切割覆盖层，而 Inspector 需要切换它
+    var currentTab by remember { mutableStateOf(WorkbenchTab.FILTER) }
 
-        state.cropperLayer?.let { layer ->
-            ScreenCropperDialog(
-                imageLayer = layer,
-                onConfirm = { rect -> viewModel.handleEvent(ConfirmCrop(layer, rect)) },
-                onDismiss = { viewModel.handleEvent(DismissCropper) }
-            )
-        }
-
+    Box(modifier = Modifier.fillMaxSize()) {
         Row(modifier = Modifier.fillMaxSize()) {
 
-            // 左侧
+            // --- 左侧：资源列表 ---
             Column(modifier = Modifier.width(260.dp).fillMaxHeight()) {
                 Button(
-                    onClick = { viewModel.handleEvent(StartScreenCapture) },
+                    onClick = { projectListViewModel.captureScreen() },
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text("屏幕截图")
                 }
-
-                ProjectListPanel(
-                    modifier = Modifier.weight(1f),
-                    assets = state.assets,
-                    activeAssetId = state.activeChain?.inputAssetId,
-                    onEvent = viewModel::handleEvent
-                )
+                // ProjectListPanel 内部已注入 VM，无需传参
+                ProjectListPanel(modifier = Modifier.weight(1f))
             }
 
-            // 中间：画布与流水线
+            // --- 中间：画布与流水线 ---
             Column(modifier = Modifier.weight(1f).fillMaxHeight()) {
-                // 1. 画布：占据绝大部分空间
+                // 1. 画布
                 EditorCanvasPanel(
                     modifier = Modifier.weight(1f),
-                    displayLayer = state.displayImage,
-                    pickingType = state.pickingType,
-                    segmentationResults = state.segmentationProject?.results ?: emptyList(),
-                    showSegmentationOverlay = state.activeTab == WorkbenchTab.SEGMENTATION,
-                    onPickColor = { viewModel.handleEvent(TriggerColorPick(it)) }, // 传出颜色
-                    onPickPoint = { viewModel.handleEvent(TriggerPointPick(it)) }, // 传出坐标
-                    onCancel = { viewModel.handleEvent(CancelPick) } // 通用取消
+                    // 仅当 Tab 为 切割识别 时，显示红色覆盖层
+                    showSegmentationOverlay = (currentTab == WorkbenchTab.SEGMENTATION)
+                    // 其他交互事件已在 EditorCanvasPanel 内部直接对接 ViewModel
                 )
 
-                // 2. 流水线：固定高度，不再抢占空间
+                // 2. 流水线
                 ProcessingPipeline(
-                    modifier = Modifier.fillMaxWidth().height(112.dp),
-                    chain = state.activeChain,
-                    assets = state.assets,
-                    onEvent = viewModel::handleEvent
+                    modifier = Modifier.fillMaxWidth().height(112.dp)
+                    // 数据源已在组件内部通过 Koin 注入
                 )
             }
 
-            // 右侧
+            // --- 右侧：属性面板 ---
             InspectorPanel(
                 modifier = Modifier.width(320.dp).fillMaxHeight(),
-                uiState = state,
-                onEvent = viewModel::handleEvent
+                // 将 Tab 状态下放
+                currentTab = currentTab,
+                onTabChange = { currentTab = it }
             )
         }
+
+        // --- 全局弹窗层 ---
+
+        // 1. 裁剪对话框 (受 EditorViewModel 控制)
+        editorState.cropperLayer?.let { layer ->
+            ScreenCropperDialog(
+                imageLayer = layer,
+                onConfirm = { rect -> editorViewModel.confirmCrop(rect) },
+                onDismiss = { editorViewModel.exitCropMode() }
+            )
+        }
+
+        // 2. Loading 遮罩
+        if (mainState.isLoading) {
+            LoadingOverlay(message = mainState.loadingMessage)
+        }
+
+        // 3. Toast 提示
+        mainState.toastMessage?.let { msg ->
+            ToastOverlay(message = msg, onDismiss = mainViewModel::clearToast)
+        }
+
+        // 4. 错误提示 (可选)
+        /*
+        mainState.errorMessage?.let { error ->
+            ErrorDialog(text = error, onDismiss = mainViewModel::clearError)
+        }
+        */
     }
 }

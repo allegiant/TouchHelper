@@ -19,21 +19,57 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import kotlinx.coroutines.launch
-import org.eu.freex.tools.common.ColorRule
+import org.koin.compose.koinInject // [新增]
+import org.eu.freex.tools.common.model.ColorRule
+import org.eu.freex.tools.common.model.PickingType
 import org.eu.freex.tools.modules.image.domain.model.ImageFilter
 import org.eu.freex.tools.modules.image.domain.model.MultiColorFilter
-import org.eu.freex.tools.modules.image.presentation.core.LocalImageViewModel
+// [新增] 引入 ViewModel 和 PickingType
+import org.eu.freex.tools.modules.image.presentation.viewmodel.EditorCanvasViewModel
 
 object MultiColorRenderer : FilterRenderer {
 
     @Composable
     override fun Content(filter: ImageFilter, onFilterChange: (ImageFilter) -> Unit) {
         val currentFilter = filter as? MultiColorFilter ?: return
-        val viewModel = LocalImageViewModel.current // 获取 ViewModel
 
-        // 我们需要一个协程作用域来启动挂起任务
-        val scope = rememberCoroutineScope()
+        // [修改] 注入 ViewModel，替代 LocalImageViewModel
+        val editorViewModel: EditorCanvasViewModel = koinInject()
+
+        // [新增] 记录当前正在取色的规则索引
+        var activePickingIndex by remember { mutableStateOf<Int?>(null) }
+
+        // [新增] 保持最新状态引用，供 LaunchedEffect 使用
+        val currentFilterState by rememberUpdatedState(currentFilter)
+        val onFilterChangeState by rememberUpdatedState(onFilterChange)
+
+        // [新增] 监听取色结果
+        LaunchedEffect(Unit) {
+            editorViewModel.pickEvent.collect { event ->
+                val index = activePickingIndex
+                if (event is Color && index != null) {
+                    // 拿到颜色，更新对应规则
+                    val rules = currentFilterState.rules
+                    if (index in rules.indices) {
+                        val pickedColor = event
+                        val hex = "#%02X%02X%02X".format(
+                            (pickedColor.red * 255).toInt(),
+                            (pickedColor.green * 255).toInt(),
+                            (pickedColor.blue * 255).toInt()
+                        )
+
+                        val newRule = rules[index].copy(targetHex = hex)
+                        val newRules = rules.toMutableList()
+                        newRules[index] = newRule
+
+                        // 提交更新
+                        onFilterChangeState(currentFilterState.copy(rules = newRules))
+                    }
+                    // 重置取色状态
+                    activePickingIndex = null
+                }
+            }
+        }
 
         fun updateRules(newRules: List<ColorRule>) {
             onFilterChange(currentFilter.copy(rules = newRules))
@@ -67,24 +103,9 @@ object MultiColorRenderer : FilterRenderer {
                         updateRules(newRules)
                     },
                     onPickColor = {
-                        // 【优化】使用协程线性调用
-                        scope.launch {
-                            // 1. 调用挂起函数，协程在此暂停，UI 显示取色器
-                            val pickedColor = viewModel.awaitColorPick()
-
-                            // 2. 只有当拿到了颜色（非 null）才继续执行
-                            if (pickedColor != null) {
-                                val hex = "#%02X%02X%02X".format(
-                                    (pickedColor.red * 255).toInt(),
-                                    (pickedColor.green * 255).toInt(),
-                                    (pickedColor.blue * 255).toInt()
-                                )
-                                val newRule = rule.copy(targetHex = hex)
-                                val newRules = currentFilter.rules.toMutableList()
-                                newRules[index] = newRule
-                                updateRules(newRules)
-                            }
-                        }
+                        // [修改] 触发取色模式
+                        activePickingIndex = index
+                        editorViewModel.setPickingType(PickingType.COLOR)
                     }
                 )
                 if (index < currentFilter.rules.lastIndex) {

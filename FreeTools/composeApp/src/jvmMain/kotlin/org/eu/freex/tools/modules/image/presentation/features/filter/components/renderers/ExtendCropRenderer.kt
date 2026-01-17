@@ -13,12 +13,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
-import kotlinx.coroutines.launch
+import org.koin.compose.koinInject // [新增]
 import org.eu.freex.tools.common.components.ModeSelectionRow
+import org.eu.freex.tools.common.model.PickingType
 import org.eu.freex.tools.modules.image.domain.model.ExtendCropFilter
 import org.eu.freex.tools.modules.image.domain.model.ImageFilter
-import org.eu.freex.tools.modules.image.presentation.core.LocalImageViewModel
+// [新增] 引入新架构组件
+import org.eu.freex.tools.modules.image.presentation.viewmodel.EditorCanvasViewModel
 
 object ExtendCropRenderer: FilterRenderer {
 
@@ -27,15 +30,71 @@ object ExtendCropRenderer: FilterRenderer {
         filter: ImageFilter,
         onFilterChange: (ImageFilter) -> Unit
     ) {
-        val current = filter as? ExtendCropFilter?: return
-        val viewModel = LocalImageViewModel.current
-        val scope = rememberCoroutineScope()
+        val current = filter as? ExtendCropFilter ?: return
+
+        // [修改] 注入 ViewModel
+        val editorViewModel: EditorCanvasViewModel = koinInject()
+
+        // [新增] 本地状态机：0=闲置, 1=等待第1个点, 2=等待第2个点
+        var pickingStage by remember { mutableStateOf(0) }
+
+        // [新增] 保持最新状态引用，供 LaunchedEffect 使用 (避免闭包过期)
+        val currentFilterState by rememberUpdatedState(current)
+        val onFilterChangeState by rememberUpdatedState(onFilterChange)
+
+        // [新增] 监听取点事件流
+        LaunchedEffect(Unit) {
+            editorViewModel.pickEvent.collect { event ->
+                if (event is IntOffset) {
+                    when (pickingStage) {
+                        1 -> {
+                            // 收到第1个点
+                            val p1 = event
+                            // 更新 Filter 状态 (status=1)
+                            onFilterChangeState(
+                                currentFilterState.copy(
+                                    x1 = p1.x, y1 = p1.y,
+                                    x2 = -1, y2 = -1,
+                                    status = 1
+                                )
+                            )
+                            // 进入下一阶段，并再次请求取点
+                            pickingStage = 2
+                            editorViewModel.setPickingType(PickingType.POINT)
+                        }
+                        2 -> {
+                            // 收到第2个点
+                            val p2 = event
+                            val p1x = currentFilterState.x1
+                            val p1y = currentFilterState.y1
+
+                            // 自动修正坐标 (Min/Max)
+                            val minX = minOf(p1x, p2.x)
+                            val minY = minOf(p1y, p2.y)
+                            val maxX = maxOf(p1x, p2.x)
+                            val maxY = maxOf(p1y, p2.y)
+
+                            // 更新最终结果 (status=2)
+                            onFilterChangeState(
+                                currentFilterState.copy(
+                                    x1 = minX, y1 = minY,
+                                    x2 = maxX, y2 = maxY,
+                                    status = 2
+                                )
+                            )
+                            // 结束流程
+                            pickingStage = 0
+                        }
+                    }
+                }
+            }
+        }
 
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
 
             ModeSelectionRow(
                 text = "两点确定矩形",
-                description = "点击“取点”后，依次点击画面左上角和右下角。",
+                description = if (pickingStage == 2) "请点击画面右下角..." else "点击“取点”后，依次点击画面左上角和右下角。",
                 selected = true,
                 onClick = {}
             )
@@ -44,36 +103,25 @@ object ExtendCropRenderer: FilterRenderer {
             Button(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
                 colors = ButtonDefaults.buttonColors(
+                    // 根据状态改变颜色：完成(2)用Tertiary，正在取点(1/2)或闲置(0)用Primary
                     containerColor = if (current.status == 2) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.primary
                 ),
                 onClick = {
-                    scope.launch {
-                        // 1. 取第一个点
-                        val p1 = viewModel.awaitPointPick() ?: return@launch
-                        // 此时 step=1, 界面可提示“请点击右下角”
-                        onFilterChange(current.copy(x1 = p1.x, y1 = p1.y, x2 = -1, y2 = -1, status = 1))
-
-                        // 2. 取第二个点
-                        val p2 = viewModel.awaitPointPick() ?: return@launch
-
-                        // 3. 完成
-                        // 自动修正：确保 x1<x2, y1<y2 (防止用户先点右下后点左上)
-                        val minX = minOf(p1.x, p2.x)
-                        val minY = minOf(p1.y, p2.y)
-                        val maxX = maxOf(p1.x, p2.x)
-                        val maxY = maxOf(p1.y, p2.y)
-
-                        onFilterChange(current.copy(
-                            x1 = minX, y1 = minY,
-                            x2 = maxX, y2 = maxY,
-                            status = 2
-                        ))
-                    }
+                    // [修改] 启动取点流程
+                    pickingStage = 1
+                    editorViewModel.setPickingType(PickingType.POINT)
                 }
             ) {
                 Icon(if (current.status == 2) Icons.Default.Crop else Icons.Default.TouchApp, contentDescription = null)
                 Spacer(Modifier.width(8.dp))
-                Text(if (current.status == 2) "重新取点" else "开始取点")
+                // 根据本地 pickingStage 显示提示，比依赖 filter status 更即时
+                val buttonText = when {
+                    pickingStage == 1 -> "请点击左上角"
+                    pickingStage == 2 -> "请点击右下角"
+                    current.status == 2 -> "重新取点"
+                    else -> "开始取点"
+                }
+                Text(buttonText)
             }
 
             // --- 2. 坐标微调区 (仅在已选点后显示) ---
@@ -119,7 +167,7 @@ object ExtendCropRenderer: FilterRenderer {
     }
 
     /**
-     * 带微调按钮的数字输入组件 (修正版)
+     * 带微调按钮的数字输入组件 (保留原样)
      */
     @Composable
     private fun CoordinateInput(label: String, value: Int, onValueChange: (Int) -> Unit) {
@@ -131,7 +179,6 @@ object ExtendCropRenderer: FilterRenderer {
             OutlinedTextField(
                 value = value.toString(),
                 onValueChange = { str ->
-                    // 只有输入纯数字时才更新
                     if (str.isEmpty()) return@OutlinedTextField
                     str.toIntOrNull()?.let { onValueChange(it) }
                 },
@@ -140,7 +187,6 @@ object ExtendCropRenderer: FilterRenderer {
                 textStyle = MaterialTheme.typography.bodyMedium,
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
-                // 【已删除】 contentPadding 参数，因为它导致了编译错误
             )
 
             // 微调按钮列

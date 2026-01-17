@@ -1,6 +1,5 @@
 package org.eu.freex.tools.modules.image.presentation.features.filter.components.renderers
 
-import AutoCropRenderer
 import org.eu.freex.tools.modules.image.domain.model.AutoCropFilter
 import org.eu.freex.tools.modules.image.domain.model.BinarizationFilter
 import org.eu.freex.tools.modules.image.domain.model.BlackWhiteInvertFilter

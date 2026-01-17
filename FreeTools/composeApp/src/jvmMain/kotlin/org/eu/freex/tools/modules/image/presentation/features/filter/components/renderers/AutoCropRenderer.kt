@@ -1,3 +1,6 @@
+package org.eu.freex.tools.modules.image.presentation.features.filter.components.renderers
+
+// [新增] 引入 ViewModel 和 PickingType
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -27,21 +30,24 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import kotlinx.coroutines.launch
 import org.eu.freex.tools.common.components.ModeSelectionRow
+import org.eu.freex.tools.common.model.PickingType
 import org.eu.freex.tools.modules.image.domain.model.AutoCropFilter
 import org.eu.freex.tools.modules.image.domain.model.AutoCropMode
 import org.eu.freex.tools.modules.image.domain.model.ImageFilter
-import org.eu.freex.tools.modules.image.presentation.core.LocalImageViewModel
-import org.eu.freex.tools.modules.image.presentation.features.filter.components.renderers.FilterRenderer
+import org.eu.freex.tools.modules.image.presentation.viewmodel.EditorCanvasViewModel
+import org.koin.compose.koinInject
 
 object AutoCropRenderer : FilterRenderer {
 
@@ -52,9 +58,33 @@ object AutoCropRenderer : FilterRenderer {
     ) {
         val currentFilter = filter as? AutoCropFilter ?: return
 
-        // 获取 ViewModel 以支持屏幕取色
-        val viewModel = LocalImageViewModel.current
-        val scope = rememberCoroutineScope()
+        // [修改] 注入 ViewModel
+        val editorViewModel: EditorCanvasViewModel = koinInject()
+
+        // [新增] 标记是否正在等待取色结果
+        var isPickingColor by remember { mutableStateOf(false) }
+
+        // [新增] 保持引用，供 LaunchedEffect 使用
+        val currentFilterState by rememberUpdatedState(currentFilter)
+        val onFilterChangeState by rememberUpdatedState(onFilterChange)
+
+        // [新增] 监听取色事件
+        LaunchedEffect(Unit) {
+            editorViewModel.pickEvent.collect { event ->
+                if (event is Color && isPickingColor) {
+                    val picked = event
+                    val hex = "#%02X%02X%02X".format(
+                        (picked.red * 255).toInt(),
+                        (picked.green * 255).toInt(),
+                        (picked.blue * 255).toInt()
+                    )
+                    // 更新 Filter
+                    onFilterChangeState(currentFilterState.copy(fixedColorHex = hex))
+                    // 重置标记
+                    isPickingColor = false
+                }
+            }
+        }
 
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
 
@@ -119,18 +149,9 @@ object AutoCropRenderer : FilterRenderer {
                             onFilterChange(currentFilter.copy(fixedColorHex = newHex))
                         },
                         onPickColor = {
-                            scope.launch {
-                                // 暂停协程等待取色结果
-                                val picked = viewModel.awaitColorPick()
-                                if (picked != null) {
-                                    val hex = "#%02X%02X%02X".format(
-                                        (picked.red * 255).toInt(),
-                                        (picked.green * 255).toInt(),
-                                        (picked.blue * 255).toInt()
-                                    )
-                                    onFilterChange(currentFilter.copy(fixedColorHex = hex))
-                                }
-                            }
+                            // [修改] 触发取色流程
+                            isPickingColor = true
+                            editorViewModel.setPickingType(PickingType.COLOR)
                         }
                     )
 
@@ -173,7 +194,7 @@ object AutoCropRenderer : FilterRenderer {
         }
     }
 
-    // --- 辅助组件 ---
+    // --- 辅助组件 (保持不变) ---
 
     @Composable
     private fun ColorSelectionRow(
@@ -257,7 +278,11 @@ object AutoCropRenderer : FilterRenderer {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(label, style = MaterialTheme.typography.bodySmall)
-                Text(displayValue, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelMedium)
+                Text(
+                    displayValue,
+                    color = MaterialTheme.colorScheme.primary,
+                    style = MaterialTheme.typography.labelMedium
+                )
             }
             Slider(
                 value = value,

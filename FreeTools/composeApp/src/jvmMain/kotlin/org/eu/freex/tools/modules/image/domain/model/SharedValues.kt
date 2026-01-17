@@ -2,7 +2,7 @@ package org.eu.freex.tools.modules.image.domain.model
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import org.eu.freex.tools.common.ColorRule
+import org.eu.freex.tools.common.model.ColorRule
 
 // --- 滤镜 ---
 @Serializable

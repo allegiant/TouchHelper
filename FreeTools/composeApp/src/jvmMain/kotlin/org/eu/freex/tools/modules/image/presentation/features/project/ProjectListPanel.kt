@@ -27,6 +27,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -45,19 +47,16 @@ import io.github.vinceglb.filekit.core.PickerMode
 import io.github.vinceglb.filekit.core.PickerType
 import org.eu.freex.tools.modules.image.domain.model.ImageLayer
 import org.eu.freex.tools.modules.image.domain.model.LayerConfig
-import org.eu.freex.tools.modules.image.presentation.core.ImageUiEvent
-import org.eu.freex.tools.modules.image.presentation.core.LoadFile
-import org.eu.freex.tools.modules.image.presentation.core.RemoveAsset
-import org.eu.freex.tools.modules.image.presentation.core.SelectAsset
+import org.eu.freex.tools.modules.image.presentation.viewmodel.ProjectListViewModel
+import org.koin.compose.koinInject
 import java.io.File
 
 @Composable
 fun ProjectListPanel(
     modifier: Modifier = Modifier,
-    assets: List<ImageLayer>,
-    activeAssetId: String?,
-    onEvent: (ImageUiEvent) -> Unit
+    viewModel: ProjectListViewModel = koinInject(),
 ) {
+    val state by viewModel.uiState.collectAsState()
     val launcher = rememberFilePickerLauncher(
         type = PickerType.Image, // 限制只选择图片
         mode = PickerMode.Single, // 单选模式
@@ -68,7 +67,7 @@ fun ProjectListPanel(
         // 在 JVM 平台上，platformFile.file 就是 java.io.File
         val file = platformFile?.file
         if (file != null) {
-            onEvent(LoadFile(file))
+            viewModel.importImage(file)
         }
     }
     Column(
@@ -109,7 +108,7 @@ fun ProjectListPanel(
         Spacer(Modifier.height(8.dp))
 
         // 2. 列表区域
-        if (assets.isEmpty()) {
+        if (state.assets.isEmpty()) {
             Box(
                 modifier = Modifier.weight(1f).fillMaxWidth(),
                 contentAlignment = Alignment.Center
@@ -139,12 +138,12 @@ fun ProjectListPanel(
                 verticalArrangement = Arrangement.spacedBy(4.dp),
                 modifier = Modifier.weight(1f)
             ) {
-                items(assets, key = { it.id }) { layer ->
+                items(state.assets, key = { it.id }) { layer ->
                     ProjectItem(
                         layer = layer,
-                        isSelected = layer.id == activeAssetId,
-                        onSelect = { onEvent(SelectAsset(layer.id)) },
-                        onRemove = { onEvent(RemoveAsset(layer.id)) }
+                        isSelected = layer.id == state.activeAssetId,
+                        onSelect = { viewModel.selectAsset(layer.id) },
+                        onRemove = { viewModel.deleteAsset(layer.id) }
                     )
                 }
             }

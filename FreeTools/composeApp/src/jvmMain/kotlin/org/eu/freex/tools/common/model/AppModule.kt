@@ -1,4 +1,4 @@
-package org.eu.freex.tools.common
+package org.eu.freex.tools.common.model
 
 enum class AppModule {
     IMAGE_PROCESSING,

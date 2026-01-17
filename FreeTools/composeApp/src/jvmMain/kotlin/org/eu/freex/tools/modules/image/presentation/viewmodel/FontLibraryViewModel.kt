@@ -1,83 +1,63 @@
 package org.eu.freex.tools.modules.image.presentation.viewmodel
 
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
+import org.eu.freex.tools.modules.image.application.FontLibraryUseCase
 import org.eu.freex.tools.modules.image.domain.model.FontLibItem
-import org.eu.freex.tools.modules.image.presentation.core.*
+import org.eu.freex.tools.modules.image.domain.model.SegmentationRect
+import org.eu.freex.tools.modules.image.domain.repository.ProjectRepository
+import java.io.File
 
-/**
- * ImageViewModel 的字体库管理扩展
- */
-internal suspend fun ImageViewModel.handleFontLibraryEvent(event: FontLibraryEvent) {
-    when (event) {
-        is BatchAddToLibrary -> batchAddToLibrary(event)
-        is DeleteFontItem -> deleteItem(event.id)
-        is SortLibrary -> sortLibrary()
-        is ClearLibrary -> clearLibrary()
-        is ImportFontLibrary -> importLibrary(event.file)
-        is ExportFontLibrary -> exportLibrary(event.file)
-    }
-}
+data class FontLibraryUiState(
+    val items: List<FontLibItem> = emptyList()
+)
 
-// --- 私有业务逻辑 (请将原 Delegate 中的代码搬运至此) ---
+class FontLibraryViewModel(
+    private val projectRepo: ProjectRepository,
+    private val fontLibraryUseCase: FontLibraryUseCase
+) : ViewModel() {
 
-private suspend fun ImageViewModel.batchAddToLibrary(event: BatchAddToLibrary) {
-    val sourceImage = uiState.value.displayImage?.image ?: return
+    val uiState: StateFlow<FontLibraryUiState> = projectRepo.fontLibrary
+        .map { FontLibraryUiState(items = it) }
+        .stateIn(
+            viewModelScope,
+            SharingStarted.WhileSubscribed(5000),
+            FontLibraryUiState()
+        )
 
-    useCase.addBatchToLibrary(getWorkspaceSnapshot(), event.items, sourceImage)
-        .onSuccess { newWorkspace ->
-            updateWorkspace { newWorkspace }
-        }
-}
-
-private fun ImageViewModel.deleteItem(id: String) {
-    updateWorkspace { it ->
-        it.copy(fontLibrary = it.fontLibrary.filter { it.id != id })
-    }
-}
-
-private fun ImageViewModel.sortLibrary() {
-    updateWorkspace { it ->
-        it.copy(fontLibrary = it.fontLibrary.sortedBy { it.charName })
-    }
-
-}
-
-private fun ImageViewModel.clearLibrary() {
-    updateWorkspace {
-        it.copy(fontLibrary = emptyList())
-    }
-}
-
-private suspend fun ImageViewModel.importLibrary(file: java.io.File) {
-    if (!file.exists()) return
-    val lines = file.readLines()
-    val newItems = lines.mapNotNull { line ->
-        try {
-            val parts = line.split("$")
-            if (parts.size >= 4) {
-                val name = parts[0]
-                val w = parts[1].toInt()
-                val h = parts[2].toInt()
-                val data = parts[3]
-                // 注意：导入的数据通常没有 Bitmap 缓存，显示时可能需要重建或者显示占位符
-                // 这里为了简单，displayBitmap 留空，UI层需处理 null 情况
-                FontLibItem(charName = name, width = w, height = h, binaryData = data, displayBitmap = null)
-            } else null
-        } catch (e: Exception) {
-            null
+    fun addToLibrary(items: List<Pair<SegmentationRect, String>>) {
+        viewModelScope.launch {
+            fontLibraryUseCase.addBatchToLibrary(items)
         }
     }
 
-    updateWorkspace {
-        it.copy(fontLibrary = it.fontLibrary + newItems)
+    fun exportLibrary(file: File) {
+        viewModelScope.launch {
+            fontLibraryUseCase.exportLibrary(file)
+        }
     }
-}
 
-private suspend fun ImageViewModel.exportLibrary(file: java.io.File) {
-    useCase.exportFontLibrary(getWorkspaceSnapshot(), file)
-        .onSuccess {
-            println("成功导出")
+
+    fun deleteItem(id: String) {
+        projectRepo.updateWorkspace { ws ->
+            ws.copy(fontLibrary = ws.fontLibrary.filter { it.id != id })
         }
-        .onFailure { e ->
-            e.printStackTrace()
+    }
+
+    fun clearLibrary() {
+        projectRepo.updateWorkspace { ws ->
+            ws.copy(fontLibrary = emptyList())
         }
+    }
+
+    fun sortLibrary() {
+        projectRepo.updateWorkspace { ws ->
+            ws.copy(fontLibrary = ws.fontLibrary.sortedBy { it.charName })
+        }
+    }
 }

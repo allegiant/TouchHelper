@@ -12,9 +12,4 @@ data class Pipeline(
         if (activeIndex == -1) return assets.find { it.id == inputAssetId }
         return steps.getOrNull(activeIndex)
     }
-
-    fun getFinalLayer(assets: List<ImageLayer>): ImageLayer? {
-        if (steps.isEmpty()) return assets.find { it.id == inputAssetId }
-        return steps.last()
-    }
 }

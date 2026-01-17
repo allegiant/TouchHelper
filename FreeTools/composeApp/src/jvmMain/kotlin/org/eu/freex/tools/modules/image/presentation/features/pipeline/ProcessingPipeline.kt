@@ -16,6 +16,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -27,23 +29,30 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.eu.freex.tools.modules.image.domain.model.ImageLayer
-import org.eu.freex.tools.modules.image.domain.model.Pipeline
-import org.eu.freex.tools.modules.image.presentation.core.ImageUiEvent
-import org.eu.freex.tools.modules.image.presentation.core.RemoveStep
-import org.eu.freex.tools.modules.image.presentation.core.SelectStep
+import org.eu.freex.tools.modules.image.presentation.viewmodel.PipelineViewModel
+import org.eu.freex.tools.modules.image.presentation.viewmodel.ProjectListViewModel
+import org.koin.compose.koinInject
 import java.awt.image.BufferedImage
 
 @Composable
 fun ProcessingPipeline(
     modifier: Modifier = Modifier,
-    chain: Pipeline?,
-    assets: List<ImageLayer>,
-    onEvent: (ImageUiEvent) -> Unit
+    // [新架构] 注入 ViewModel，不再依赖外部传参
+    pipelineViewModel: PipelineViewModel = koinInject(),
+    // [新架构] 为了获取 Input Asset (原图)，我们需要访问资源列表，可以通过 ProjectListViewModel 或直接 Repo
+    // 这里简单起见注入 ProjectListViewModel
+    projectViewModel: ProjectListViewModel = koinInject()
 ) {
-    if (chain == null) return
+    // 1. 监听 ViewModel 状态
+    val pipelineState by pipelineViewModel.uiState.collectAsState()
+    val projectState by projectViewModel.uiState.collectAsState()
 
-    val inputAsset = remember(chain.inputAssetId, assets) {
-        assets.find { it.id == chain.inputAssetId }
+    val chain = pipelineState.pipeline ?: return
+
+    // 2. 计算原图 (Input Asset)
+    // 监听资源列表，找到 ID 匹配的那张图
+    val inputAsset = remember(chain.inputAssetId, projectState.assets) {
+        projectState.assets.find { it.id == chain.inputAssetId }
     }
 
     // 容器背景色稍微亮一点，区分于画布
@@ -54,7 +63,7 @@ fun ProcessingPipeline(
             .fillMaxWidth()
             .background(containerColor)
             .padding(horizontal = 16.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp), // 减小间距
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         // 1. 原图节点
@@ -63,7 +72,8 @@ fun ProcessingPipeline(
                 name = "原图",
                 image = inputAsset?.image,
                 isSelected = chain.activeIndex == -1,
-                onClick = { onEvent(SelectStep(-1)) }
+                // [变更] 直接调用 VM 方法
+                onClick = { pipelineViewModel.selectStep(-1) }
             )
         }
 
@@ -80,15 +90,18 @@ fun ProcessingPipeline(
             Spacer(Modifier.width(8.dp))
 
             PipelineNode(
-                name = layer.name, // 去掉序号，更简洁
+                name = layer.name,
                 image = layer.image,
                 isSelected = chain.activeIndex == index,
-                onClick = { onEvent(SelectStep(index)) },
-                onRemove = { onEvent(RemoveStep(index)) }
+                // [变更] 直接调用 VM 方法
+                onClick = { pipelineViewModel.selectStep(index) },
+                onRemove = { pipelineViewModel.removeFilter(index) }
             )
         }
     }
 }
+
+// --- 以下 UI 组件完全保留您的原有设计 ---
 
 @Composable
 private fun PipelineNode(
@@ -109,15 +122,15 @@ private fun PipelineNode(
 
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.width(100.dp) // 【优化】宽度从 120 -> 100
+        modifier = Modifier.width(100.dp)
     ) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(72.dp) // 【优化】高度从 90 -> 72
+                .height(72.dp)
                 .border(2.dp, borderColor, shape)
                 .clip(shape)
-                .background(Color.Black) // 图片未加载时黑底
+                .background(Color.Black)
                 .clickable(onClick = onClick),
             contentAlignment = Alignment.Center
         ) {
@@ -125,22 +138,23 @@ private fun PipelineNode(
                 Image(
                     bitmap = image.toComposeImageBitmap(),
                     contentDescription = null,
-                    contentScale = ContentScale.Fit, // 完整显示
+                    contentScale = ContentScale.Fit,
                     modifier = Modifier.fillMaxSize()
                 )
             } else {
                 Text("No Data", color = Color.Gray, fontSize = 9.sp)
             }
-            // [新增] 删除按钮 (如果有回调则显示)
+
+            // 删除按钮
             if (onRemove != null) {
                 Box(
                     modifier = Modifier
-                        .align(Alignment.TopEnd) // 右上角
+                        .align(Alignment.TopEnd)
                         .padding(4.dp)
-                        .size(20.dp) // 触摸热区
+                        .size(20.dp)
                         .clip(CircleShape)
-                        .background(Color.Black.copy(alpha = 0.6f)) // 半透明黑底
-                        .clickable(onClick = onRemove), // 点击触发删除，因为在 Box 上层，会拦截 onClick
+                        .background(Color.Black.copy(alpha = 0.6f))
+                        .clickable(onClick = onRemove),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(

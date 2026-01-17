@@ -25,6 +25,7 @@ kotlin {
             implementation(compose.materialIconsExtended)
             implementation(libs.koin.core)
             implementation(libs.koin.compose)
+            implementation(libs.koin.composeviewmodel)
 
             // 用于序列化滤镜参数 (Map -> JSON String)
             implementation(libs.kotlinx.serialization.json)

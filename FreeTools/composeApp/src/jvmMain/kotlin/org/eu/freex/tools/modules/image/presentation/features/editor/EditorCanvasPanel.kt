@@ -16,6 +16,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -40,25 +41,32 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
-import org.eu.freex.tools.modules.image.domain.model.ImageLayer
-import org.eu.freex.tools.modules.image.domain.model.SegmentationRect
-import org.eu.freex.tools.modules.image.presentation.core.PickingType
+import org.eu.freex.tools.common.model.PickingType
+import org.eu.freex.tools.modules.image.presentation.viewmodel.EditorCanvasViewModel
+import org.eu.freex.tools.modules.image.presentation.viewmodel.SegmentationViewModel
+import org.koin.compose.koinInject
 import java.awt.Cursor
 import java.awt.Color as AwtColor
 
 @Composable
 fun EditorCanvasPanel(
     modifier: Modifier = Modifier,
-    displayLayer: ImageLayer?,
-    pickingType: PickingType = PickingType.NONE,
-    // 切割结果数据
-    segmentationResults: List<SegmentationRect> = emptyList(),
-    //是否显示切割覆盖层 (只有在 切割Tab 时才传 true)
-    showSegmentationOverlay: Boolean = false,
-    onPickColor: (Color) -> Unit = {},
-    onPickPoint: (IntOffset) -> Unit = {},
-    onCancel: () -> Unit
+    // [新架构] 1. 注入 ViewModels，数据自给自足
+    editorViewModel: EditorCanvasViewModel = koinInject(),
+    segmentationViewModel: SegmentationViewModel = koinInject(),
+    // [新架构] 2. 依然保留这个参数，由外部(ImageWorkbench)根据 Tab 状态决定是否显示覆盖层
+    showSegmentationOverlay: Boolean = false
 ) {
+    // 3. 监听状态
+    val editorState by editorViewModel.uiState.collectAsState()
+    val segmentationState by segmentationViewModel.uiState.collectAsState()
+
+    // 提取核心数据
+    val displayLayer = editorState.displayImage
+    val pickingType = editorState.pickingType
+    val segmentationResults = segmentationState.project?.results ?: emptyList()
+
+    // 样式定义
     val backgroundColor = MaterialTheme.colorScheme.surfaceContainerLow
     val gridColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
     val highlightColor = MaterialTheme.colorScheme.error
@@ -79,13 +87,14 @@ fun EditorCanvasPanel(
         val bufferedImage = displayLayer.image
         val bitmap = remember(bufferedImage) { bufferedImage.toComposeImageBitmap() }
 
+        // --- 内部 UI 状态 (缩放、平移) ---
         var scale by remember { mutableStateOf(1f) }
         var offset by remember { mutableStateOf(Offset.Zero) }
         var hoverPixel by remember { mutableStateOf<IntOffset?>(null) }
         var hoverColor by remember { mutableStateOf<AwtColor?>(null) }
-
         val isPicking = pickingType != PickingType.NONE
 
+        // 图片切换时重置视图
         LaunchedEffect(displayLayer.id) {
             scale = 1f
             offset = Offset.Zero
@@ -95,21 +104,22 @@ fun EditorCanvasPanel(
         Canvas(
             modifier = Modifier
                 .fillMaxSize()
-                // 【新增】根据 isPicking 改变光标样式 (十字准星 vs 默认)
+                // 光标样式
                 .pointerHoverIcon(
                     if (isPicking) PointerIcon(Cursor.getPredefinedCursor(Cursor.CROSSHAIR_CURSOR))
                     else PointerIcon.Default
                 )
-                // 1. 鼠标移动与滚轮
+                // 1. 鼠标移动与滚轮 (缩放/悬停信息) - [保持原逻辑不变]
                 .pointerInput(Unit) {
                     awaitPointerEventScope {
                         while (true) {
                             val event = awaitPointerEvent()
-                            // ... (原有的计算逻辑，保持不变) ...
                             val canvasCenter = Offset(size.width / 2f, size.height / 2f)
                             val pointerPos = event.changes.first().position
                             val imgWidth = bitmap.width
                             val imgHeight = bitmap.height
+
+                            // 核心坐标换算：Screen -> Image Pixel
                             val relativeToCenter = pointerPos - canvasCenter - offset
                             val unscaledRelative = relativeToCenter / scale
                             val pixelX = (unscaledRelative.x + imgWidth / 2f).toInt()
@@ -118,8 +128,11 @@ fun EditorCanvasPanel(
                             if (event.type == PointerEventType.Move) {
                                 if (pixelX in 0 until imgWidth && pixelY in 0 until imgHeight) {
                                     hoverPixel = IntOffset(pixelX, pixelY)
-                                    val rgb = bufferedImage.getRGB(pixelX, pixelY)
-                                    hoverColor = AwtColor(rgb, true)
+                                    // 安全检查防止越界
+                                    try {
+                                        val rgb = bufferedImage.getRGB(pixelX, pixelY)
+                                        hoverColor = AwtColor(rgb, true)
+                                    } catch (e: Exception) { /* ignore */ }
                                 } else {
                                     hoverPixel = null
                                     hoverColor = null
@@ -139,14 +152,14 @@ fun EditorCanvasPanel(
                         }
                     }
                 }
-                // 2. 触摸板手势
+                // 2. 触摸板手势 (平移/缩放) - [保持原逻辑不变]
                 .pointerInput(Unit) {
                     detectTransformGestures { _, pan, zoom, _ ->
                         scale = (scale * zoom).coerceIn(0.1f, 50f)
                         offset += pan
                     }
                 }
-                // 3. 点击事件 (根据 isPicking 切换)
+                // 3. 点击事件 - [核心修改：调用 ViewModel]
                 .pointerInput(pickingType) {
                     if (isPicking) {
                         detectTapGestures(
@@ -161,23 +174,26 @@ fun EditorCanvasPanel(
                                 val pixelY = (unscaledRelative.y + imgHeight / 2f).toInt()
 
                                 if (pixelX in 0 until imgWidth && pixelY in 0 until imgHeight) {
-                                    // 分发事件
-                                    when (pickingType) {
-                                        PickingType.COLOR -> {
-                                            val rgb = bufferedImage.getRGB(pixelX, pixelY)
-                                            onPickColor(Color(rgb))
-                                        }
-                                        PickingType.POINT -> {
-                                            onPickPoint(IntOffset(pixelX, pixelY))
-                                        }
-                                    }
+                                    // 获取颜色
+                                    val rgb = bufferedImage.getRGB(pixelX, pixelY)
+                                    val pickedColor = Color(rgb)
+
+                                    // [核心修改] 将 图像坐标 和 颜色 发送给 VM 处理
+                                    // 注意：这里传的是 offset 类型，但值是 pixelX/pixelY
+                                    editorViewModel.onCanvasClick(
+                                        offset = Offset(pixelX.toFloat(), pixelY.toFloat()),
+                                        color = pickedColor
+                                    )
                                 }
                             },
-                            onLongPress = { onCancel() } // 长按取消
+                            onLongPress = {
+                                // 长按退出取色模式
+                                editorViewModel.setPickingType(PickingType.NONE)
+                            }
                         )
                     } else {
                         detectTapGestures(
-                            onDoubleTap = { scale = 1f; offset = Offset.Zero } // 普通模式双击复位
+                            onDoubleTap = { scale = 1f; offset = Offset.Zero }
                         )
                     }
                 }
@@ -194,17 +210,14 @@ fun EditorCanvasPanel(
                 val dstLeft = (canvasWidth - imgWidth) / 2
                 val dstTop = (canvasHeight - imgHeight) / 2
 
+                // 绘制图片
                 clipRect(left = dstLeft, top = dstTop, right = dstLeft + imgWidth, bottom = dstTop + imgHeight) {
                     drawRect(Color.White, topLeft = Offset(dstLeft, dstTop), size = Size(imgWidth, imgHeight))
                     drawImage(bitmap, topLeft = Offset(dstLeft, dstTop))
 
-                    // ==============================
-                    // [修改点] 绘制切割结果覆盖层
-                    // ==============================
+                    // 绘制切割覆盖层 (数据源自 SegmentationViewModel)
                     if (showSegmentationOverlay) {
                         segmentationResults.forEach { rect ->
-                            // rect 的坐标是相对于图片左上角的 (0,0)
-                            // 绘制时需要加上图片的偏移量 (dstLeft, dstTop)
                             drawRect(
                                 color = Color.Red,
                                 topLeft = Offset(
@@ -215,21 +228,20 @@ fun EditorCanvasPanel(
                                     width = rect.width.toInt().toFloat(),
                                     height = rect.height.toInt().toFloat()
                                 ),
-                                // 线宽随缩放反向调整，保持视觉上的细线效果
                                 style = Stroke(width = 2f / scale)
                             )
                         }
                     }
                 }
 
-                // 网格线
+                // 绘制网格线
                 if (scale > 8f) {
                     val strokeWidth = 1f / scale
                     for (x in 0..imgWidth.toInt()) drawLine(gridColor, Offset(dstLeft + x, dstTop), Offset(dstLeft + x, dstTop + imgHeight), strokeWidth)
                     for (y in 0..imgHeight.toInt()) drawLine(gridColor, Offset(dstLeft, dstTop + y), Offset(dstLeft + imgWidth, dstTop + y), strokeWidth)
                 }
 
-                // 高亮选中像素
+                // 绘制悬停像素高亮
                 hoverPixel?.let { pixel ->
                     drawRect(
                         color = highlightColor,
@@ -241,6 +253,7 @@ fun EditorCanvasPanel(
             }
         }
 
+        // 信息悬浮窗
         InfoOverlay(
             modifier = Modifier.align(Alignment.BottomStart).padding(16.dp),
             hoverPixel = hoverPixel,
@@ -249,11 +262,12 @@ fun EditorCanvasPanel(
             imgSize = IntSize(displayLayer.image.width, displayLayer.image.height)
         )
 
-        // 拾取器提示横幅
+        // 拾取模式提示条
         if (isPicking) {
             val promptText = when (pickingType) {
                 PickingType.COLOR -> "正在取色... 点击图片选取"
                 PickingType.POINT -> "正在拾取坐标... 点击图片确定起点"
+                else -> ""
             }
             Box(
                 modifier = Modifier
@@ -272,7 +286,7 @@ fun EditorCanvasPanel(
     }
 }
 
-// 辅助组件：InfoOverlay (保持你原有的逻辑，这里直接复制你的代码)
+// 辅助组件：InfoOverlay (完全复用您的代码)
 @Composable
 private fun InfoOverlay(
     modifier: Modifier,
