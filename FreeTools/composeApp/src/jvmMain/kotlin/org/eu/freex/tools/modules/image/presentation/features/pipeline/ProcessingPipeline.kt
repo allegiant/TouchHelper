@@ -28,7 +28,6 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import org.eu.freex.tools.modules.image.domain.model.ImageLayer
 import org.eu.freex.tools.modules.image.presentation.viewmodel.PipelineViewModel
 import org.eu.freex.tools.modules.image.presentation.viewmodel.ProjectListViewModel
 import org.koin.compose.koinInject
@@ -37,26 +36,39 @@ import java.awt.image.BufferedImage
 @Composable
 fun ProcessingPipeline(
     modifier: Modifier = Modifier,
-    // [新架构] 注入 ViewModel，不再依赖外部传参
     pipelineViewModel: PipelineViewModel = koinInject(),
-    // [新架构] 为了获取 Input Asset (原图)，我们需要访问资源列表，可以通过 ProjectListViewModel 或直接 Repo
-    // 这里简单起见注入 ProjectListViewModel
     projectViewModel: ProjectListViewModel = koinInject()
 ) {
-    // 1. 监听 ViewModel 状态
     val pipelineState by pipelineViewModel.uiState.collectAsState()
     val projectState by projectViewModel.uiState.collectAsState()
 
-    val chain = pipelineState.pipeline ?: return
+    val chain = pipelineState.pipeline
 
-    // 2. 计算原图 (Input Asset)
-    // 监听资源列表，找到 ID 匹配的那张图
+    // 容器背景色
+    val containerColor = MaterialTheme.colorScheme.surfaceContainer
+
+    // 【关键修复】如果 chain 为空，显示占位提示，而不是 return
+    if (chain == null) {
+        Box(
+            modifier = modifier
+                .fillMaxWidth()
+                .background(containerColor),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = "请在左侧选择一张图片开始编辑",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.outline
+            )
+        }
+        return
+    }
+
+    // --- 以下是正常的渲染逻辑 ---
+
     val inputAsset = remember(chain.inputAssetId, projectState.assets) {
         projectState.assets.find { it.id == chain.inputAssetId }
     }
-
-    // 容器背景色稍微亮一点，区分于画布
-    val containerColor = MaterialTheme.colorScheme.surfaceContainer
 
     LazyRow(
         modifier = modifier
@@ -72,14 +84,12 @@ fun ProcessingPipeline(
                 name = "原图",
                 image = inputAsset?.image,
                 isSelected = chain.activeIndex == -1,
-                // [变更] 直接调用 VM 方法
                 onClick = { pipelineViewModel.selectStep(-1) }
             )
         }
 
-        // 2. 步骤节点 (带箭头)
+        // 2. 步骤节点
         itemsIndexed(chain.steps) { index, layer ->
-            // 简单的箭头连接符
             Icon(
                 imageVector = Icons.AutoMirrored.Filled.ArrowForward,
                 contentDescription = null,
@@ -93,7 +103,6 @@ fun ProcessingPipeline(
                 name = layer.name,
                 image = layer.image,
                 isSelected = chain.activeIndex == index,
-                // [变更] 直接调用 VM 方法
                 onClick = { pipelineViewModel.selectStep(index) },
                 onRemove = { pipelineViewModel.removeFilter(index) }
             )
@@ -101,8 +110,7 @@ fun ProcessingPipeline(
     }
 }
 
-// --- 以下 UI 组件完全保留您的原有设计 ---
-
+// ... PipelineNode 保持不变 ...
 @Composable
 private fun PipelineNode(
     name: String,
@@ -111,6 +119,8 @@ private fun PipelineNode(
     onClick: () -> Unit,
     onRemove: (() -> Unit)? = null
 ) {
+    // ... (保留您原有的 PipelineNode 代码) ...
+    // 为节省篇幅，这里复用您刚才上传的 PipelineNode 实现
     // 选中时使用 Primary 色高亮，未选中透明
     val borderColor = if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent
     val nameStyle = if (isSelected)
@@ -145,7 +155,6 @@ private fun PipelineNode(
                 Text("No Data", color = Color.Gray, fontSize = 9.sp)
             }
 
-            // 删除按钮
             if (onRemove != null) {
                 Box(
                     modifier = Modifier

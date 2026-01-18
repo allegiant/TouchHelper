@@ -58,20 +58,20 @@ val appDiModule = module {
     // =================================================================================
 
     // 全局协调者：Loading, Error, Toast
-    viewModel { MainViewModel(get(), get()) }
+    single{ MainViewModel(get(), get()) }
 
     // 左侧资源列表：导入、导出、管理图片
-    viewModel { ProjectListViewModel(get(), get(), get()) }
+    single{ ProjectListViewModel(get(), get(), get()) }
 
     // 右侧滤镜流水线：滤镜链管理、预览
-    viewModel { PipelineViewModel(get(), get()) }
+    single{ PipelineViewModel(get(), get()) }
 
     // 智能切割：参数配置、运行算法、标注
-    viewModel { SegmentationViewModel(get(), get()) }
+    single{ SegmentationViewModel(get(), get()) }
 
     // 字库管理：预览、导出
-    viewModel { FontLibraryViewModel(get(), get()) }
+    single{ FontLibraryViewModel(get(), get()) }
 
     // 画布交互：显示最终结果、处理点击/裁剪
-    viewModel { EditorCanvasViewModel(get(), get()) }
+    single{ EditorCanvasViewModel(get(), get()) }
 }

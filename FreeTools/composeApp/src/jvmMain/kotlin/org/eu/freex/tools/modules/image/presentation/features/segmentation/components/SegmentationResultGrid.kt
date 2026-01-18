@@ -1,6 +1,7 @@
 package org.eu.freex.tools.modules.image.presentation.features.segmentation.components
 
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -21,6 +22,7 @@ import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.rememberTextMeasurer
@@ -49,7 +51,9 @@ fun SegmentationResultGrid(
     selectedIndex: Int,
     sourceImage: ImageBitmap?,
     slicedImages: List<ImageBitmap?>,
-    onSelectChar: (Int) -> Unit
+    onSelectChar: (Int) -> Unit,
+    // [新增] 双击回调
+    onDoubleTap: (Int) -> Unit
 ) {
     val gridState = rememberLazyGridState()
     val textMeasurer = rememberTextMeasurer()
@@ -103,7 +107,9 @@ fun SegmentationResultGrid(
                 colors = gridColors,
                 textMeasurer = textMeasurer,
                 textStyle = labelTextStyle,
-                onItemClick = onSelectChar
+                onItemClick = onSelectChar,
+                // [新增] 传递双击事件
+                onItemDoubleTap = onDoubleTap
             )
         }
     }
@@ -120,13 +126,20 @@ private fun CharGridItemUnified(
     colors: GridItemColors,
     textMeasurer: androidx.compose.ui.text.TextMeasurer,
     textStyle: TextStyle,
-    onItemClick: (Int) -> Unit
+    onItemClick: (Int) -> Unit,
+    // [新增] 双击参数
+    onItemDoubleTap: (Int) -> Unit
 ) {
     Spacer(
         modifier = Modifier
             .aspectRatio(1f)
-            .clickable { onItemClick(index) }
+            // [修改] 替换 clickable 为 pointerInput 以支持双击
+            .combinedClickable(
+                onClick = { onItemClick(index) },
+                onDoubleClick = { onItemDoubleTap(index) }
+            )
             .drawWithCache {
+                // ... (原有的绘图逻辑保持完全不变) ...
                 val cornerRadiusPx = 4.dp.toPx()
                 val paddingPx = 3.dp.toPx()
 

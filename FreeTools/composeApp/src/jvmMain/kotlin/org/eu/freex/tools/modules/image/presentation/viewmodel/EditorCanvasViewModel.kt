@@ -36,9 +36,8 @@ class EditorCanvasViewModel(
 
     private val _interactionState = MutableStateFlow(EditorCanvasUiState())
 
-    // [新增] 用于向外发送拾取结果的事件流
-    private val _pickEvent = MutableSharedFlow<Any>() // Color or Offset
-    val pickEvent = _pickEvent.asSharedFlow()
+    // 1. 用于广播一次性事件 (如取色结果、取点坐标)
+    val pickEvent = MutableSharedFlow<Any>()
 
     val uiState: StateFlow<EditorCanvasUiState> = combine(
         projectRepo.workspace, // 监听 workspace 获取最新的 displayImage
@@ -83,22 +82,14 @@ class EditorCanvasViewModel(
 
     // [新增] 处理画布点击 (由 View 层调用)
     fun onCanvasClick(offset: Offset, color: Color) {
-        val type = uiState.value.pickingType
+        val pickingType = uiState.value.pickingType
         viewModelScope.launch {
-            when (type) {
-                PickingType.COLOR -> {
-                    _pickEvent.emit(color)
-                    // 拾取一次后通常自动退出模式
-                    setPickingType(PickingType.NONE)
-                }
-                PickingType.POINT -> {
-                    // 需要转换为 IntOffset
-                    _pickEvent.emit(IntOffset(offset.x.toInt(), offset.y.toInt()))
-                    setPickingType(PickingType.NONE)
-                }
-                else -> {
-                    // 普通点击，可能是取消裁剪或选中切割框，视具体需求
-                }
+            if (pickingType == PickingType.POINT) {
+                // 发送坐标事件
+                pickEvent.emit(IntOffset(offset.x.toInt(), offset.y.toInt()))
+            } else if (pickingType == PickingType.COLOR) {
+                // 发送颜色事件
+                pickEvent.emit(color)
             }
         }
     }
