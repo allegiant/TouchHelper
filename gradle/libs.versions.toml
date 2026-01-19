@@ -27,6 +27,7 @@ jna = "5.13.0"
 koin = "4.1.1"
 coil = "3.3.0"
 filekit = "0.8.8"
+gobley = "0.3.7"
 
 [libraries]
 koin-core = { module = "io.insert-koin:koin-core", version.ref = "koin" }
@@ -67,6 +68,8 @@ android-application = { id = "com.android.application", version.ref = "agp" }
 kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
+gobley-cargo = {  id = "dev.gobley.cargo", version.ref = "gobley"}
+gobley-uniffi = { id= "dev.gobley.uniffi", version.ref = "gobley"}
 
 composeHotReload = { id = "org.jetbrains.compose.hot-reload", version.ref = "composeHotReload" }
 composeMultiplatform = { id = "org.jetbrains.compose", version.ref = "composeMultiplatform" }

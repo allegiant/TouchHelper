@@ -6,7 +6,6 @@ plugins {
 }
 
 dependencies {
-    implementation(libs.jna)
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)
@@ -15,7 +14,8 @@ dependencies {
     implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.0")
+    implementation(libs.kotlinx.serialization.json)
+    //implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.0")
     implementation(libs.androidx.appcompat)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
@@ -24,7 +24,9 @@ dependencies {
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
-    implementation(project(":lib-sdk"))
+    implementation(project(":lib-sdk")) {
+        exclude(group = "net.java.dev.jna", module = "jna")
+    }
 }
 
 android {
@@ -64,6 +66,7 @@ android {
     buildFeatures {
         compose = true
     }
+
 }
 
 tasks.configureEach {
