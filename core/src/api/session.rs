@@ -74,4 +74,3 @@ fn bgra_to_rgba_in_place(data: &mut [u8]) {
         chunk.swap(0, 2);
     }
 }
-
