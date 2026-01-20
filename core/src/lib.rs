@@ -1,16 +1,8 @@
-#[macro_use]
-pub mod macros;
-pub mod bindgen;
-pub mod constants;
-pub mod core;
-pub mod jni_binding;
-pub mod logger;
-pub mod uniffi_binding;
+// 🔥 启用 UniFFI
+uniffi::setup_scaffolding!();
 
-pub use uniffi_binding::UniFfiTag;
+pub mod domain;
+pub mod scripting;
 
-pub mod api;
-pub mod input;
-pub mod js_engine;
-pub mod types;
-pub mod vision;
+pub mod bindings;
+pub mod common;

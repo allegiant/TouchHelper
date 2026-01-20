@@ -1,6 +1,5 @@
 import { type GameConfig } from './config';
 
-
 export async function fightLoop(config: GameConfig) {
   const color = config.monsterColor;
   log(`[Task] 开始找怪，颜色: ${color}`);
@@ -18,3 +17,4 @@ export async function fightLoop(config: GameConfig) {
     }
   }
 }
+

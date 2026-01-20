@@ -8,7 +8,9 @@
     "build": "npm run build:script vue-tsc && vite build",
     "preview": "vite preview",
     "build:script": "node tools/build.js",
-    "android-dev": "node tools/dev.js"
+    "android-dev": "node tools/dev.js",
+    "//": "👇 修改：指定 bin 为 gen_ts_types，并直接传入路径",
+    "gen:types": "cargo run --manifest-path ../core/Cargo.toml --bin gen_ts_types -- ./src/types/touch-helper.d.ts"
   },
   "dependencies": {
     "element-plus": "^2.4.4",

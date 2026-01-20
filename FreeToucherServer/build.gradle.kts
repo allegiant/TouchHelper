@@ -96,3 +96,33 @@ val buildDex by tasks.registering(BuildDexTask::class) {
         enabled = false
     }
 }
+
+// ==================================================================
+// 🦀 新增：自动生成常量的任务
+// ==================================================================
+val generateConstants by tasks.registering(Exec::class) {
+    group = "rust"
+    description = "Generates shared constants from Rust core"
+
+    // 1. 定位到 core 目录 (根据你的项目结构调整 ../../core)
+    val coreDir = file("../core")
+    workingDir = coreDir
+
+    // 2. 动态计算目标文件的绝对路径
+    // layout.projectDirectory 是当前 FreeToucherServer 的目录
+    val targetFile = layout.projectDirectory.file("src/main/java/bind/GeneratedConstants.java").asFile.absolutePath
+
+    // 3. 传给 Rust: cargo run --bin  gen_java_constants -- <目标路径>
+    // 注意: "--" 是告诉 cargo 后面的参数是传给程序的，不是传给 cargo 的
+    commandLine("cargo", "run", "--bin", "gen_java_constants", "--", targetFile)
+
+    // 增量构建支持 (输入没变就不重跑)
+    inputs.files(fileTree(coreDir.resolve("src")) { include("**/*.rs") })
+    outputs.file(targetFile)
+}
+
+// 4. 关键：让 Java 编译任务依赖它
+// 这样每次 compileJava 之前，都会先跑 generateConstants
+tasks.named("compileJava") {
+    dependsOn(generateConstants)
+}

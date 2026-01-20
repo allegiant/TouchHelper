@@ -1,5 +1,9 @@
 {
   "compilerOptions": {
+    "baseUrl": ".",  // 必须添加这一行，指定根目录
+    "paths": {
+      "@/*": ["src/*"] // 映射 @/ 到 src/
+    },
     "target": "ES2020",
     "useDefineForClassFields": true,
     "module": "ESNext",
@@ -30,5 +34,5 @@
     {
       "path": "./tsconfig.node.json"
     }
-  ]
+  ],
 }
