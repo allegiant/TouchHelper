@@ -10,7 +10,6 @@ use rquickjs::{Class, Ctx, Object, Result};
 pub mod analysis_api;
 pub mod colors;
 pub mod device;
-pub mod image;
 pub mod session;
 pub mod thread;
 

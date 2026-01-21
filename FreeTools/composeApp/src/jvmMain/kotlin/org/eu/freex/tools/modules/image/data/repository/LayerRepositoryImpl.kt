@@ -36,7 +36,6 @@ import org.eu.freex.tools.modules.image.domain.repository.LayerRepository
 import org.eu.freex.tools.platform.ScreenCaptureService
 import uniffi.touch_core.ImageFilterWrapper
 import uniffi.touch_core.ImageSession
-import uniffi.touch_core.processImage
 import java.awt.image.BufferedImage
 import java.io.File
 import java.nio.ByteBuffer
@@ -66,7 +65,10 @@ class LayerRepositoryImpl(
                 val w = source.width
                 val h = source.height
                 val rustFilterWrapper = filter.toRust()
-                val result = processImage(pixels, w, h, rustFilterWrapper)
+
+                val session = ImageSession( pixels, w, h)
+                session.applyFilter(rustFilterWrapper)
+                val result = session.getImage();
                 // 5. 重建图片
                 // 使用 result.width 和 result.height，这样能正确处理 Resize/Crop 等改变尺寸的滤镜
                 ImageUtils.fromRgbaPixels(
