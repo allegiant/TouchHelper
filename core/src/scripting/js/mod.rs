@@ -1,13 +1,12 @@
 use crate::bindings::kotlin_ffi::CONTROLLER;
 use crate::domain::input::InputController;
-use crate::scripting::api::colors::Colors;
-use crate::scripting::api::device::Device;
-use crate::scripting::api::thread::Thread;
+use crate::scripting::js::colors::Colors;
+use crate::scripting::js::device::Device;
+use crate::scripting::js::thread::Thread;
 use log::{error, info};
 use rquickjs::prelude::Func;
 use rquickjs::{Class, Ctx, Object, Result};
 
-pub mod analysis_api;
 pub mod colors;
 pub mod device;
 pub mod session;

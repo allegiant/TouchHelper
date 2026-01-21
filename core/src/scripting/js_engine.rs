@@ -2,7 +2,7 @@ use log::info;
 use rquickjs::{AsyncContext, AsyncRuntime};
 use tokio::task::AbortHandle;
 
-use crate::scripting::api;
+use crate::scripting::js;
 
 // 🔥 全局任务句柄：用于存储当前正在跑的脚本任务
 // 这样我们才能在外部调用 stop_script 时找到它并杀掉
@@ -19,7 +19,7 @@ pub async fn run_script_async(script_content: String) -> Result<(), String> {
     ctx.with(|ctx| {
         let global = ctx.globals();
         // 传入 ctx 以便注册 Class
-        if let Err(e) = api::register_globals(&global, &ctx) {
+        if let Err(e) = js::register_globals(&global, &ctx) {
             log::error!("Failed to register globals: {}", e);
         }
     })
