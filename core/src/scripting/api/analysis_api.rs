@@ -6,7 +6,7 @@ use crate::domain::vision::types::{Rect, SegmentationConfig, VisionError}; // �
 /// 暴露给 Kotlin 的接口
 /// 统一使用 Result<..., VisionError> 进行错误处理
 /// 统一接收 pixels: Vec<u8> 作为输入
-#[uniffi::export]
+//#[uniffi::export]
 pub fn perform_segmentation(
     mut pixels: Vec<u8>,
     width: i32,

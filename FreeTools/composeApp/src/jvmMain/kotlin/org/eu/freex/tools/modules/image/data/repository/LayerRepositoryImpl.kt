@@ -5,36 +5,13 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.eu.freex.tools.common.utils.ImageUtils
 import org.eu.freex.tools.modules.image.domain.mapper.toRust
-import org.eu.freex.tools.modules.image.domain.model.AutoCropFilter
-import org.eu.freex.tools.modules.image.domain.model.AutoCropMode
-import org.eu.freex.tools.modules.image.domain.model.BinarizationFilter
-import org.eu.freex.tools.modules.image.domain.model.BinarizationMode
-import org.eu.freex.tools.modules.image.domain.model.BlackWhiteInvertFilter
-import org.eu.freex.tools.modules.image.domain.model.DenoiseFilter
-import org.eu.freex.tools.modules.image.domain.model.DeskewFilter
-import org.eu.freex.tools.modules.image.domain.model.ExtendCropFilter
-import org.eu.freex.tools.modules.image.domain.model.ExtractBlobsFilter
-import org.eu.freex.tools.modules.image.domain.model.ExtractContoursFilter
-import org.eu.freex.tools.modules.image.domain.model.GrayscaleFilter
-import org.eu.freex.tools.modules.image.domain.model.GrayscaleMode
 import org.eu.freex.tools.modules.image.domain.model.ImageFilter
-import org.eu.freex.tools.modules.image.domain.model.MorphologyFilter
-import org.eu.freex.tools.modules.image.domain.model.MorphologyMode
-import org.eu.freex.tools.modules.image.domain.model.MultiColorFilter
-import org.eu.freex.tools.modules.image.domain.model.PosterizationFilter
-import org.eu.freex.tools.modules.image.domain.model.PosterizationMode
-import org.eu.freex.tools.modules.image.domain.model.RemoveLinesFilter
-import org.eu.freex.tools.modules.image.domain.model.RemoveNoiseFilter
-import org.eu.freex.tools.modules.image.domain.model.ResizeScaleFilter
-import org.eu.freex.tools.modules.image.domain.model.RotationFilter
 import org.eu.freex.tools.modules.image.domain.model.SegmentationConfig
 import org.eu.freex.tools.modules.image.domain.model.SegmentationMode
 import org.eu.freex.tools.modules.image.domain.model.SegmentationRect
-import org.eu.freex.tools.modules.image.domain.model.SmartLayoutFilter
 import org.eu.freex.tools.modules.image.domain.model.ViewFilter
 import org.eu.freex.tools.modules.image.domain.repository.LayerRepository
 import org.eu.freex.tools.platform.ScreenCaptureService
-import uniffi.touch_core.ImageFilterWrapper
 import uniffi.touch_core.ImageSession
 import java.awt.image.BufferedImage
 import java.io.File
@@ -66,7 +43,7 @@ class LayerRepositoryImpl(
                 val h = source.height
                 val rustFilterWrapper = filter.toRust()
 
-                val session = ImageSession( pixels, w, h)
+                val session = ImageSession(pixels, w, h)
                 session.applyFilter(rustFilterWrapper)
                 val result = session.getImage();
                 // 5. 重建图片
@@ -180,9 +157,8 @@ class LayerRepositoryImpl(
                 projectionThreshold = config.projectionThreshold
             )
 
-            // 3. 调用 Rust 接口
-            // 现在 byteArray 的类型是 ByteArray，符合 UniFFI 生成代码的要求
-            val rustRects = uniffi.touch_core.performSegmentation(byteArray, width, height, rustConfig)
+            val imageSession = ImageSession(pixels = byteArray, width, height)
+            val rustRects = imageSession.segmentation(rustConfig)
 
             // 4. 结果转换: Rust Rects -> Domain Rects
             rustRects.map { r ->

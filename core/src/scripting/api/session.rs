@@ -1,7 +1,10 @@
 use image::{DynamicImage, ImageBuffer, Rgba};
 use std::sync::Mutex;
 
-use crate::domain::vision::types::{ImageFilterWrapper, ProcessedImage, VisionError};
+use crate::domain::vision::analysis::perform_segmentation;
+use crate::domain::vision::types::{
+    ImageFilterWrapper, ProcessedImage, Rect, SegmentationConfig, VisionError,
+};
 
 /// 有状态的图像处理会话
 /// 避免了每次操作都在 Kotlin 和 Rust 之间搬运像素数据
@@ -66,6 +69,20 @@ impl ImageSession {
             height: rgba.height() as i32,
             pixels: rgba.into_raw(),
         })
+    }
+
+    /// ✅ 新增：执行切割
+    /// 注意：这里没有修改 self.image，而是返回 Vec<Rect>
+    pub fn segmentation(&self, config: SegmentationConfig) -> Result<Vec<Rect>, VisionError> {
+        // 1. 获取锁 (只读访问即可，但 Mutex 通常不分读写，除非用 RwLock)
+        let guard = self
+            .image
+            .lock()
+            .map_err(|_| VisionError::ProcessError("Lock failed".into()))?;
+
+        // 2. 调用核心算法 (需确保 perform_segmentation 接受 &DynamicImage)
+        let rects = perform_segmentation(&*guard, &config);
+        Ok(rects)
     }
 }
 
