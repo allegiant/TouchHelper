@@ -120,41 +120,32 @@ object ImageUtils {
     }
 
     /**
-     * [新增] 将 "001101..." 格式的二值化字符串还原为图片
+     * 将 "001101..." 格式的二值化字符串还原为图片
      * @param width 图片宽
      * @param height 图片高
-     * @param binaryStr 0/1 字符串
+     * @param binary 0/1 字符串
      */
-    fun binaryStringToBitmap(width: Int, height: Int, binaryStr: String): ImageBitmap? {
-        try {
-            if (width <= 0 || height <= 0 || binaryStr.length != width * height) {
-                return null
-            }
+    fun binaryStringToBitmap(width: Int, height: Int, binary: String): ImageBitmap {
+        val bufferedImage = BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB)
 
-            // 创建 ARGB 图片
-            val image = BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB)
+        // 限制长度防止越界
+        val length = minOf(binary.length, width * height)
 
-            // 遍历字符串设置像素
-            // 注意：您的 FontLibraryUseCase 是先遍历 y 再遍历 x (行优先)
-            var index = 0
-            for (y in 0 until height) {
-                for (x in 0 until width) {
-                    val char = binaryStr[index++]
-                    if (char == '1') {
-                        // 前景 (文字)：设为黑色，不透明
-                        image.setRGB(x, y, Color.BLACK.rgb)
-                    } else {
-                        // 背景：设为白色或透明
-                        // 建议设为透明 (0x00000000)，这样在任何背景下都好看
-                        // 如果您想要白底，可以使用 Color.WHITE.rgb
-                        image.setRGB(x, y, 0x00FFFFFF) // 完全透明
-                    }
-                }
+        // 定义颜色 (使用 java.awt.Color 常量更安全)
+        val colorForeground = Color.BLACK.rgb      // 前景：红色
+        val colorTransparent = 0x00000000          // 背景：全透明
+
+        for (i in 0 until length) {
+            val x = i % width
+            val y = i / width
+            val char = binary[i]
+
+            if (char == '1') {
+                bufferedImage.setRGB(x, y, colorForeground)
+            } else {
+                bufferedImage.setRGB(x, y, colorTransparent)
             }
-            return image.toComposeImageBitmap()
-        } catch (e: Exception) {
-            e.printStackTrace()
-            return null
         }
+        return bufferedImage.toComposeImageBitmap()
     }
 }

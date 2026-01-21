@@ -1,17 +1,16 @@
 package org.eu.freex.tools.modules.image.application
 
 
-import androidx.compose.ui.graphics.toComposeImageBitmap
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
+import org.eu.freex.tools.common.utils.ImageUtils
 import org.eu.freex.tools.modules.image.domain.model.ImageLayer
 import org.eu.freex.tools.modules.image.domain.model.ImageWorkspace
 import org.eu.freex.tools.modules.image.domain.model.LayerConfig
 import org.eu.freex.tools.modules.image.domain.model.Pipeline
 import org.eu.freex.tools.modules.image.domain.repository.LayerRepository
 import org.eu.freex.tools.modules.image.domain.repository.ProjectRepository
-import java.awt.image.BufferedImage
 import java.io.File
 
 class ProjectAssetUseCase(
@@ -129,7 +128,7 @@ class ProjectAssetUseCase(
             // 4. 恢复 FontLibrary 预览图 (从 01 二进制串重建 Bitmap)
             val restoredLib = rawWorkspace.fontLibrary.map { item ->
                 if (item.displayBitmap == null && item.binaryData.isNotEmpty()) {
-                    val bitmap = reconstructBitmapFromBinary(item.binaryData, item.width, item.height)
+                    val bitmap = ImageUtils.binaryStringToBitmap(item.width, item.height, item.binaryData)
                     item.copy(displayBitmap = bitmap)
                 } else {
                     item
@@ -154,33 +153,6 @@ class ProjectAssetUseCase(
             val jsonString = json.encodeToString(current)
             file.writeText(jsonString)
         }
-    }
-
-    /**
-     * 辅助方法：将 01 字符串转换为 Compose ImageBitmap (用于预览)
-     */
-    private fun reconstructBitmapFromBinary(binary: String, width: Int, height: Int): androidx.compose.ui.graphics.ImageBitmap {
-        val bufferedImage = BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB)
-
-        // 限制长度防止越界
-        val length = minOf(binary.length, width * height)
-
-        // 定义颜色 (使用 java.awt.Color 常量更安全)
-        val colorRed = java.awt.Color.RED.rgb      // 前景：红色
-        val colorTransparent = 0x00000000          // 背景：全透明
-
-        for (i in 0 until length) {
-            val x = i % width
-            val y = i / width
-            val char = binary[i]
-
-            if (char == '1') {
-                bufferedImage.setRGB(x, y, colorRed)
-            } else {
-                bufferedImage.setRGB(x, y, colorTransparent)
-            }
-        }
-        return bufferedImage.toComposeImageBitmap()
     }
 }
 

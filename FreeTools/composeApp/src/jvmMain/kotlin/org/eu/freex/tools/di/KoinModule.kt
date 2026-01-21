@@ -6,6 +6,7 @@ import kotlinx.coroutines.SupervisorJob
 import org.eu.freex.tools.modules.image.application.FontLibraryUseCase
 import org.eu.freex.tools.modules.image.application.ImageProcessingUseCase
 import org.eu.freex.tools.modules.image.application.ProjectAssetUseCase
+import org.eu.freex.tools.modules.image.application.RecognitionUseCase
 import org.eu.freex.tools.modules.image.application.SegmentationUseCase
 import org.eu.freex.tools.modules.image.data.repository.LayerRepositoryImpl
 import org.eu.freex.tools.modules.image.data.repository.ProjectRepositoryImpl
@@ -16,6 +17,7 @@ import org.eu.freex.tools.modules.image.presentation.viewmodel.FontLibraryViewMo
 import org.eu.freex.tools.modules.image.presentation.viewmodel.MainViewModel
 import org.eu.freex.tools.modules.image.presentation.viewmodel.PipelineViewModel
 import org.eu.freex.tools.modules.image.presentation.viewmodel.ProjectListViewModel
+import org.eu.freex.tools.modules.image.presentation.viewmodel.RecognitionViewModel
 import org.eu.freex.tools.modules.image.presentation.viewmodel.SegmentationViewModel
 import org.eu.freex.tools.platform.DesktopScreenCaptureService
 import org.eu.freex.tools.platform.ScreenCaptureService
@@ -51,6 +53,7 @@ val appDiModule = module {
     single { ImageProcessingUseCase(get(), get()) }
     single { SegmentationUseCase(get(), get()) }
     single { FontLibraryUseCase(get()) }
+    single { RecognitionUseCase(get(), get()) }
 
 
     // =================================================================================
@@ -74,4 +77,5 @@ val appDiModule = module {
 
     // 画布交互：显示最终结果、处理点击/裁剪
     single{ EditorCanvasViewModel(get(), get()) }
+    single { RecognitionViewModel(get(), get()) }
 }
