@@ -1,5 +1,8 @@
 package org.eu.freex.tools.modules.image.domain.model
 
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Size
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import org.eu.freex.tools.common.model.ColorRule
@@ -282,6 +285,9 @@ data class SegmentationRect(
     val width: UInt,
     val height: UInt
 )
+fun SegmentationRect.toComposeRect(): Rect {
+    return Rect(Offset(this.left.toFloat(), this.top.toFloat()), Size(this.width.toFloat(), this.height.toFloat()))
+}
 
 @Serializable
 enum class SegmentationMode {

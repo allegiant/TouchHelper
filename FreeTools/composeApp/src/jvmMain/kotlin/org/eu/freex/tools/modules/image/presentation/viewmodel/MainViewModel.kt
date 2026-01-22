@@ -7,7 +7,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import org.eu.freex.tools.modules.image.application.ProjectAssetUseCase
-import org.eu.freex.tools.modules.image.application.TsCodeGenerator
+import org.eu.freex.tools.modules.image.application.TsCodeGeneratorUseCase
 import org.eu.freex.tools.modules.image.domain.repository.ProjectRepository
 import java.io.File
 
@@ -108,7 +108,7 @@ class MainViewModel(
         }
 
         // 5. 调用生成器
-        return TsCodeGenerator.generate(
+        return TsCodeGeneratorUseCase.generate(
             pipeline = pipeline,
             segConfig = segConfig,
             fontLib = fontLib,

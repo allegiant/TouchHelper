@@ -14,11 +14,8 @@ plugins {
 }
 cargo {
     packageDirectory = file("../../core")
-    builds.android {
-    }
+    builds.android {}
     builds.jvm {
-        // 逻辑含义：只有当 "构建目标" 等于 "当前电脑架构" 时，才进行构建和嵌入
-        // 这样在 Windows 上就只会编 Windows 版，在 Mac 上只编 Mac 版
         embedRustLibrary = (rustTarget == GobleyHost.current.rustTarget)
     }
 }

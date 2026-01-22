@@ -45,7 +45,7 @@ class LayerRepositoryImpl(
 
                 val session = ImageSession(pixels, w, h)
                 session.applyFilter(rustFilterWrapper)
-                val result = session.getImage();
+                val result = session.getImage()
                 // 5. 重建图片
                 // 使用 result.width 和 result.height，这样能正确处理 Resize/Crop 等改变尺寸的滤镜
                 ImageUtils.fromRgbaPixels(

@@ -3,6 +3,9 @@ name = "touch_core"
 version = "0.1.0"
 edition = "2021"
 
+[profile.dev]
+opt-level = 3       # 开启最高优化 (和 Release 模式一样)
+
 [lib]
 crate-type = ["cdylib", "rlib", "staticlib"]
 name = "touch_core" # 确保库名是 core，生成  touch_core.so

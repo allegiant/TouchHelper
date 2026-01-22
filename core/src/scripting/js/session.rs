@@ -1,9 +1,11 @@
 use std::sync::{Arc, Mutex};
 // 引入必要的类型，包括 Atom 和 Error
 use image::{DynamicImage, GenericImageView};
+use rquickjs::Error;
 use rquickjs::{class::Trace, Ctx, Exception, JsLifetime, Object, Result, Value};
 use serde_json;
 
+use crate::domain::common::{hex_to_binary, is_likely_hex};
 // 引入您在 domain 中定义的类型
 use crate::domain::vision::analysis::perform_segmentation;
 use crate::domain::vision::types::{ImageFilterWrapper, SegmentationConfig};
@@ -109,25 +111,24 @@ impl JsImage {
         let mut rust_lib: Vec<(String, String)> = Vec::new();
 
         for item in library {
-            // item 是 Result<(Atom, Value)>
             let (key_atom, val_value) = item?;
-
-            // Atom -> String
             let key = key_atom.to_string()?;
+            let val_str = val_value
+                .as_string()
+                .ok_or(Error::new_from_js(
+                    "Library value must be string",
+                    "TypeError",
+                ))?
+                .to_string()?;
 
-            // Value -> String (确保 Value 是字符串)
-            let val_js_string = match val_value.as_string() {
-                Some(s) => s,
-                None => {
-                    return Self::throw_err(
-                        &ctx,
-                        "Library value must be a string (e.g., '0101...')",
-                    )
-                }
+            // 🔥 自动识别 Hex 并解压
+            let feature = if is_likely_hex(&val_str) {
+                hex_to_binary(&val_str)
+            } else {
+                val_str
             };
-            let val = val_js_string.to_string()?;
 
-            rust_lib.push((key, val));
+            rust_lib.push((key, feature));
         }
 
         // 3. 调用核心算法

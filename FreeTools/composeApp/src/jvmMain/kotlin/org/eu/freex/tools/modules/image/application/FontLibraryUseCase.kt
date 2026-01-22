@@ -1,13 +1,17 @@
 package org.eu.freex.tools.modules.image.application
 
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.toComposeImageBitmap
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import org.eu.freex.tools.common.utils.ImageFeatureExtractor
+import org.eu.freex.tools.common.utils.ImageUtils
 import org.eu.freex.tools.modules.image.domain.model.FontLibItem
 import org.eu.freex.tools.modules.image.domain.model.SegmentationRect
+import org.eu.freex.tools.modules.image.domain.model.toComposeRect
 import org.eu.freex.tools.modules.image.domain.repository.ProjectRepository
-import java.awt.image.BufferedImage
+import uniffi.touch_core.fontExtractFeature
 import java.io.File
 
 class FontLibraryUseCase(
@@ -33,14 +37,12 @@ class FontLibraryUseCase(
 
             try {
                 // 2. 裁剪图片
-                val subImage = BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB)
-                val g = subImage.createGraphics()
-                g.drawImage(sourceImage, -rect.left.toInt(), -rect.top.toInt(), null)
-                g.dispose()
+                val subImage = ImageUtils.cropImage(sourceImage, rect.toComposeRect())
+                val pixels = ImageUtils.toRgbaPixels(subImage)
+
 
                 // 3. 生成二值化特征串 (使用统一工具，保证与识别算法一致)
-                // 如果您还没创建 ImageFeatureExtractor，请参考上一条回答创建
-                val binaryData = ImageFeatureExtractor.generateBinaryData(subImage)
+                val binaryData = fontExtractFeature(pixels, subImage.width, subImage.height)
 
                 // 4. 🌟【核心修复】去重检查
                 if (existingSignatures.contains(binaryData)) {

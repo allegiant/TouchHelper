@@ -395,3 +395,57 @@ fn apply_padding_and_clamp(mut rects: Vec<Rect>, w: u32, h: u32, padding: i32) -
         .filter(|r| r.width > 0 && r.height > 0)
         .collect()
 }
+
+// 核心特征提取算法 (Single Source of Truth)
+/// 逻辑复刻自之前的 Kotlin ImageFeatureExtractor，但在 Rust 中统一实现
+pub fn compute_binary_feature(img: &DynamicImage) -> String {
+    // 1. 转换为 RGBA8 确保像素访问一致
+    let rgba = img.to_rgba8();
+    let (width, height) = rgba.dimensions();
+
+    // 2. 统计全局亮度 (用于自适应阈值)
+    let mut total_brightness: u64 = 0;
+    let pixel_count = (width * height) as u64;
+
+    if pixel_count == 0 {
+        return String::new();
+    }
+
+    for pixel in rgba.pixels() {
+        let r = pixel[0] as f32;
+        let g = pixel[1] as f32;
+        let b = pixel[2] as f32;
+        // 标准亮度公式
+        total_brightness += (r * 0.299 + g * 0.587 + b * 0.114) as u64;
+    }
+
+    let avg_brightness = total_brightness / pixel_count;
+
+    // 3. 判断背景 ( < 128 为黑背景)
+    let is_dark_background = avg_brightness < 128;
+
+    // 4. 生成 01 串
+    let mut feature = String::with_capacity(pixel_count as usize);
+
+    // 遍历顺序必须严格一致 (Row-Major: y -> x)
+    for y in 0..height {
+        for x in 0..width {
+            let pixel = rgba.get_pixel(x, y);
+            let r = pixel[0] as f32;
+            let g = pixel[1] as f32;
+            let b = pixel[2] as f32;
+            let luma = (r * 0.299 + g * 0.587 + b * 0.114) as u64;
+
+            // 特征判定：与背景反差大的像素记为 '1'
+            let is_feature = if is_dark_background {
+                luma > 128 // 黑背景找亮
+            } else {
+                luma < 128 // 白背景找暗
+            };
+
+            feature.push(if is_feature { '1' } else { '0' });
+        }
+    }
+
+    feature
+}

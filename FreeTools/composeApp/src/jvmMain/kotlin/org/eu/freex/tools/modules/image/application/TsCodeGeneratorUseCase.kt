@@ -4,6 +4,7 @@ import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.InternalSerializationApi
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.serializer
+import org.eu.freex.tools.common.utils.ImageUtils.binaryStringToHex
 import org.eu.freex.tools.modules.image.domain.model.ImageFilter
 import org.eu.freex.tools.modules.image.domain.model.Pipeline
 import org.eu.freex.tools.modules.image.domain.model.SegmentationConfig
@@ -12,7 +13,7 @@ import org.eu.freex.tools.modules.image.domain.model.SegmentationConfig
  * TypeScript 代码生成器 (基于 kotlinx.serialization)
  * 能够自动将当前工作台的配置转换为可直接运行的 TouchHelper 脚本
  */
-object TsCodeGenerator {
+object TsCodeGeneratorUseCase {
 
     // 配置 JSON 格式：美化输出，确保生成的代码易读
     private val json = Json {
@@ -82,17 +83,20 @@ object TsCodeGenerator {
             sb.appendLine()
 
             if (!fontLib.isNullOrEmpty()) {
-                sb.appendLine("// 4. 定义字库 (包含 ${fontLib.size} 个字符)")
-                // Map<String, String> 序列化后就是标准的 JS 对象 { "A": "...", "B": "..." }
-                val libJson = json.encodeToString(json.serializersModule.serializer(), fontLib)
+                sb.appendLine("// 4. 字库数据 (Hex压缩)")
+
+                // 🔥 压缩逻辑：Binary -> Hex Map
+                val compressedLib = fontLib.mapValues { (_, binStr) -> binaryStringToHex(binStr) }
+
+                // 生成干净的 Map: { "汉": "HexStr", ... }
+                val libJson = json.encodeToString(json.serializersModule.serializer(), compressedLib)
                 sb.appendLine("const fontLibrary = $libJson;")
+
+                // Rust 运行时会自动识别 Hex，无需解压代码
                 sb.appendLine()
                 sb.appendLine("// 5. 执行识别")
                 sb.appendLine("const result = img.ocrGrid(config, fontLibrary, $minConf);")
-                sb.appendLine("log(`识别结果: \${result}`);")
-            } else {
-                sb.appendLine("// (⚠️未提供字库，仅生成切割配置)")
-                sb.appendLine("// img.ocrGrid(config, YOUR_FONT_LIBRARY, $minConf);")
+                sb.appendLine($$"log(`识别结果: ${result}`);")
             }
         }
 
@@ -120,6 +124,7 @@ object TsCodeGenerator {
         // 3. 序列化 Filter 内容本身
         // 使用反射获取该实例具体的 Serializer (需要 @Serializable 支持)
         val serializer = filter::class.serializer()
+
         @Suppress("UNCHECKED_CAST")
         val filterJson = json.encodeToString(serializer as kotlinx.serialization.KSerializer<Any>, filter)
 

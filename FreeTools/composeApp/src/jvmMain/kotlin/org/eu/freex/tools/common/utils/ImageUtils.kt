@@ -148,4 +148,23 @@ object ImageUtils {
         }
         return bufferedImage.toComposeImageBitmap()
     }
+
+    /**
+     * 二进制串 "0011..." 转 Hex "3..."
+     */
+    fun binaryStringToHex(bin: String): String {
+        val sb = StringBuilder()
+        var padded = bin
+        // 补齐 4 位
+        while (padded.length % 4 != 0) {
+            padded += "0"
+        }
+        for (i in padded.indices step 4) {
+            val chunk = padded.substring(i, i + 4)
+            val decimal = chunk.toInt(2)
+            // 转 16 进制，大写
+            sb.append(decimal.toString(16).uppercase())
+        }
+        return sb.toString()
+    }
 }
