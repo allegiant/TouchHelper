@@ -7,6 +7,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import org.eu.freex.tools.modules.image.application.ProjectAssetUseCase
+import org.eu.freex.tools.modules.image.application.TsCodeGenerator
 import org.eu.freex.tools.modules.image.domain.repository.ProjectRepository
 import java.io.File
 
@@ -81,5 +82,37 @@ class MainViewModel(
                 if (loadingMsg != null) hideLoading()
             }
         }
+    }
+
+    fun generateScript(): String {
+        // 1. 从 Repository 的 Source of Truth (StateFlow) 获取当前快照
+        val currentWorkspace = projectRepo.workspace.value
+
+        // 2. 获取 Pipeline
+        val pipeline = currentWorkspace.pipeline
+
+        // 3. 获取切割配置
+        // Workspace 中应该包含 segmentation (SegmentationProject?)
+        val segmentationProject = currentWorkspace.segmentation
+        val segConfig = segmentationProject?.config
+
+        // 4. 获取并转换字库 [修复点]
+        // ProjectRepository 中没有 currentLibrary，我们要从 workspace 中拿 List
+        val fontList = currentWorkspace.fontLibrary // 假设 workspace 中的字段名叫 fontLibrary
+
+        // 将 List<FontLibItem> 转换为 Map<String, String> (字符 -> 特征)
+        val fontLib = fontList.associate { item ->
+            // 假设 FontLibItem 的字段是 character 和 feature
+            // 如果您的字段名不同 (例如 char, code)，请在这里调整
+            item.charName to item.binaryData
+        }
+
+        // 5. 调用生成器
+        return TsCodeGenerator.generate(
+            pipeline = pipeline,
+            segConfig = segConfig,
+            fontLib = fontLib,
+            minConf = 0.8f // 这个阈值也可以做成 UI 可配置的参数
+        )
     }
 }

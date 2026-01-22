@@ -1,5 +1,7 @@
 use image::{DynamicImage, ImageBuffer, Rgba};
+use log::info;
 use std::sync::Mutex;
+use std::time::Instant;
 
 use crate::domain::vision::analysis::perform_segmentation;
 use crate::domain::vision::types::{
@@ -19,6 +21,8 @@ impl ImageSession {
     /// 创建新会话
     #[uniffi::constructor]
     pub fn new(mut pixels: Vec<u8>, width: i32, height: i32) -> Result<Self, VisionError> {
+        let start = Instant::now();
+
         let width_u32 = width as u32;
         let height_u32 = height as u32;
         let expected_len = (width_u32 * height_u32 * 4) as usize;
@@ -33,6 +37,8 @@ impl ImageSession {
         let img_buffer = ImageBuffer::<Rgba<u8>, Vec<u8>>::from_raw(width_u32, height_u32, pixels)
             .ok_or_else(|| VisionError::LoadError("Failed to create image buffer".into()))?;
 
+        info!("KtSession initialized in {:?}", start.elapsed());
+
         Ok(Self {
             image: Mutex::new(DynamicImage::ImageRgba8(img_buffer)),
         })
@@ -40,6 +46,7 @@ impl ImageSession {
 
     /// 应用滤镜 (核心修改点)
     pub fn apply_filter(&self, filter: ImageFilterWrapper) -> Result<(), VisionError> {
+        let start = Instant::now();
         let mut guard = self
             .image
             .lock()
@@ -51,6 +58,7 @@ impl ImageSession {
             .apply(&*guard)
             .map_err(|e| VisionError::ProcessError(e.to_string()))?;
 
+        info!("apply filter: {:?} in {:?}", filter, start.elapsed());
         // 更新当前状态
         *guard = new_img;
         Ok(())
