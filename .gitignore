@@ -52,3 +52,4 @@ pnpm-debug.log*
 .DS_Store
 Thumbs.db
 ehthumbs.db
+java_pid*

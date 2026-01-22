@@ -43,7 +43,6 @@ kotlin {
                 implementation(libs.jna)
                 implementation(libs.kotlinx.serialization.json)
             }
-            kotlin.srcDir("build/generated/uniffi/src")
         }
 
         androidMain {

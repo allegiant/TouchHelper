@@ -2,13 +2,17 @@ package org.eu.freex.tools.modules.image.application
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import org.eu.freex.tools.common.utils.ImageFeatureExtractor
-import org.eu.freex.tools.modules.image.domain.model.*
+import org.eu.freex.tools.common.utils.ImageUtils
+import org.eu.freex.tools.modules.image.domain.model.ImageFilter
+import org.eu.freex.tools.modules.image.domain.model.RecognitionResult
+import org.eu.freex.tools.modules.image.domain.model.SegmentationConfig
+import org.eu.freex.tools.modules.image.domain.model.SegmentationRect
 import org.eu.freex.tools.modules.image.domain.repository.LayerRepository
 import org.eu.freex.tools.modules.image.domain.repository.ProjectRepository
+import uniffi.touch_core.RsFontItem
+import uniffi.touch_core.rsFontRecognize
 import java.awt.image.BufferedImage
 import java.io.File
-import javax.imageio.ImageIO
 
 class RecognitionUseCase(
     private val projectRepo: ProjectRepository,
@@ -31,7 +35,6 @@ class RecognitionUseCase(
             if (!imageFile.exists()) throw IllegalStateException("文件不存在")
 
             val rawImage = layerRepo.loadFromFile(imageFile)
-                ?: throw IllegalStateException("图片加载失败，对象为空")
             println("   ✅ 图片加载成功: ${rawImage.width}x${rawImage.height}")
 
             // --- 2. 预处理 (滤镜) ---
@@ -68,35 +71,55 @@ class RecognitionUseCase(
                 return@runCatching emptyList()
             }
 
+            // 🔥 [重构核心] 将 Kotlin 字库对象转换为 Rust 结构体
+            // 这一步确保传递给底层的是包含正确宽高的标准数据
+            val rustLibrary = fontLibrary.map {
+                RsFontItem(
+                    charName = it.charName,
+                    binaryData = it.binaryData,
+                    width = it.width,
+                    height = it.height
+                )
+            }
+
             // --- 5. 匹配 ---
             println("📍 [步骤 5/5] 开始特征匹配 (阈值: $minConfidence)")
             val results = mutableListOf<RecognitionResult>()
 
             // 为了不刷屏，我们只打印前 3 个和后 3 个的详细日志
             rects.forEachIndexed { index, rect ->
-                val charImage = cropImage(finalImage, rect)
-                if (charImage == null) {
-                    println("      ⚠️ [$index] 切片无效，跳过")
-                    return@forEachIndexed
+                val charImage = cropImage(finalImage, rect) ?: return@forEachIndexed
+
+
+                // 2. 转像素数据
+                val pixels = ImageUtils.toRgbaPixels(charImage)
+
+                // 3. 🔥 调用 Rust 统一接口 (替代原本的 findBestMatch)
+                // Rust 内部会自动执行：Resize -> Feature Extract -> Similarity
+                val rustResult = rsFontRecognize(
+                    pixels = pixels,
+                    width = charImage.width,
+                    height = charImage.height,
+                    library = rustLibrary,
+                    minConfidence = minConfidence
+                )
+                // 4. 处理结果
+                val score = rustResult.confidence
+                val charName = rustResult.charName
+
+                // 日志 (保留部分调试信息)
+                if (index < 5 && score > 0) {
+                    println("      🔎 切片 #$index [${rect.width}x${rect.height}] -> 匹配: '$charName' ($score)")
                 }
 
-
-                // 寻找匹配
-                val bestMatch = findBestMatch(charImage, fontLibrary)
-                val score = bestMatch?.second ?: 0f
-                val charName = bestMatch?.first?.charName ?: "无"
-
-                // 打印详细日志 (仅打印前5个，方便调试)
-                if (index < 5) {
-                    println("      🔎 切片 #$index [${rect.width}x${rect.height}] -> 最佳匹配: '$charName' (分值: $score)")
-                }
-
-                if (score >= minConfidence && bestMatch != null) {
-                    results.add(RecognitionResult(
-                        char = charName,
-                        rect = rect,
-                        confidence = score
-                    ))
+                if (score >= minConfidence && charName.isNotEmpty()) {
+                    results.add(
+                        RecognitionResult(
+                            char = charName,
+                            rect = rect,
+                            confidence = score
+                        )
+                    )
                 }
             }
 
@@ -123,17 +146,6 @@ class RecognitionUseCase(
         return "尺寸=${w}x${h}, 平均亮度=$avg (0=全黑, 255=全白)"
     }
 
-    // 开发调试用：保存中间图片到用户目录
-    private fun saveDebugImage(image: BufferedImage, name: String) {
-        try {
-            val file = File(System.getProperty("user.home"), name)
-            ImageIO.write(image, "png", file)
-            println("      💾 [DEBUG] 中间图已保存至: ${file.absolutePath}")
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
-    }
-
     private fun cropImage(source: BufferedImage, rect: SegmentationRect): BufferedImage? {
         val w = rect.width.toInt()
         val h = rect.height.toInt()
@@ -141,74 +153,8 @@ class RecognitionUseCase(
         if (rect.left < 0 || rect.top < 0 || rect.left + w > source.width || rect.top + h > source.height) return null
         val subImage = BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB)
         val g = subImage.createGraphics()
-        g.drawImage(source, -rect.left.toInt(), -rect.top.toInt(), null)
+        g.drawImage(source, -rect.left, -rect.top, null)
         g.dispose()
         return subImage
-    }
-
-    private fun findBestMatch(
-        // 注意：这里不再传入 targetBinary，而是传入 targetImage，因为我们要动态缩放它
-        targetImage: BufferedImage,
-        library: List<FontLibItem>
-    ): Pair<FontLibItem, Float>? {
-        var bestItem: FontLibItem? = null
-        var maxScore = 0f
-
-        for (item in library) {
-            // 1. 宽高比检查 (可选)
-            // 如果一个字是很扁的，而字库里是很瘦的，强行缩放也没意义，可以直接跳过
-            // 这里暂且不做严格限制，让它尽量匹配
-
-            // 2. 🌟 关键步骤：将【切出来的图】缩放到【字库样本】的大小
-            // 比如：切出来是 86x61，字库是 40x30 --> 把切出来的图缩成 40x30
-            val resizedTarget = resizeImage(targetImage, item.width, item.height)
-
-            // 3. 生成特征 (此时尺寸完全一致了)
-            val dynamicBinary = ImageFeatureExtractor.generateBinaryData(resizedTarget)
-
-            // 4. 比对
-            val score = calculateSimilarity(
-                dynamicBinary, item.width, item.height,
-                item.binaryData, item.width, item.height
-            )
-
-            if (score > maxScore) {
-                maxScore = score
-                bestItem = item
-            }
-        }
-
-        return if (bestItem != null) bestItem to maxScore else null
-    }
-
-    private fun calculateSimilarity(bin1: String, w1: Int, h1: Int, bin2: String, w2: Int, h2: Int): Float {
-        val minW = kotlin.math.min(w1, w2)
-        val minH = kotlin.math.min(h1, h2)
-        var matchCount = 0
-        var totalPixels = 0
-        for (y in 0 until minH) {
-            for (x in 0 until minW) {
-                val idx1 = y * w1 + x
-                val idx2 = y * w2 + x
-                if (idx1 < bin1.length && idx2 < bin2.length) {
-                    if (bin1[idx1] == bin2[idx2]) matchCount++
-                    totalPixels++
-                }
-            }
-        }
-        return if (totalPixels > 0) matchCount.toFloat() / totalPixels else 0f
-    }
-    /**
-     * 将图片强制缩放到指定尺寸 (橡皮泥模式)
-     * 用于将切出来的字缩放到和字库样本一样大
-     */
-    private fun resizeImage(original: BufferedImage, targetW: Int, targetH: Int): BufferedImage {
-        val resized = BufferedImage(targetW, targetH, BufferedImage.TYPE_INT_ARGB)
-        val g = resized.createGraphics()
-        // 使用双线性插值，效果较好；如果要追求极致锐利（像素风），可用 KEY_INTERPOLATION_NEAREST_NEIGHBOR
-        g.setRenderingHint(java.awt.RenderingHints.KEY_INTERPOLATION, java.awt.RenderingHints.VALUE_INTERPOLATION_BILINEAR)
-        g.drawImage(original, 0, 0, targetW, targetH, null)
-        g.dispose()
-        return resized
     }
 }

@@ -7,7 +7,7 @@ use serde_json;
 
 use crate::domain::common::{hex_to_binary, is_likely_hex};
 // 引入您在 domain 中定义的类型
-use crate::domain::vision::analysis::perform_segmentation;
+use crate::domain::vision::analysis::{find_best_match, perform_segmentation};
 use crate::domain::vision::types::{ImageFilterWrapper, SegmentationConfig};
 
 /// 脚本使用的图像对象
@@ -107,8 +107,15 @@ impl JsImage {
             .unwrap_err()
         })?;
 
+        // 2. 解析字库并构建 Rust 内部字库格式
+        // ⚠️ 关键点：JS 字库通常没有宽高信息。
+        // 我们假设：这些字是为了匹配当前 Grid 配置而生成的。
+        // 因此，我们将 config.cell_width 和 cell_height 赋予这些字模。
+        let target_w = config.cell_width;
+        let target_h = config.cell_height;
+
         // 2. 解析字库 (迭代 Object)
-        let mut rust_lib: Vec<(String, String)> = Vec::new();
+        let mut rust_lib: Vec<(String, String, u32, u32)> = Vec::new();
 
         for item in library {
             let (key_atom, val_value) = item?;
@@ -128,7 +135,7 @@ impl JsImage {
                 val_str
             };
 
-            rust_lib.push((key, feature));
+            rust_lib.push((key, feature, target_w, target_h));
         }
 
         // 3. 调用核心算法
@@ -140,10 +147,11 @@ impl JsImage {
 
         for rect in rects {
             // 越界检查
-            if rect.left < 0 || rect.top < 0 {
-                continue;
-            }
-            if (rect.left as u32 + rect.width) > img_w || (rect.top as u32 + rect.height) > img_h {
+            if rect.left < 0
+                || rect.top < 0
+                || (rect.left as u32 + rect.width) > img_w
+                || (rect.top as u32 + rect.height) > img_h
+            {
                 continue;
             }
 
@@ -157,22 +165,9 @@ impl JsImage {
             );
 
             let sub_dynamic = DynamicImage::ImageRgba8(sub_img.to_image());
-            let feature = generate_binary_feature_internal(&sub_dynamic);
-
-            // 匹配
-            let mut best_char: &str = "";
-            let mut max_score = 0.0f32;
-
-            for (char_str, lib_feat) in &rust_lib {
-                let score = calculate_similarity(feature.as_str(), lib_feat.as_str());
-                if score > max_score {
-                    max_score = score;
-                    best_char = char_str.as_str();
-                }
-            }
-
-            if max_score >= min_conf {
-                result_str.push_str(best_char);
+            // Rust 会自动把 sub_dynamic 缩放到 (target_w, target_h) 再进行特征比对
+            if let Some((best_char, _)) = find_best_match(&sub_dynamic, &rust_lib, min_conf) {
+                result_str.push_str(&best_char);
             }
         }
 
@@ -221,50 +216,4 @@ impl JsImage {
     fn throw_err_result<'js, T>(ctx: &Ctx<'js>, msg: &str) -> Result<T> {
         Self::throw_err(ctx, msg)
     }
-}
-
-fn generate_binary_feature_internal(img: &DynamicImage) -> String {
-    let gray = img.to_luma8();
-    let (w, h) = gray.dimensions();
-    let mut feature = String::with_capacity((w * h) as usize);
-
-    for y in 0..h {
-        for x in 0..w {
-            let pixel = gray.get_pixel(x, y);
-            if pixel[0] > 128 {
-                feature.push('1');
-            } else {
-                feature.push('0');
-            }
-        }
-    }
-    feature
-}
-
-fn calculate_similarity(s1: &str, s2: &str) -> f32 {
-    let len1 = s1.len();
-    let len2 = s2.len();
-
-    if len1 == 0 || len2 == 0 {
-        return 0.0;
-    }
-
-    let min_len = std::cmp::min(len1, len2);
-    let max_len = std::cmp::max(len1, len2);
-
-    if (max_len as f32 / min_len as f32) > 1.5 {
-        return 0.0;
-    }
-
-    let mut match_count = 0;
-    let s1_bytes = s1.as_bytes();
-    let s2_bytes = s2.as_bytes();
-
-    for i in 0..min_len {
-        if s1_bytes[i] == s2_bytes[i] {
-            match_count += 1;
-        }
-    }
-
-    match_count as f32 / max_len as f32
 }

@@ -163,3 +163,19 @@ pub struct SegmentationConfig {
     pub split_cols: bool,
     pub projection_threshold: u8,
 }
+
+/// --- 字模项 ---
+#[derive(uniffi::Record)]
+pub struct RsFontItem {
+    pub char_name: String,
+    pub binary_data: String,
+    pub width: i32,
+    pub height: i32,
+}
+
+/// --- 识别结果 ---
+#[derive(uniffi::Record)]
+pub struct RsRecognitionResult {
+    pub char_name: String,
+    pub confidence: f32,
+}

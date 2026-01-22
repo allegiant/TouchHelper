@@ -1,3 +1,4 @@
+use image::imageops::FilterType;
 use image::{DynamicImage, GenericImageView};
 use std::cmp::{max, min};
 
@@ -448,4 +449,72 @@ pub fn compute_binary_feature(img: &DynamicImage) -> String {
     }
 
     feature
+}
+
+// ==========================================
+// [新增] 统一匹配算法 (含自动缩放)
+// ==========================================
+/// 在字库中寻找最佳匹配
+/// target_img: 待识别的小图 (切片)
+/// library: 字库列表 [(字符, 特征码, 样本宽, 样本高)]
+/// min_confidence: 最低相似度阈值
+pub fn find_best_match(
+    target_img: &DynamicImage,
+    library: &[(String, String, u32, u32)],
+    min_confidence: f32,
+) -> Option<(String, f32)> {
+    let mut best_char = String::new();
+    let mut max_score = 0.0f32;
+
+    for (char_name, lib_feature, lib_w, lib_h) in library {
+        // 1. 尺寸检查：如果字库样本尺寸异常，跳过
+        if *lib_w == 0 || *lib_h == 0 {
+            continue;
+        }
+
+        // 2. 动态缩放 (Resize)
+        // 只有当目标图片尺寸与字库样本不一致时，才进行缩放
+        // 这是解决 "预览能识别，脚本不能识别" 的关键：强制统一维度
+        let feature = if target_img.width() != *lib_w || target_img.height() != *lib_h {
+            let resized = target_img.resize_exact(*lib_w, *lib_h, FilterType::Triangle);
+            compute_binary_feature(&resized)
+        } else {
+            compute_binary_feature(target_img)
+        };
+
+        // 3. 计算相似度
+        let score = calculate_similarity(&feature, lib_feature);
+
+        if score > max_score {
+            max_score = score;
+            best_char = char_name.clone();
+        }
+    }
+
+    if max_score >= min_confidence {
+        Some((best_char, max_score))
+    } else {
+        None
+    }
+}
+
+/// 简单的字符串相似度比对 (Hamming Distance 变体)
+pub fn calculate_similarity(s1: &str, s2: &str) -> f32 {
+    let len = min(s1.len(), s2.len());
+    if len == 0 {
+        return 0.0;
+    }
+
+    let s1_bytes = s1.as_bytes();
+    let s2_bytes = s2.as_bytes();
+    let mut match_count = 0;
+
+    for i in 0..len {
+        if s1_bytes[i] == s2_bytes[i] {
+            match_count += 1;
+        }
+    }
+
+    // 分母取最大长度，惩罚长度不一致的情况
+    match_count as f32 / max(s1.len(), s2.len()) as f32
 }
