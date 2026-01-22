@@ -5,6 +5,26 @@ use ts_rs::TS;
 
 // 引入所有需要导出的类型
 // 假设这些类型都在 crate::vision::types 下
+use crate::domain::vision::filters::{
+    AutoCropFilter,
+    BinarizationFilter,
+    BinarizationMode, // 注意这里还需要导出 Mode
+    BlackWhiteInvertFilter,
+    DenoiseFilter,
+    DeskewFilter,
+    ExtendCropFilter,
+    ExtractBlobsFilter,
+    ExtractContoursFilter,
+    GrayscaleFilter,
+    MorphologyFilter, // 如果有 MorphologyOp 枚举，建议也在此处引入并导出
+    MultiColorFilter,
+    PosterizationFilter,
+    RemoveLinesFilter,
+    RemoveNoiseFilter,
+    ResizeScaleFilter,
+    RotationFilter,
+    SmartLayoutFilter,
+};
 use crate::domain::vision::types::{
     ColorRule, GridParams, ImageFilterWrapper, ProcessedImage, Rect, SegmentationConfig,
     SegmentationMode,
@@ -48,8 +68,29 @@ pub fn export_ts_types(path_str: &str) {
     write_type_decl::<SegmentationMode>(&mut file);
     write_type_decl::<SegmentationConfig>(&mut file);
 
-    // ⚠️ 注意：这要求 ImageFilterWrapper 内部引用的所有 Filter (AutoCropFilter等)
-    // 也都必须实现了 TS Trait。如果你还没给 filters/*.rs 加宏，先注释掉下面这行。
+    // Binarization
+    write_type_decl::<BinarizationMode>(&mut file); // 必须导出，否则 TS 报错 "BinarizationMode not defined"
+    write_type_decl::<BinarizationFilter>(&mut file);
+
+    // 其他滤镜
+    write_type_decl::<PosterizationFilter>(&mut file);
+    write_type_decl::<MultiColorFilter>(&mut file);
+    write_type_decl::<GrayscaleFilter>(&mut file);
+    write_type_decl::<RemoveNoiseFilter>(&mut file);
+    write_type_decl::<RemoveLinesFilter>(&mut file);
+    write_type_decl::<ExtractContoursFilter>(&mut file);
+    write_type_decl::<ExtractBlobsFilter>(&mut file);
+    write_type_decl::<DeskewFilter>(&mut file);
+    write_type_decl::<RotationFilter>(&mut file);
+    write_type_decl::<BlackWhiteInvertFilter>(&mut file);
+    write_type_decl::<MorphologyFilter>(&mut file);
+    write_type_decl::<SmartLayoutFilter>(&mut file);
+    write_type_decl::<AutoCropFilter>(&mut file);
+    write_type_decl::<ResizeScaleFilter>(&mut file);
+    write_type_decl::<ExtendCropFilter>(&mut file);
+    write_type_decl::<DenoiseFilter>(&mut file);
+
+    // 最后导出 Wrapper (它引用了上面所有的 Filter)
     write_type_decl::<ImageFilterWrapper>(&mut file);
 
     println!("✅ TypeScript bindings generated successfully!");

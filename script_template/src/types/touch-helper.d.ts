@@ -18,5 +18,41 @@ export type SegmentationMode = "FixedGrid" | "Projection" | "ConnectedComp";
 
 export type SegmentationConfig = { mode: SegmentationMode, padding: number, min_width: number, min_height: number, max_width: number, max_height: number, merge_distance: number, start_x: number, start_y: number, cell_width: number, cell_height: number, col_count: number, row_count: number, col_gap: number, row_gap: number, split_rows: boolean, split_cols: boolean, projection_threshold: number, };
 
+export type BinarizationMode = "Manual" | "Adaptive" | "Otsu";
+
+export type BinarizationFilter = { mode: BinarizationMode, threshold_min: number, threshold_max: number, is_rgb_avg: boolean, sauvola_k: number, window_size: number, };
+
+export type PosterizationFilter = { mode: PosterizationMode, is_multi_value: boolean, level: number, channel1: boolean, channel2: boolean, channel3: boolean, };
+
+export type MultiColorFilter = { rules: Array<ColorRule>, is_invert: boolean, keep_original: boolean, };
+
+export type GrayscaleFilter = { mode: GrayscaleMode, };
+
+export type RemoveNoiseFilter = { min_area: number, gap: number, remove_white: boolean, };
+
+export type RemoveLinesFilter = { min_length: number, remove_horizontal: boolean, remove_vertical: boolean, };
+
+export type ExtractContoursFilter = { is_canny: boolean, canny_low: number, canny_high: number, morph_kernel: number, };
+
+export type ExtractBlobsFilter = { min_w: number, max_w: number, min_h: number, max_h: number, min_area: number, max_area: number, use_eight_connectivity: boolean, };
+
+export type DeskewFilter = { angle: number, auto: boolean, background_color: number, };
+
+export type RotationFilter = { is_auto: boolean, manual_angle: number, max_search_angle: number, precision: number, };
+
+export type BlackWhiteInvertFilter = { mode: InvertMode, };
+
+export type MorphologyFilter = { mode: MorphologyMode, kernel_size: number, iterations: number, };
+
+export type SmartLayoutFilter = { padding: number, min_width: number, min_height: number, fixed_height: number, align_center: boolean, };
+
+export type AutoCropFilter = { mode: AutoCropMode, tolerance: number, padding: number, noise_threshold: number, fixed_color_hex: string, };
+
+export type ResizeScaleFilter = { scale_factor: number, high_quality: boolean, };
+
+export type ExtendCropFilter = { x1: number, y1: number, x2: number, y2: number, };
+
+export type DenoiseFilter = { radius: number, };
+
 export type ImageFilterWrapper = { "Binarization": BinarizationFilter } | { "Posterization": PosterizationFilter } | { "MultiColor": MultiColorFilter } | { "Grayscale": GrayscaleFilter } | { "RemoveNoise": RemoveNoiseFilter } | { "RemoveLines": RemoveLinesFilter } | { "ExtractContours": ExtractContoursFilter } | { "ExtractBlobs": ExtractBlobsFilter } | { "Deskew": DeskewFilter } | { "Rotation": RotationFilter } | { "BlackWhiteInvert": BlackWhiteInvertFilter } | { "Morphology": MorphologyFilter } | { "SmartLayout": SmartLayoutFilter } | { "AutoCrop": AutoCropFilter } | { "ResizeScale": ResizeScaleFilter } | { "ExtendCrop": ExtendCropFilter } | { "Denoise": DenoiseFilter };
 
