@@ -14,7 +14,7 @@ export async function fightLoop(config: GameConfig) {
   // Step 1: GrayscaleFilter
   img.applyFilter({
     "Grayscale": {
-      "mode": "WEIGHTED",
+      "mode": "Weighted"
     }
   });
   // Step 2: BinarizationFilter

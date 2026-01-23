@@ -32,7 +32,7 @@ var GameScript = (() => {
     const img = Device.capture();
     img.applyFilter({
       "Grayscale": {
-        "mode": "WEIGHTED"
+        "mode": "Weighted"
       }
     });
     img.applyFilter({

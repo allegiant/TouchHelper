@@ -28,6 +28,8 @@ export type MultiColorFilter = { rules: Array<ColorRule>, is_invert: boolean, ke
 
 export type GrayscaleFilter = { mode: GrayscaleMode, };
 
+export type GrayscaleMode = "Weighted" | "Max" | "Min" | "Red" | "Green" | "Blue";
+
 export type RemoveNoiseFilter = { min_area: number, gap: number, remove_white: boolean, };
 
 export type RemoveLinesFilter = { min_length: number, remove_horizontal: boolean, remove_vertical: boolean, };
