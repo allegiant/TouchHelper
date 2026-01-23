@@ -10,6 +10,5 @@ public class GeneratedConstants {
     public static final String SHARED_FILE_PATH = "/data/local/tmp/screen_buffer.raw";
     public static final int SHARED_MEMORY_SIZE = 4194304;
     public static final byte SIGNAL_BYTE = (byte) 0xAA;
-    public static final String NATVIE_LIB_PATH = "org/eu/freex/app/NativeLib";
 
 }

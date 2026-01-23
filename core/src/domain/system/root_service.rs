@@ -1,3 +1,4 @@
+use anyhow::Result;
 use core::time;
 use std::{
     fs::OpenOptions,
@@ -7,6 +8,7 @@ use std::{
     thread,
 };
 
+use image::{DynamicImage, ImageBuffer, Rgba};
 use lazy_static::lazy_static;
 use log::{error, info};
 use memmap2::MmapOptions;
@@ -249,4 +251,63 @@ pub fn start_root_server_internal(jar_path: String) {
             }
         }
     });
+}
+
+// ... (保留 start_root_server_internal 函数) ...
+
+// ==========================================
+// [新增] 屏幕截图核心函数
+// ==========================================
+pub fn capture_screen() -> Result<DynamicImage> {
+    let guard = SCREEN_BUFFER.lock().unwrap();
+    let pixels = &guard.0;
+    let width = guard.1 as u32;
+    let height = guard.2 as u32;
+    // guard.3 是 stride (行字节数)
+    // guard.4 是 scale
+
+    if pixels.is_empty() || width == 0 || height == 0 {
+        return Err(anyhow::anyhow!(
+            "屏幕服务尚未就绪或画面为空 (Screen Buffer Empty)"
+        ));
+    }
+
+    // 原始数据格式是 BGRA (Blue, Green, Red, Alpha) - 参考 find_color_in_buffer 逻辑
+    // image crate 需要 RGBA
+    // 我们需要重新排列字节
+    let mut rgba_pixels = Vec::with_capacity(pixels.len());
+
+    // 遍历像素进行转换
+    // 注意：这里假设 buffer 是紧凑的。如果有 padding (stride > width * 4)，需要按行处理
+    // 为了简单且稳健，我们按行遍历
+    let stride = guard.3;
+
+    for y in 0..height {
+        let row_start = (y as usize) * stride;
+        let row_end = row_start + (width as usize) * 4;
+
+        // 确保不越界
+        if row_end > pixels.len() {
+            break;
+        }
+
+        let row_pixels = &pixels[row_start..row_end];
+
+        for chunk in row_pixels.chunks_exact(4) {
+            let b = chunk[0];
+            let g = chunk[1];
+            let r = chunk[2];
+            let a = chunk[3]; // Alpha
+
+            rgba_pixels.push(r);
+            rgba_pixels.push(g);
+            rgba_pixels.push(b);
+            rgba_pixels.push(a); // 这里的 Alpha 通常是 0xFF
+        }
+    }
+
+    let buffer = ImageBuffer::<Rgba<u8>, _>::from_raw(width, height, rgba_pixels)
+        .ok_or_else(|| anyhow::anyhow!("无法构建 ImageBuffer"))?;
+
+    Ok(DynamicImage::ImageRgba8(buffer))
 }

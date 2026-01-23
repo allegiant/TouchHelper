@@ -40,14 +40,14 @@ kotlin {
             dependencies {
                 // 如果你需要在这个层写通用的 Kotlin 逻辑
                 implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
-                implementation(libs.jna)
+                compileOnly(libs.jna)
                 implementation(libs.kotlinx.serialization.json)
             }
         }
 
         androidMain {
             dependencies {
-                implementation(libs.jna)
+                implementation("net.java.dev.jna:jna:5.13.0@aar")
             }
         }
         jvmMain {

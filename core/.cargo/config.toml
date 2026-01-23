@@ -1,0 +1,7 @@
+# 针对 64位 ARM (真机常用)
+[target.aarch64-linux-android]
+rustflags = ["-C", "link-arg=-z", "-C", "link-arg=max-page-size=16384"]
+
+# 针对 64位 x86 (模拟器常用，也是你报错的架构)
+[target.x86_64-linux-android]
+rustflags = ["-C", "link-arg=-z", "-C", "link-arg=max-page-size=16384"]
