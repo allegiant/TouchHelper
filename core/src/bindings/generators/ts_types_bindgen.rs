@@ -6,24 +6,10 @@ use ts_rs::TS;
 // 引入所有需要导出的类型
 // 假设这些类型都在 crate::vision::types 下
 use crate::domain::vision::filters::{
-    AutoCropFilter,
-    BinarizationFilter,
-    BinarizationMode, // 注意这里还需要导出 Mode
-    BlackWhiteInvertFilter,
-    DenoiseFilter,
-    DeskewFilter,
-    ExtendCropFilter,
-    ExtractBlobsFilter,
-    ExtractContoursFilter,
-    GrayscaleFilter,
-    MorphologyFilter, // 如果有 MorphologyOp 枚举，建议也在此处引入并导出
-    MultiColorFilter,
-    PosterizationFilter,
-    RemoveLinesFilter,
-    RemoveNoiseFilter,
-    ResizeScaleFilter,
-    RotationFilter,
-    SmartLayoutFilter,
+    AutoCropFilter, BinarizationFilter, BinarizationMode, BlackWhiteInvertFilter, DenoiseFilter,
+    DeskewFilter, ExtendCropFilter, ExtractBlobsFilter, ExtractContoursFilter, GrayscaleFilter,
+    GrayscaleMode, MorphologyFilter, MultiColorFilter, PosterizationFilter, RemoveLinesFilter,
+    RemoveNoiseFilter, ResizeScaleFilter, RotationFilter, SmartLayoutFilter,
 };
 use crate::domain::vision::types::{
     ColorRule, GridParams, ImageFilterWrapper, ProcessedImage, Rect, SegmentationConfig,
@@ -76,6 +62,7 @@ pub fn export_ts_types(path_str: &str) {
     write_type_decl::<PosterizationFilter>(&mut file);
     write_type_decl::<MultiColorFilter>(&mut file);
     write_type_decl::<GrayscaleFilter>(&mut file);
+    write_type_decl::<GrayscaleMode>(&mut file);
     write_type_decl::<RemoveNoiseFilter>(&mut file);
     write_type_decl::<RemoveLinesFilter>(&mut file);
     write_type_decl::<ExtractContoursFilter>(&mut file);

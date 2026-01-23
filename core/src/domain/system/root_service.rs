@@ -6,6 +6,7 @@ use std::{
     process::{Command, Stdio},
     sync::Mutex,
     thread,
+    time::{Duration, Instant},
 };
 
 use image::{DynamicImage, ImageBuffer, Rgba};
@@ -253,18 +254,15 @@ pub fn start_root_server_internal(jar_path: String) {
     });
 }
 
-// ... (保留 start_root_server_internal 函数) ...
-
 // ==========================================
-// [新增] 屏幕截图核心函数
+// 屏幕截图核心函数
 // ==========================================
 pub fn capture_screen() -> Result<DynamicImage> {
     let guard = SCREEN_BUFFER.lock().unwrap();
     let pixels = &guard.0;
     let width = guard.1 as u32;
     let height = guard.2 as u32;
-    // guard.3 是 stride (行字节数)
-    // guard.4 是 scale
+    let scale = guard.4; // 获取缩放比例 (例如 2.0 表示 Buffer 是屏幕的 1/2)
 
     if pixels.is_empty() || width == 0 || height == 0 {
         return Err(anyhow::anyhow!(
@@ -272,42 +270,60 @@ pub fn capture_screen() -> Result<DynamicImage> {
         ));
     }
 
-    // 原始数据格式是 BGRA (Blue, Green, Red, Alpha) - 参考 find_color_in_buffer 逻辑
-    // image crate 需要 RGBA
-    // 我们需要重新排列字节
+    // 1. 构建原始 ImageBuffer (BGRA -> RGBA)
     let mut rgba_pixels = Vec::with_capacity(pixels.len());
-
-    // 遍历像素进行转换
-    // 注意：这里假设 buffer 是紧凑的。如果有 padding (stride > width * 4)，需要按行处理
-    // 为了简单且稳健，我们按行遍历
     let stride = guard.3;
 
     for y in 0..height {
         let row_start = (y as usize) * stride;
         let row_end = row_start + (width as usize) * 4;
-
-        // 确保不越界
         if row_end > pixels.len() {
             break;
         }
 
         let row_pixels = &pixels[row_start..row_end];
-
         for chunk in row_pixels.chunks_exact(4) {
-            let b = chunk[0];
-            let g = chunk[1];
-            let r = chunk[2];
-            let a = chunk[3]; // Alpha
-
-            rgba_pixels.push(r);
-            rgba_pixels.push(g);
-            rgba_pixels.push(b);
-            rgba_pixels.push(a); // 这里的 Alpha 通常是 0xFF
+            rgba_pixels.push(chunk[2]); // R
+            rgba_pixels.push(chunk[1]); // G
+            rgba_pixels.push(chunk[0]); // B
+            rgba_pixels.push(chunk[3]); // A
         }
     }
 
     let buffer = ImageBuffer::<Rgba<u8>, _>::from_raw(width, height, rgba_pixels)
         .ok_or_else(|| anyhow::anyhow!("无法构建 ImageBuffer"))?;
 
-    Ok(DynamicImage::ImageRgba8(buffer))
+    let img = DynamicImage::ImageRgba8(buffer);
+
+    // 🔥 核心修复：如果存在缩放，则还原回原始尺寸
+    // 这里使用 Nearest (最近邻) 插值，速度最快且保持边缘清晰，最适合 OCR/找色
+    if (scale - 1.0).abs() > 0.001 {
+        // scale 通常表示 "屏幕是Buffer的多少倍" (例如 2.0)
+        let new_w = (width as f32 * scale) as u32;
+        let new_h = (height as f32 * scale) as u32;
+        return Ok(img.resize(new_w, new_h, image::imageops::FilterType::Nearest));
+    }
+
+    Ok(img)
+}
+
+// 🔥 新增：等待服务就绪 (阻塞直到收到第一帧或超时)
+pub fn wait_for_service_ready(timeout_ms: u64) -> bool {
+    let start = Instant::now();
+    let timeout = Duration::from_millis(timeout_ms);
+
+    loop {
+        if let Ok(guard) = SCREEN_BUFFER.lock() {
+            // 只要 buffer 不为空且宽高有效，说明已就绪
+            if !guard.0.is_empty() && guard.1 > 0 && guard.2 > 0 {
+                return true;
+            }
+        }
+
+        if start.elapsed() > timeout {
+            return false;
+        }
+
+        thread::sleep(Duration::from_millis(50)); // 每 50ms 检查一次
+    }
 }

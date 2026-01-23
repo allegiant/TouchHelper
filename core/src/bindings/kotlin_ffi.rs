@@ -13,7 +13,10 @@ use crate::{
         logger::{self, init_logger},
         types::{AccessibilityService, PlatformLogger},
     },
-    domain::input::{AccessibilityStrategy, InputController, RootStrategy},
+    domain::{
+        input::{AccessibilityStrategy, InputController, RootStrategy},
+        system::root_service,
+    },
     scripting::js_engine::{self, CURRENT_SCRIPT_TASK},
 };
 
@@ -61,13 +64,22 @@ pub fn init_desktop() {
 #[uniffi::export]
 pub fn init_service(
     use_root: bool,
+    jar_path: Option<String>, // 🔥 新增：接收 server.jar 路径
     logger: Box<dyn PlatformLogger>,
     service: Option<Box<dyn AccessibilityService>>,
 ) {
     init_logger();
+    // 🔥 核心修复：如果是 Root 模式，必须启动 Java Server
+    if let Some(path) = jar_path {
+        // 启动 Server (这会 kill 掉旧进程并启动新的)
+        root_service::start_root_server_internal(path);
+    } else {
+        logger.log("❌ Error: Root mode requires jar_path provided!".into());
+    }
 
     let ctrl: Box<dyn InputController> = if use_root {
         info!("Initializing Root Strategy");
+
         Box::new(RootStrategy)
     } else {
         info!("Initializing Accessibility Strategy");
@@ -105,6 +117,13 @@ pub fn run_js_script(script_content: String) {
             let handle = tokio::spawn(async move {
                 // 🔥 每次运行前，强制重置为非暂停状态
                 IS_PAUSED.store(false, Ordering::Relaxed);
+
+                info!("⏳ Waiting for screen service ready...");
+                if root_service::wait_for_service_ready(3000) {
+                    info!("✅ Screen service is ready!");
+                } else {
+                    info!("⚠️ Warning: Screen service wait timeout. Script might fail if it calls capture() immediately.");
+                }
 
                 match js_engine::run_script_async(script_content).await {
                     Ok(_) => info!("✅ Script finished successfully"),

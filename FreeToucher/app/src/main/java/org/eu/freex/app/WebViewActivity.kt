@@ -211,11 +211,13 @@ class WebViewActivity : ComponentActivity() {
 
     private fun initRust(isRoot: Boolean) {
         try {
+
+            val serverPath = File(filesDir, "server.jar").absolutePath
             if (isRoot) {
-                uniffi.touch_core.initService(true, AndroidLogger(), null)
+                uniffi.touch_core.initService(true, serverPath,AndroidLogger(), null)
             } else {
                 val adapter = AccessibilityImpl()
-                uniffi.touch_core.initService(false, AndroidLogger(), adapter)
+                uniffi.touch_core.initService(false, serverPath,AndroidLogger(), adapter)
             }
         } catch (e: Exception) {
             Log.e("TouchHelper", "Init Rust failed", e)
