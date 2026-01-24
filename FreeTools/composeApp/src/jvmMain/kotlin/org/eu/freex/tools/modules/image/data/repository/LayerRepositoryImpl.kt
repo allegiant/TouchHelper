@@ -4,7 +4,6 @@ import androidx.compose.ui.geometry.Rect
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.eu.freex.tools.common.utils.ImageUtils
-import org.eu.freex.tools.modules.image.domain.mapper.toRust
 import org.eu.freex.tools.modules.image.domain.model.ImageFilter
 import org.eu.freex.tools.modules.image.domain.model.SegmentationConfig
 import org.eu.freex.tools.modules.image.domain.model.SegmentationMode

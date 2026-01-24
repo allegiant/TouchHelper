@@ -32,15 +32,17 @@ export type GrayscaleMode = "weighted" | "max" | "min" | "red" | "green" | "blue
 
 export type RemoveNoiseFilter = { minArea: number, gap: number, removeWhite: boolean, };
 
-export type RemoveLinesFilter = { min_length: number, remove_horizontal: boolean, remove_vertical: boolean, };
+export type RemoveLinesFilter = { minLength: number, removeHorizontal: boolean, removeVertical: boolean, };
 
 export type ExtractContoursFilter = { isCanny: boolean, cannyLow: number, cannyHigh: number, morphKernel: number, };
 
 export type ExtractBlobsFilter = { minW: number, maxW: number, minH: number, maxH: number, minArea: number, maxArea: number, useEightConnectivity: boolean, };
 
-export type DeskewFilter = { angle: number, auto: boolean, background_color: number, };
+export type DeskewFilter = { angle: number, auto: boolean, backgroundColor: number, };
 
 export type RotationFilter = { isAuto: boolean, manualAngle: number, maxSearchAngle: number, precision: number, };
+
+export type InvertMode = "autoToWhiteBg" | "autoToBlackBg" | "force";
 
 export type BlackWhiteInvertFilter = { mode: InvertMode, };
 

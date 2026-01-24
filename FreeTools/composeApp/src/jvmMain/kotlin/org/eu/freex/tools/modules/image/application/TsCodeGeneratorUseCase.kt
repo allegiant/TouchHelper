@@ -3,11 +3,16 @@ package org.eu.freex.tools.modules.image.application
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.InternalSerializationApi
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.serializer
 import org.eu.freex.tools.common.utils.ImageUtils.binaryStringToHex
 import org.eu.freex.tools.modules.image.domain.model.ImageFilter
 import org.eu.freex.tools.modules.image.domain.model.Pipeline
 import org.eu.freex.tools.modules.image.domain.model.SegmentationConfig
+import kotlin.reflect.full.memberProperties
 
 /**
  * TypeScript 代码生成器 (基于 kotlinx.serialization)
@@ -48,7 +53,7 @@ object TsCodeGeneratorUseCase {
         sb.appendLine("import { ImageFilterWrapper, SegmentationConfig } from './types/touch-helper';")
         sb.appendLine()
         sb.appendLine("// 1. 截图")
-        sb.appendLine("const img = device.capture();")
+        sb.appendLine("const img = Device.capture();")
         sb.appendLine()
 
         // 2. 生成滤镜代码 (修复：从 steps 中提取 activeFilter)
@@ -78,7 +83,7 @@ object TsCodeGeneratorUseCase {
             sb.appendLine("// 3. 配置切割参数")
             // 直接序列化 Config 对象
             // 因为您加了 @Serializable，这里会生成标准的 JSON
-            val configJson = json.encodeToString(SegmentationConfig.serializer(), segConfig)
+            val configJson = this.convertSegmentationToWrapperJson(segConfig)
             sb.appendLine("const config: SegmentationConfig = $configJson;")
             sb.appendLine()
 
@@ -108,28 +113,104 @@ object TsCodeGeneratorUseCase {
         return sb.toString()
     }
 
-    /**
-     * 将任意 ImageFilter 转换为符合 TS 接口的 Wrapper JSON
-     * TS 接口定义: type ImageFilterWrapper = { "Binarization": BinarizationFilter } | ...
-     */
-    @InternalSerializationApi
-    private fun convertFilterToWrapperJson(filter: ImageFilter): String {
-        // 1. 获取 Filter 的类名 (例如 "BinarizationFilter")
-        val className = filter::class.simpleName ?: return "{}"
+    @OptIn(InternalSerializationApi::class)
+    private fun convertSegmentationToWrapperJson(segConfig: SegmentationConfig): String {
 
-        // 2. 推导 TS 中的 Key (例如 "Binarization")
-        // 约定：Kotlin 类名去掉 "Filter" 后缀即为 TS Key
-        val keyName = className.removeSuffix("Filter")
-
-        // 3. 序列化 Filter 内容本身
-        // 使用反射获取该实例具体的 Serializer (需要 @Serializable 支持)
-        val serializer = filter::class.serializer()
-
+        // 🔥 修改开始：转为 Rust 对象 -> 转 JSON 树 -> 递归修复枚举 -> 转字符串
+        val rustConfig = segConfig.toRust()
+        // 获取 Rust 类的序列化器
         @Suppress("UNCHECKED_CAST")
-        val filterJson = json.encodeToString(serializer as kotlinx.serialization.KSerializer<Any>, filter)
+        val configSerializer = rustConfig::class.serializer() as kotlinx.serialization.KSerializer<Any>
 
-        // 4. 手动包裹一层，构造成 Wrapper 结构
-        // 最终输出: { "Binarization": { "mode": "Otsu", ... } }
-        return """{ "$keyName": $filterJson }"""
+        // 生成 JSON 树并修复枚举 (FIXED_GRID -> fixedGrid)
+        val configJsonElement = json.encodeToJsonElement(configSerializer, rustConfig)
+        val fixedConfigJson = fixEnumsRecursively(configJsonElement)
+
+        // 输出
+        return json.encodeToString(JsonElement.serializer(), fixedConfigJson)
+    }
+
+    @InternalSerializationApi
+    private fun convertFilterToWrapperJson(uiFilter: ImageFilter): String {
+        val className = uiFilter::class.simpleName ?: return "{}"
+        // Wrapper Key: "BinarizationFilter" -> "binarization"
+        val keyName = className.removeSuffix("Filter").replaceFirstChar { it.lowercase() }
+
+        // 1. 拆包获取 Rust Struct (如 uniffi...BinarizationFilter)
+        val rustWrapper = uiFilter.toRust()
+        val rustStruct = unwrapUniffiEnum(rustWrapper) ?: return "{}"
+
+        // 2. 获取序列化器
+        @Suppress("UNCHECKED_CAST")
+        val serializer = rustStruct::class.serializer() as kotlinx.serialization.KSerializer<Any>
+
+        // 3. 🔥 [核心修改]：先转成 JSON 树，而不是直接转字符串
+        val jsonTree = json.encodeToJsonElement(serializer, rustStruct)
+
+        // 4. 🔥 [核心修改]：递归修正枚举值的格式 (MANUAL -> manual, AUTO_TO_WHITE -> autoToWhite)
+        val fixedJsonTree = fixEnumsRecursively(jsonTree)
+
+        // 5. 输出最终字符串
+        val filterJsonString = json.encodeToString(JsonElement.serializer(), fixedJsonTree)
+
+        return """{ "$keyName": $filterJsonString }"""
+    }
+
+    // ========================================================================
+    // 👇 新增的两个辅助函数，用于自动修正枚举格式
+    // ========================================================================
+
+    /**
+     * 递归遍历 JSON 树，将所有全大写的字符串值转换为 camelCase
+     */
+    private fun fixEnumsRecursively(element: JsonElement): JsonElement {
+        return when (element) {
+            is JsonObject -> JsonObject(element.mapValues { fixEnumsRecursively(it.value) })
+            is JsonArray -> JsonArray(element.map { fixEnumsRecursively(it) })
+            is JsonPrimitive -> {
+                if (element.isString) {
+                    val str = element.content
+                    // 规则：如果字符串全是 [A-Z_]，则认为是枚举，需要转换
+                    // 例如: "AUTO_TO_WHITE_BG" -> "autoToWhiteBg", "FORCE" -> "force"
+                    if (str.isNotEmpty() && str.all { it.isUpperCase() || it == '_' }) {
+                        JsonPrimitive(snakeToCamel(str))
+                    } else {
+                        element
+                    }
+                } else {
+                    element
+                }
+            }
+        }
+    }
+
+    /**
+     * 字符串转换算法: SCREAMING_SNAKE_CASE -> camelCase
+     * 例: "AUTO_TO_WHITE_BG" -> "autoToWhiteBg"
+     * 例: "FORCE" -> "force"
+     */
+    private fun snakeToCamel(input: String): String {
+        return input.lowercase().split('_').mapIndexed { index, part ->
+            if (index == 0) part else part.replaceFirstChar { it.uppercase() }
+        }.joinToString("")
+    }
+
+    /**
+     * 辅助函数：利用反射取出 UniFFI 枚举变体中的数据对象
+     * 避免了写巨大的 when (wrapper) { is Binarization -> wrapper.v1 ... }
+     */
+    private fun unwrapUniffiEnum(wrapper: Any): Any? {
+        try {
+            // 获取该对象的所有属性
+            val props = wrapper::class.memberProperties
+            // UniFFI 生成的元组枚举变体通常只有一个属性来持有数据
+            if (props.size == 1) {
+                // 取出第一个属性的值
+                return props.first().call(wrapper)
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+        return null
     }
 }

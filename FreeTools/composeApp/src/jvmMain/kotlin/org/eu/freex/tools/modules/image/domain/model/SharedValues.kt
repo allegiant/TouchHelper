@@ -6,17 +6,24 @@ import androidx.compose.ui.geometry.Size
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import org.eu.freex.tools.common.model.ColorRule
+import uniffi.touch_core.ImageFilterWrapper
+import uniffi.touch_core.InvertMode
+import uniffi.touch_core.SegmentationConfig
 
 // --- 滤镜 ---
 @Serializable
 sealed interface ImageFilter {
     val name: String
+    fun toRust(): ImageFilterWrapper
 }
 
 @Serializable
 @SerialName("ORIGIN")
 object ViewFilter : ImageFilter {
     override val name = "原图"
+    override fun toRust(): ImageFilterWrapper {
+        throw IllegalArgumentException("ViewFilter cannot be applied in Rust pipeline")
+    }
 }
 
 // 1. 定义三种模式的枚举
@@ -37,6 +44,23 @@ data class BinarizationFilter(
     val windowSize: Float = 15f,
 ) : ImageFilter {
     override val name = "二值化"
+    override fun toRust(): ImageFilterWrapper {
+
+        val mode = when (this.mode) {
+            BinarizationMode.MANUAL -> uniffi.touch_core.BinarizationMode.MANUAL
+            BinarizationMode.ADAPTIVE -> uniffi.touch_core.BinarizationMode.ADAPTIVE
+            BinarizationMode.OTSU -> uniffi.touch_core.BinarizationMode.OTSU
+        }
+        val f = uniffi.touch_core.BinarizationFilter(
+            mode,
+            min.toInt(),
+            max.toInt(),
+            isRgbAvg,
+            sauvolaK.toDouble(),
+            windowSize.toInt()
+        )
+        return ImageFilterWrapper.Binarization(f)
+    }
 }
 
 // [新增] 色彩空间枚举
@@ -59,6 +83,16 @@ data class PosterizationFilter(
     val channel3: Boolean = false  // 原 extractB
 ) : ImageFilter {
     override val name = "色调分离"
+    override fun toRust(): ImageFilterWrapper {
+        val mode = when (this.mode) {
+            PosterizationMode.RGB -> uniffi.touch_core.PosterizationMode.RGB
+            PosterizationMode.HSV -> uniffi.touch_core.PosterizationMode.HSV
+        }
+        val f = uniffi.touch_core.PosterizationFilter(
+            mode, isMultiValue, level, channel1, channel2, channel3
+        )
+        return ImageFilterWrapper.Posterization(f)
+    }
 }
 
 
@@ -70,6 +104,13 @@ data class MultiColorFilter(
     val keepOriginal: Boolean = false
 ) : ImageFilter {
     override val name = "颜色选取"
+    override fun toRust(): ImageFilterWrapper {
+        val rustRules = this.rules.map { rule ->
+            uniffi.touch_core.ColorRule(rule.id, rule.targetHex, rule.biasHex, rule.isEnabled)
+        }
+        val f = uniffi.touch_core.MultiColorFilter(rustRules, isInvert, keepOriginal)
+        return ImageFilterWrapper.MultiColor(f)
+    }
 }
 
 // 1. 新增枚举：对应 Rust 里的逻辑
@@ -90,12 +131,27 @@ data class GrayscaleFilter(
     val mode: GrayscaleMode = GrayscaleMode.WEIGHTED
 ) : ImageFilter {
     override val name = "灰度化"
+    override fun toRust(): ImageFilterWrapper {
+        val mode = when (this.mode) {
+            GrayscaleMode.WEIGHTED -> uniffi.touch_core.GrayscaleMode.WEIGHTED
+            GrayscaleMode.MAX -> uniffi.touch_core.GrayscaleMode.MAX
+            GrayscaleMode.MIN -> uniffi.touch_core.GrayscaleMode.MIN
+            GrayscaleMode.RED -> uniffi.touch_core.GrayscaleMode.RED
+            GrayscaleMode.GREEN -> uniffi.touch_core.GrayscaleMode.GREEN
+            GrayscaleMode.BLUE -> uniffi.touch_core.GrayscaleMode.BLUE
+        }
+        return ImageFilterWrapper.Grayscale(uniffi.touch_core.GrayscaleFilter(mode))
+    }
 }
 
 @Serializable
 @SerialName("DENOISE")
 data class DenoiseFilter(val radius: UInt = 1u) : ImageFilter {
     override val name = "去噪"
+    override fun toRust(): ImageFilterWrapper {
+        val f = uniffi.touch_core.DenoiseFilter(radius)
+        return ImageFilterWrapper.Denoise(f)
+    }
 }
 
 @Serializable
@@ -106,15 +162,24 @@ data class RemoveNoiseFilter(
     val removeWhite: Boolean = true // 默认去除白色
 ) : ImageFilter {
     override val name = "消除杂点"
+    override fun toRust(): ImageFilterWrapper {
+        val f = uniffi.touch_core.RemoveNoiseFilter(minArea, gap, removeWhite)
+        return ImageFilterWrapper.RemoveNoise(f)
+    }
 }
+
 @Serializable
 @SerialName("REMOVE_LINES")
 data class RemoveLinesFilter(
     val minLength: Int = 30, // 线条的最小长度 (核的大小)。长度小于此值的线条不会被去除
     val removeHorizontal: Boolean = true, // 是否去除横线
     val removeVertical: Boolean = false, // 是否去除竖线
-): ImageFilter {
+) : ImageFilter {
     override val name = "去直线"
+    override fun toRust(): ImageFilterWrapper {
+        val f = uniffi.touch_core.RemoveLinesFilter(minLength, removeHorizontal, removeVertical)
+        return ImageFilterWrapper.RemoveLines(f)
+    }
 }
 
 @Serializable
@@ -129,6 +194,12 @@ data class ExtractContoursFilter(
     val morphKernel: Int = 1
 ) : ImageFilter {
     override val name: String = "提取轮廓"
+    override fun toRust():  ImageFilterWrapper {
+        val f = uniffi.touch_core.ExtractContoursFilter(
+            isCanny, cannyLow, cannyHigh, morphKernel.toUByte()
+        )
+        return ImageFilterWrapper.ExtractContours(f)
+    }
 }
 
 @Serializable
@@ -148,6 +219,13 @@ data class ExtractBlobsFilter(
     val useEightConnectivity: Boolean = true // [新增字段] 默认为 true (8向)
 ) : ImageFilter {
     override val name = "提取色块"
+    override fun toRust(): ImageFilterWrapper {
+        val f = uniffi.touch_core.ExtractBlobsFilter(
+            minWidth.toUInt(), maxWidth.toUInt(), minHeight.toUInt(), maxHeight.toUInt(),
+            minArea.toUInt(), maxArea.toUInt(), useEightConnectivity
+        )
+        return ImageFilterWrapper.ExtractBlobs(f)
+    }
 }
 
 @Serializable
@@ -161,6 +239,11 @@ data class DeskewFilter(
     val splitBackgroundColor: Boolean = false
 ) : ImageFilter {
     override val name = "倾斜矫正"
+    override fun toRust():  ImageFilterWrapper {
+        val f = uniffi.touch_core.DeskewFilter(angle, isAuto, bgColor.toUByte())
+        return ImageFilterWrapper.Deskew(f)
+    }
+
     // 辅助属性，用于 UI 转换背景色 bool 到 int
     val bgColor: Int get() = if (splitBackgroundColor) 255 else 0
 }
@@ -176,6 +259,12 @@ data class RotationFilter(
     val precision: Float = 0.5f
 ) : ImageFilter {
     override val name = "旋转纠正"
+    override fun toRust(): ImageFilterWrapper {
+        val f = uniffi.touch_core.RotationFilter(
+            isAuto, angle.toDouble(), maxSearchRange.toDouble(), precision.toDouble()
+        )
+        return ImageFilterWrapper.Rotation(f)
+    }
 }
 
 @Serializable
@@ -185,6 +274,15 @@ data class BlackWhiteInvertFilter(
     val mode: Int = 0
 ) : ImageFilter {
     override val name = "黑白反转"
+    override fun toRust(): ImageFilterWrapper {
+        val rustMode = when (mode) {
+            0 -> InvertMode.AUTO_TO_WHITE_BG
+            1 -> InvertMode.AUTO_TO_BLACK_BG
+            else -> InvertMode.FORCE
+        }
+        val f = uniffi.touch_core.BlackWhiteInvertFilter(rustMode)
+        return ImageFilterWrapper.BlackWhiteInvert(f)
+    }
 }
 
 // 1. 新增枚举：对应 Rust 里的逻辑
@@ -203,8 +301,19 @@ data class MorphologyFilter(
     val mode: MorphologyMode = MorphologyMode.DILATE,
     val kernelSize: Int = 1, // 核大小 (半径)，实际大小 = 2*r + 1
     val iterations: Int = 1 // 迭代次数
-): ImageFilter {
+) : ImageFilter {
     override val name = "形态学"
+    override fun toRust():  ImageFilterWrapper {
+        val mode = when (this.mode) {
+            MorphologyMode.DILATE -> uniffi.touch_core.MorphologyMode.DILATE
+            MorphologyMode.ERODE -> uniffi.touch_core.MorphologyMode.ERODE
+            MorphologyMode.OPEN -> uniffi.touch_core.MorphologyMode.OPEN
+            MorphologyMode.CLOSE -> uniffi.touch_core.MorphologyMode.CLOSE
+            MorphologyMode.GRADIENT -> uniffi.touch_core.MorphologyMode.GRADIENT
+        }
+        val f = uniffi.touch_core.MorphologyFilter(mode, kernelSize, iterations)
+        return ImageFilterWrapper.Morphology(f)
+    }
 }
 
 @Serializable
@@ -217,13 +326,19 @@ data class SmartLayoutFilter(
     val alignCenter: Boolean = true
 ) : ImageFilter {
     override val name = "智能重排"
+    override fun toRust(): ImageFilterWrapper {
+        val f = uniffi.touch_core.SmartLayoutFilter(padding, minWidth, minHeight, fixedHeight, alignCenter)
+        return ImageFilterWrapper.SmartLayout(f)
+    }
 }
+
 @Serializable
 @SerialName("AutoCropMode")
 enum class AutoCropMode {
     AUTO_CORNERS, // 自动取角落
     FIXED_COLOR   // 固定颜色
 }
+
 @Serializable
 @SerialName("AutoCropFilter")
 data class AutoCropFilter(
@@ -234,6 +349,14 @@ data class AutoCropFilter(
     val fixedColorHex: String = "#000000" // 如果是手动模式
 ) : ImageFilter {
     override val name = "智能裁切"
+    override fun toRust():  ImageFilterWrapper {
+        val mode = when (this.mode) {
+            AutoCropMode.AUTO_CORNERS -> uniffi.touch_core.AutoCropMode.AUTO_CORNERS
+            AutoCropMode.FIXED_COLOR -> uniffi.touch_core.AutoCropMode.FIXED_COLOR
+        }
+        val f = uniffi.touch_core.AutoCropFilter(mode, tolerance, padding, noiseThreshold, fixedColorHex)
+        return ImageFilterWrapper.AutoCrop(f)
+    }
 }
 
 
@@ -247,6 +370,10 @@ data class ResizeScaleFilter(
     val highQuality: Boolean = true, // true=Lanczos3(平滑), false=Nearest(硬边)
 ) : ImageFilter {
     override val name = "智能缩放"
+    override fun toRust(): ImageFilterWrapper {
+        val f = uniffi.touch_core.ResizeScaleFilter(scaleFactor, highQuality)
+        return ImageFilterWrapper.ResizeScale(f)
+    }
 }
 
 /**
@@ -254,7 +381,7 @@ data class ResizeScaleFilter(
  */
 @Serializable
 @SerialName("ExtendCropFilter")
-data class ExtendCropFilter (
+data class ExtendCropFilter(
     val x1: Int = -1,
     val y1: Int = -1,
     val x2: Int = -1,
@@ -263,6 +390,10 @@ data class ExtendCropFilter (
     val status: Int = 0
 ) : ImageFilter {
     override val name: String = "延伸裁剪"
+    override fun toRust(): ImageFilterWrapper {
+        val f = uniffi.touch_core.ExtendCropFilter(x1, y1, x2, y2)
+        return ImageFilterWrapper.ExtendCrop(f)
+    }
 
     // 辅助属性：判断是否已经是一个有效的矩形
     val isValid: Boolean get() = status == 2 && x1 != -1 && x2 != -1
@@ -285,6 +416,7 @@ data class SegmentationRect(
     val width: UInt,
     val height: UInt
 )
+
 fun SegmentationRect.toComposeRect(): Rect {
     return Rect(Offset(this.left.toFloat(), this.top.toFloat()), Size(this.width.toFloat(), this.height.toFloat()))
 }
@@ -293,7 +425,16 @@ fun SegmentationRect.toComposeRect(): Rect {
 enum class SegmentationMode {
     FIXED_GRID,      // 固定网格
     PROJECTION,      // 投影切割
-    CONNECTED_COMP   // 连通区域
+    CONNECTED_COMP;   // 连通区域
+
+    // 🔥 枚举转换
+    fun toRust(): uniffi.touch_core.SegmentationMode {
+        return when (this) {
+            FIXED_GRID -> uniffi.touch_core.SegmentationMode.FIXED_GRID
+            PROJECTION -> uniffi.touch_core.SegmentationMode.PROJECTION
+            CONNECTED_COMP -> uniffi.touch_core.SegmentationMode.CONNECTED_COMP
+        }
+    }
 }
 
 @Serializable
@@ -323,5 +464,23 @@ data class SegmentationConfig(
     val splitRows: Boolean = true,
     val splitCols: Boolean = true,
     val projectionThreshold: UByte = 128u
-)
+) {
+    fun toRust(): uniffi.touch_core.SegmentationConfig {
+
+        return uniffi.touch_core.SegmentationConfig(
+            this.mode.toRust(),
+            padding,
+            minWidth, minHeight,
+            maxWidth, maxHeight,
+            mergeDistance,
+            startX, startY,
+            cellWidth, cellHeight,
+            colCount, rowCount,
+            colGap, rowGap,
+            splitRows, splitCols,
+            projectionThreshold
+        )
+    }
+
+}
 

@@ -8,8 +8,8 @@ use ts_rs::TS;
 use crate::domain::vision::filters::{
     AutoCropFilter, BinarizationFilter, BinarizationMode, BlackWhiteInvertFilter, DenoiseFilter,
     DeskewFilter, ExtendCropFilter, ExtractBlobsFilter, ExtractContoursFilter, GrayscaleFilter,
-    GrayscaleMode, MorphologyFilter, MultiColorFilter, PosterizationFilter, RemoveLinesFilter,
-    RemoveNoiseFilter, ResizeScaleFilter, RotationFilter, SmartLayoutFilter,
+    GrayscaleMode, InvertMode, MorphologyFilter, MultiColorFilter, PosterizationFilter,
+    RemoveLinesFilter, RemoveNoiseFilter, ResizeScaleFilter, RotationFilter, SmartLayoutFilter,
 };
 use crate::domain::vision::types::{
     ColorRule, GridParams, ImageFilterWrapper, ProcessedImage, Rect, SegmentationConfig,
@@ -69,6 +69,7 @@ pub fn export_ts_types(path_str: &str) {
     write_type_decl::<ExtractBlobsFilter>(&mut file);
     write_type_decl::<DeskewFilter>(&mut file);
     write_type_decl::<RotationFilter>(&mut file);
+    write_type_decl::<InvertMode>(&mut file);
     write_type_decl::<BlackWhiteInvertFilter>(&mut file);
     write_type_decl::<MorphologyFilter>(&mut file);
     write_type_decl::<SmartLayoutFilter>(&mut file);
