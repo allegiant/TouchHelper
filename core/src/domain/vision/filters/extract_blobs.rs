@@ -16,6 +16,8 @@ use super::ImageFilter;
 /// 3. 根据传入的范围 (min~max) 进行筛选。
 /// 4. 只保留符合条件的 Blob，其余擦除（变黑）。
 #[derive(Debug, Clone, Serialize, Deserialize, uniffi::Record, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
 pub struct ExtractBlobsFilter {
     pub min_w: u32,
     pub max_w: u32,

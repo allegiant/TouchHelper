@@ -6,6 +6,8 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, uniffi::Enum, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
 pub enum BinarizationMode {
     Manual,
     Adaptive,
@@ -13,6 +15,8 @@ pub enum BinarizationMode {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, uniffi::Record, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
 pub struct BinarizationFilter {
     pub mode: BinarizationMode,
     pub threshold_min: i32,

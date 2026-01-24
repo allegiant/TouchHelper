@@ -6,6 +6,8 @@ use super::ImageFilter;
 
 // 延伸裁剪滤镜参数
 #[derive(Debug, Clone, Serialize, Deserialize, uniffi::Record, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
 pub struct ExtendCropFilter {
     pub x1: i32,
     pub y1: i32,

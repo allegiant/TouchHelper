@@ -85,3 +85,29 @@ android {
     }
 }
 
+// 🔥 新增：彻底禁用所有 Lint 任务，加速编译
+tasks.configureEach {
+    val taskName = name.lowercase()
+    // 只要任务名包含 "lint"，就直接禁用
+    if (taskName.contains("lint")) {
+        enabled = false
+    }
+}
+
+tasks.configureEach {
+    // 拦截 Gobley 插件生成的 Cargo 编译任务 (任务名通常包含 "cargoBuild")
+    if (name.contains("cargoBuild", ignoreCase = true)) {
+        // 1. 监听 Rust 源码目录
+        inputs.dir(file("../../core/src"))
+
+        // 2. 监听 Cargo 配置文件
+        inputs.file(file("../../core/Cargo.toml"))
+        inputs.file(file("../../core/Cargo.lock"))
+
+        // 3. (可选) 如果你有其他依赖 (例如 SQL 文件或额外的 crate)，也可以加在这里
+        // inputs.dir(file("../../core/migrations"))
+
+        // 打印日志方便调试 (可选)
+        // doFirst { println("检测到 Rust 变动，开始增量编译: $name") }
+    }
+}

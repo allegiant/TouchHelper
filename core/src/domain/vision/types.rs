@@ -16,6 +16,8 @@ use super::filters::{
 // 统一滤镜包装器 (Union Wrapper)
 /// 这允许我们在单次调用中传递任意类型的滤镜
 #[derive(Debug, Clone, Serialize, Deserialize, uniffi::Enum, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
 pub enum ImageFilterWrapper {
     Binarization(BinarizationFilter),
     Posterization(PosterizationFilter),
@@ -66,6 +68,8 @@ impl ImageFilterWrapper {
 // ==========================================
 //
 #[derive(Debug, Clone, Serialize, Deserialize, uniffi::Record, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
 pub struct ColorRule {
     pub id: i64,
     pub target_hex: String,
@@ -76,7 +80,9 @@ pub struct ColorRule {
 // ==========================================
 // 2. Rect (纯数据 -> Record)
 // ==========================================
-#[derive(Debug, Clone, Copy, uniffi::Record, TS)] // <--- 使用 Record
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, uniffi::Record, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")] // <--- 使用 Record
 pub struct Rect {
     pub left: i32,
     pub top: i32,
@@ -87,7 +93,9 @@ pub struct Rect {
 // ==========================================
 // 3. GridParams (纯数据 -> Record)
 // ==========================================
-#[derive(Debug, Clone, Copy, uniffi::Record, TS)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, uniffi::Record, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
 pub struct GridParams {
     pub x: i32,
     pub y: i32,
@@ -101,6 +109,8 @@ pub struct GridParams {
 
 // 1. 新增：处理后的图像结果（包含新尺寸）
 #[derive(Debug, Clone, Serialize, Deserialize, uniffi::Record, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
 pub struct ProcessedImage {
     pub width: i32,
     pub height: i32,
@@ -122,6 +132,8 @@ pub enum VisionError {
 
 // [新增] 切割模式枚举
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, uniffi::Enum, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
 pub enum SegmentationMode {
     FixedGrid,     // 固定网格
     Projection,    // 投影切割 (XY轴扫描)
@@ -130,6 +142,8 @@ pub enum SegmentationMode {
 
 // 统一的切割参数配置
 #[derive(Debug, Clone, Serialize, Deserialize, uniffi::Record, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
 pub struct SegmentationConfig {
     pub mode: SegmentationMode,
 

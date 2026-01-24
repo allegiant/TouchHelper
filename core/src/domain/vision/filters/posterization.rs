@@ -7,12 +7,16 @@ use image::{DynamicImage, GrayImage, Luma, Rgba, RgbaImage};
 
 // [新增] 模式枚举
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, uniffi::Enum, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
 pub enum PosterizationMode {
     Rgb,
     Hsv,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, uniffi::Record, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
 pub struct PosterizationFilter {
     pub mode: PosterizationMode,
     pub is_multi_value: bool,

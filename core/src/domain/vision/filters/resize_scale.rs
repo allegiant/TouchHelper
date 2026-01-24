@@ -6,6 +6,8 @@ use super::ImageFilter;
 
 ///// [新增] 按倍率缩放 (Resize by Scale)
 #[derive(Debug, Clone, Serialize, Deserialize, uniffi::Record, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
 pub struct ResizeScaleFilter {
     pub scale_factor: f32,  // 缩放倍率 (例如 0.5, 2.0)
     pub high_quality: bool, // true=Lanczos3(平滑), false=Nearest(硬边)

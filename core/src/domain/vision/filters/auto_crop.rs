@@ -11,6 +11,8 @@ use super::ImageFilter;
 
 // [新增] 自动裁剪模式
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, uniffi::Enum, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
 pub enum AutoCropMode {
     AutoCorners, // 自动探测角落
     FixedColor,  // 固定颜色
@@ -18,6 +20,8 @@ pub enum AutoCropMode {
 
 // [新增] 自动裁剪滤镜参数
 #[derive(Debug, Clone, Serialize, Deserialize, uniffi::Record, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
 pub struct AutoCropFilter {
     pub mode: AutoCropMode,
     pub tolerance: f32,          // 对应 Kotlin 的 Float

@@ -8,6 +8,8 @@ use ts_rs::TS;
 
 /// 智能重排滤镜参数
 #[derive(Debug, Clone, Serialize, Deserialize, uniffi::Record, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
 pub struct SmartLayoutFilter {
     pub padding: i32,
     pub min_width: i32,

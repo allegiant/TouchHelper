@@ -7,6 +7,8 @@ use super::ImageFilter;
 
 /// 去除直线滤镜结构
 #[derive(Debug, Clone, Serialize, Deserialize, uniffi::Record, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
 pub struct RemoveLinesFilter {
     pub min_length: i32, // 线条的最小长度 (核的大小)。长度小于此值的线条不会被去除
     pub remove_horizontal: bool, // 是否去除横线

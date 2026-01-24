@@ -6,6 +6,8 @@ use ts_rs::TS;
 
 // [新增] 定义灰度模式枚举
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, uniffi::Enum, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
 pub enum GrayscaleMode {
     Weighted, // 标准加权平均 (默认)
     Max,      // 最大值法 (去色/高亮) - 适合白底黑字 OCR
@@ -16,6 +18,8 @@ pub enum GrayscaleMode {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, uniffi::Record, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
 pub struct GrayscaleFilter {
     pub mode: GrayscaleMode,
 }

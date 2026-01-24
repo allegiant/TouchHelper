@@ -15,6 +15,8 @@ use super::ImageFilter;
 /// - max_search_angle: 自动模式下的最大搜索范围 (例如 30.0 度)
 /// - precision: 自动模式下的搜索步长 (例如 0.5 度)
 #[derive(Debug, Clone, Serialize, Deserialize, uniffi::Record, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
 pub struct RotationFilter {
     pub is_auto: bool,
     pub manual_angle: f64,     // 手动模式角度

@@ -11,6 +11,8 @@ use super::ImageFilter;
 
 // 清除杂点滤镜结构
 #[derive(Debug, Clone, Serialize, Deserialize, uniffi::Record, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
 pub struct RemoveNoiseFilter {
     pub min_area: i32,      // 对应 "阈值范围" (0~8)
     pub gap: i32,           // 对应 "间隙数值"

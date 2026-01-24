@@ -13,6 +13,8 @@ use super::ImageFilter;
 /// * `auto`: 是否自动检测倾斜角。
 /// * `background_color`: 旋转后空白区域的填充色 (通常为黑色 0 或白色 255)
 #[derive(Debug, Clone, Serialize, Deserialize, uniffi::Record, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
 pub struct DeskewFilter {
     pub angle: f32, // 输入的角度 (Degrees)
     pub auto: bool,

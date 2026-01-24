@@ -8,6 +8,8 @@ use ts_rs::TS;
 use super::ImageFilter;
 
 #[derive(Debug, Clone, Serialize, Deserialize, uniffi::Record, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
 pub struct ExtractContoursFilter {
     pub is_canny: bool,
     // Canny 参数

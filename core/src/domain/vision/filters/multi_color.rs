@@ -9,6 +9,8 @@ use ts_rs::TS;
 // 4. MultiColorFilter(颜色选取)
 // ==========================================
 #[derive(Debug, Clone, Serialize, Deserialize, uniffi::Record, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
 pub struct MultiColorFilter {
     // 颜色规则列表
     pub rules: Vec<ColorRule>,

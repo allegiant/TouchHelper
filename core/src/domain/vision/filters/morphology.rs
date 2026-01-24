@@ -9,6 +9,8 @@ use super::ImageFilter;
 
 // [新增] 形态学操作模式
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, uniffi::Enum, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
 pub enum MorphologyMode {
     Dilate,   // 膨胀 (扩张白色)
     Erode,    // 腐蚀 (收缩白色)
@@ -21,6 +23,8 @@ pub enum MorphologyMode {
 /// radius: 核半径 (1 => 3x3, 2 => 5x5)
 /// iterations: 执行次数
 #[derive(Debug, Clone, Serialize, Deserialize, uniffi::Record, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
 pub struct MorphologyFilter {
     pub mode: MorphologyMode,
     pub kernel_size: i32, // 核大小 (半径)，实际大小 = 2*r + 1

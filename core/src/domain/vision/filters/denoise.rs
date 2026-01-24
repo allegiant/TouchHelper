@@ -9,6 +9,8 @@ use super::ImageFilter;
 /// 5. 去噪 (中值滤波)
 /// radius: 窗口半径，通常 1 或 2
 #[derive(Debug, Clone, Serialize, Deserialize, uniffi::Record, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
 pub struct DenoiseFilter {
     pub radius: u32,
 }
