@@ -80,6 +80,8 @@ object AutoCropRenderer : FilterRenderer {
                     )
                     // 更新 Filter
                     onFilterChangeState(currentFilterState.copy(fixedColorHex = hex))
+                    // [新增] 关键一步：成功取色后，告诉 ViewModel 退出取色模式
+                    editorViewModel.setPickingType(PickingType.NONE)
                     // 重置标记
                     isPickingColor = false
                 }

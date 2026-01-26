@@ -69,6 +69,7 @@ fun InspectorPanel(
                     WorkbenchTab.SEGMENTATION -> {
                         SegmentationTabContent()
                     }
+                    else -> {}
                 }
             }
         }

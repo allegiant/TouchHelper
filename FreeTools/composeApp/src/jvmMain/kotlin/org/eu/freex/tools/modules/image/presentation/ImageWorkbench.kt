@@ -20,6 +20,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.pointer.PointerIcon
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
 import org.koin.compose.koinInject
 
@@ -36,26 +39,50 @@ import org.eu.freex.tools.modules.image.presentation.viewmodel.MainViewModel
 import org.eu.freex.tools.modules.image.presentation.viewmodel.ProjectListViewModel
 import org.eu.freex.tools.common.components.LoadingOverlay // 假设你有这个通用组件
 import org.eu.freex.tools.common.components.ToastOverlay   // 假设你有这个通用组件
+import org.eu.freex.tools.common.model.PickingType
 import org.eu.freex.tools.common.model.WorkbenchTab
+import org.eu.freex.tools.modules.image.presentation.features.segmentation.components.drawSegmentationOverlay
 import org.eu.freex.tools.modules.image.presentation.features.tools.dialogs.CodeGenDialog
+import org.eu.freex.tools.modules.image.presentation.viewmodel.SegmentationViewModel
+import java.awt.Cursor
 
+@JvmOverloads
 @Composable
 fun ImageWorkbench(
     mainViewModel: MainViewModel = koinInject(),
     projectListViewModel: ProjectListViewModel = koinInject(),
-    editorViewModel: EditorCanvasViewModel = koinInject()
+    editorViewModel: EditorCanvasViewModel = koinInject(),
+    segmentationViewModel: SegmentationViewModel = koinInject()
 ) {
+
     // 1. 监听全局状态
     val mainState by mainViewModel.uiState.collectAsState()
     val editorState by editorViewModel.uiState.collectAsState()
+    val segmentationState by segmentationViewModel.uiState.collectAsState()
 
-    // [新增] 状态管理：控制生成代码弹窗的显示与内容
+    // 状态管理：控制生成代码弹窗的显示与内容
     var showCodeDialog by remember { mutableStateOf(false) }
     var generatedCode by remember { mutableStateOf("") }
 
     // 2. [关键] 状态提升：管理当前的 Tab (Filter vs Segmentation)
     // 必须放在这里，因为 Canvas 需要知道是否显示切割覆盖层，而 Inspector 需要切换它
     var currentTab by remember { mutableStateOf(WorkbenchTab.FILTER) }
+    // [新增] 文本测量器 (用于 Overlay 中绘制文字)
+    val textMeasurer = rememberTextMeasurer()
+
+    // [新增] 根据 PickingType 计算光标样式
+    val cursorIcon = remember(editorState.pickingType, currentTab) {
+        if (editorState.pickingType != PickingType.NONE) {
+            // 取点/取色模式：十字准星
+            PointerIcon(Cursor.getPredefinedCursor(Cursor.CROSSHAIR_CURSOR))
+        } else if (currentTab == WorkbenchTab.SEGMENTATION) {
+            // 切割模式：手型 (暗示可点击)
+            PointerIcon(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR))
+        } else {
+            // 默认
+            PointerIcon.Default
+        }
+    }
 
     Box(modifier = Modifier.fillMaxSize()) {
         Row(modifier = Modifier.fillMaxSize()) {
@@ -68,7 +95,6 @@ fun ImageWorkbench(
                 ) {
                     Text("屏幕截图")
                 }
-                // [新增] 生成脚本按钮
                 Button(
                     onClick = {
                         // 1. 调用 VM 生成代码
@@ -92,9 +118,80 @@ fun ImageWorkbench(
                 // 1. 画布
                 EditorCanvasPanel(
                     modifier = Modifier.weight(1f),
-                    // 仅当 Tab 为 切割识别 时，显示红色覆盖层
-                    showSegmentationOverlay = (currentTab == WorkbenchTab.SEGMENTATION)
-                    // 其他交互事件已在 EditorCanvasPanel 内部直接对接 ViewModel
+                    displayImage = editorState.displayImage,
+                    cursorIcon = cursorIcon,
+                    showMagnifier = (currentTab == WorkbenchTab.FEATURE) ||
+                            (editorState.pickingType != PickingType.NONE), // 取点模式下也强制开启
+                    onDrawOverlay = {
+                        when (currentTab) {
+                            WorkbenchTab.SEGMENTATION -> {
+                                drawSegmentationOverlay(
+                                    project = segmentationState.project,
+                                    textMeasurer = textMeasurer,
+                                    selectedIndex = segmentationState.selectedIndex
+                                )
+                            }
+                            WorkbenchTab.FEATURE -> {
+                                // TODO: drawFeaturePickerOverlay
+                            }
+                            else -> { }
+                        }
+                    },
+
+                    // [关键修复]
+                    onCanvasTap = { event -> // event 是 CanvasTapEvent
+                        // 只有在图片范围内点击才有效
+                        if (event.isToBounds) {
+                            if (editorState.pickingType != PickingType.NONE) {
+                                // 处于取色/取点模式，优先处理
+                                editorViewModel.onCanvasClick(
+                                    Offset(event.pixelPos.x.toFloat(), event.pixelPos.y.toFloat()),
+                                    event.color
+                                )
+                                // 拦截事件，不让下面的 Tab 处理
+                                return@EditorCanvasPanel
+                            }
+                            when (currentTab) {
+                                // 1. 滤镜模式 (修复颜色选取)
+                                WorkbenchTab.FILTER -> {
+                                    // 调用 ViewModel 的通用点击处理 (用于二值化取色等)
+                                    // 这里的 Offset 我们传 ScreenPos 还是 PixelPos?
+                                    // EditorCanvasViewModel.onCanvasClick 预期的是 Pixel 还是 Screen?
+                                    // 看了下源码，它里面用 offset.x.toInt()，如果是像素操作，应该传 PixelPos。
+                                    // 我们之前传的是 ScreenPos，这其实是错的，因为 ViewModel 里不知道 scale。
+                                    // 所以这里修正为传 PixelPos 对应的 Offset。
+                                    editorViewModel.onCanvasClick(
+                                        Offset(event.pixelPos.x.toFloat(), event.pixelPos.y.toFloat()),
+                                        event.color
+                                    )
+                                }
+
+                                // 2. 抓抓模式 (预埋逻辑)
+                                WorkbenchTab.FEATURE -> {
+                                    // 抓抓模式也需要调用这个，因为我们要加点
+                                    editorViewModel.onCanvasClick(
+                                        Offset(event.pixelPos.x.toFloat(), event.pixelPos.y.toFloat()),
+                                        event.color
+                                    )
+                                }
+
+                                // 3. 切割模式
+                                WorkbenchTab.SEGMENTATION -> {
+                                    segmentationViewModel.onCanvasTap(event.pixelPos.x, event.pixelPos.y)
+                                }
+                            }
+                        }
+                    },
+                    onCanvasDoubleTap = { event ->
+                        if (event.isToBounds && currentTab == WorkbenchTab.SEGMENTATION) {
+                            // 1. 先选中该位置的框
+                            segmentationViewModel.onCanvasTap(event.pixelPos.x, event.pixelPos.y)
+                            // 2. 只有选中了有效框，才弹窗
+                            // 我们可以在 ViewModel 里加一个 checkSelectionAndShowDialog，或者简单地直接调
+                            segmentationViewModel.showLabelDialog()
+                        }
+                    }
+
                 )
 
                 // 2. 流水线

@@ -19,12 +19,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import org.koin.compose.koinInject // [新增]
+import org.koin.compose.koinInject
 import org.eu.freex.tools.common.model.ColorRule
 import org.eu.freex.tools.common.model.PickingType
 import org.eu.freex.tools.modules.image.domain.model.ImageFilter
 import org.eu.freex.tools.modules.image.domain.model.MultiColorFilter
-// [新增] 引入 ViewModel 和 PickingType
 import org.eu.freex.tools.modules.image.presentation.viewmodel.EditorCanvasViewModel
 
 object MultiColorRenderer : FilterRenderer {
@@ -33,22 +32,19 @@ object MultiColorRenderer : FilterRenderer {
     override fun Content(filter: ImageFilter, onFilterChange: (ImageFilter) -> Unit) {
         val currentFilter = filter as? MultiColorFilter ?: return
 
-        // [修改] 注入 ViewModel，替代 LocalImageViewModel
         val editorViewModel: EditorCanvasViewModel = koinInject()
 
-        // [新增] 记录当前正在取色的规则索引
+        // 记录当前正在取色的规则索引
         var activePickingIndex by remember { mutableStateOf<Int?>(null) }
 
-        // [新增] 保持最新状态引用，供 LaunchedEffect 使用
         val currentFilterState by rememberUpdatedState(currentFilter)
         val onFilterChangeState by rememberUpdatedState(onFilterChange)
 
-        // [新增] 监听取色结果
+        // [核心修复] 监听取色结果
         LaunchedEffect(Unit) {
             editorViewModel.pickEvent.collect { event ->
                 val index = activePickingIndex
                 if (event is Color && index != null) {
-                    // 拿到颜色，更新对应规则
                     val rules = currentFilterState.rules
                     if (index in rules.indices) {
                         val pickedColor = event
@@ -64,8 +60,11 @@ object MultiColorRenderer : FilterRenderer {
 
                         // 提交更新
                         onFilterChangeState(currentFilterState.copy(rules = newRules))
+
+                        // [新增] 关键一步：成功取色后，告诉 ViewModel 退出取色模式
+                        editorViewModel.setPickingType(PickingType.NONE)
                     }
-                    // 重置取色状态
+                    // 重置本地取色索引
                     activePickingIndex = null
                 }
             }
@@ -103,7 +102,6 @@ object MultiColorRenderer : FilterRenderer {
                         updateRules(newRules)
                     },
                     onPickColor = {
-                        // [修改] 触发取色模式
                         activePickingIndex = index
                         editorViewModel.setPickingType(PickingType.COLOR)
                     }
@@ -130,6 +128,7 @@ object MultiColorRenderer : FilterRenderer {
         }
     }
 
+    // ... (ColorRuleRow, CompactHexInput, FilterCheckbox, parseColorSafe 保持不变) ...
     @Composable
     private fun ColorRuleRow(
         index: Int,
@@ -139,7 +138,6 @@ object MultiColorRenderer : FilterRenderer {
         onPickColor: () -> Unit
     ) {
         Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            // 启用 Checkbox
             Checkbox(
                 checked = rule.isEnabled,
                 onCheckedChange = { onUpdate(rule.copy(isEnabled = it)) },
@@ -148,13 +146,11 @@ object MultiColorRenderer : FilterRenderer {
 
             Text("$index", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.width(16.dp))
 
-            // 颜色预览
             val previewColor = remember(rule.targetHex) { parseColorSafe(rule.targetHex) }
             Box(
                 modifier = Modifier.size(24.dp).background(previewColor, RoundedCornerShape(4.dp)).border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(4.dp))
             )
 
-            // 吸管按钮
             IconButton(onClick = onPickColor, modifier = Modifier.size(28.dp).padding(start = 4.dp)) {
                 Icon(Icons.Default.Colorize, contentDescription = "Pick", modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
             }

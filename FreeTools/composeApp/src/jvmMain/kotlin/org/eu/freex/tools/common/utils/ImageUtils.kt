@@ -167,4 +167,56 @@ object ImageUtils {
         }
         return sb.toString()
     }
+
+    /**
+     * Color Int 转 Hex 字符串 (例如 "#FF0000")
+     */
+    fun colorToHex(color: Int, hasAlpha: Boolean = false): String {
+        val alpha = (color ushr 24) and 0xFF
+        val red = (color ushr 16) and 0xFF
+        val green = (color ushr 8) and 0xFF
+        val blue = color and 0xFF
+
+        return if (hasAlpha) {
+            String.format("#%02X%02X%02X%02X", alpha, red, green, blue)
+        } else {
+            String.format("#%02X%02X%02X", red, green, blue)
+        }
+    }
+
+    /**
+     * 安全获取子区域像素 (越界部分填充透明)
+     * 用于放大镜在边缘时的显示
+     */
+    fun getSafePixels(image: BufferedImage, x: Int, y: Int, w: Int, h: Int): IntArray {
+        val pixels = IntArray(w * h) { 0 } // 默认全 0 (透明)
+
+        // 计算与原图的交集区域
+        val imgW = image.width
+        val imgH = image.height
+
+        val safeX = x.coerceAtLeast(0)
+        val safeY = y.coerceAtLeast(0)
+        val safeW = (x + w).coerceAtMost(imgW) - safeX
+        val safeH = (y + h).coerceAtMost(imgH) - safeY
+
+        if (safeW > 0 && safeH > 0) {
+            // 临时数组存有效区域
+            val validPixels = IntArray(safeW * safeH)
+            image.getRGB(safeX, safeY, safeW, safeH, validPixels, 0, safeW)
+
+            // 将有效区域搬运到目标数组 (处理偏移)
+            val offsetX = safeX - x
+            val offsetY = safeY - y
+
+            for (row in 0 until safeH) {
+                System.arraycopy(
+                    validPixels, row * safeW,
+                    pixels, (row + offsetY) * w + offsetX,
+                    safeW
+                )
+            }
+        }
+        return pixels
+    }
 }

@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
@@ -100,5 +101,35 @@ class SegmentationViewModel(
                 it.copy(selectedIndex = nextIndex, isLabeling = true)
             }
         }
+    }
+
+    // [新增] 处理画布点击
+    fun onCanvasTap(pixelX: Int, pixelY: Int) {
+        // 1. 获取当前项目状态 (直接从 uiState 拿，而不是 _localProjectState)
+        val currentProject = uiState.value.project ?: return
+        val results = currentProject.results
+
+        // 2. 查找命中的框
+        // 倒序查找，优先选中最上层的
+        val index = results.indexOfLast { rect ->
+            // [注意] 请根据您的 SegmentationRect 定义确认属性名
+            // 如果是 left/top，这里就用 left/top
+            // 如果是 x/y，这里就用 x/y
+            val rX = rect.left // 假设您的 Rect 用的是 left
+            val rY = rect.top  // 假设您的 Rect 用的是 top
+            val rW = rect.width.toInt()
+            val rH = rect.height.toInt()
+
+            pixelX >= rX &&
+                    pixelX < (rX + rW) &&
+                    pixelY >= rY &&
+                    pixelY < (rY + rH)
+        }
+
+        // 3. 调用现有的方法更新选中状态
+        selectRect(index)
+
+        // 可选：调试日志
+        println("DEBUG: 点击 ($pixelX, $pixelY), 命中索引: $index")
     }
 }
