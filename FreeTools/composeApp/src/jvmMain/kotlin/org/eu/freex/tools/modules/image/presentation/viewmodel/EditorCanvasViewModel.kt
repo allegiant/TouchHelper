@@ -16,7 +16,9 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import org.eu.freex.tools.common.model.PickingType
+import org.eu.freex.tools.common.utils.ImageUtils
 import org.eu.freex.tools.modules.image.application.ImageProcessingUseCase
+import org.eu.freex.tools.modules.image.domain.model.FeaturePoint
 import org.eu.freex.tools.modules.image.domain.model.ImageLayer
 import org.eu.freex.tools.modules.image.domain.repository.ProjectRepository
 
@@ -26,7 +28,8 @@ data class EditorCanvasUiState(
     // 交互状态
     val pickingType: PickingType = PickingType.NONE,
     // [修改] 从 Boolean 改为持有具体的 Layer，不为 null 时即代表“正在裁剪模式”
-    val cropperLayer: ImageLayer? = null
+    val cropperLayer: ImageLayer? = null,
+    val featurePoints: List<FeaturePoint> = emptyList()
 )
 
 class EditorCanvasViewModel(
@@ -91,6 +94,37 @@ class EditorCanvasViewModel(
                 // 发送颜色事件
                 pickEvent.emit(color)
             }
+        }
+    }
+
+    // --- [新增] 特征点管理 (抓抓功能) ---
+
+    fun addFeaturePoint(x: Int, y: Int, color: Color) {
+        // 使用 ImageUtils 将颜色转为 Hex (需确保您已在 ImageUtils 添加了 colorToHex)
+        val colorInt = color.value.toInt().shl(32).shr(32).toInt() // Compose Color -> ARGB Int
+        val hexStr = ImageUtils.colorToHex(colorInt)
+
+        val newPoint = FeaturePoint(
+            x = x,
+            y = y,
+            colorHex = hexStr,
+            description = "点 ${ _interactionState.value.featurePoints.size + 1 }"
+        )
+
+        _interactionState.update { state ->
+            state.copy(featurePoints = state.featurePoints + newPoint)
+        }
+    }
+
+    fun removeFeaturePoint(id: String) {
+        _interactionState.update { state ->
+            state.copy(featurePoints = state.featurePoints.filter { it.id != id })
+        }
+    }
+
+    fun clearFeaturePoints() {
+        _interactionState.update { state ->
+            state.copy(featurePoints = emptyList())
         }
     }
 }

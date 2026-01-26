@@ -41,6 +41,7 @@ import org.eu.freex.tools.common.components.LoadingOverlay // 假设你有这个
 import org.eu.freex.tools.common.components.ToastOverlay   // 假设你有这个通用组件
 import org.eu.freex.tools.common.model.PickingType
 import org.eu.freex.tools.common.model.WorkbenchTab
+import org.eu.freex.tools.modules.image.presentation.features.feature.components.drawFeaturePointsOverlay
 import org.eu.freex.tools.modules.image.presentation.features.segmentation.components.drawSegmentationOverlay
 import org.eu.freex.tools.modules.image.presentation.features.tools.dialogs.CodeGenDialog
 import org.eu.freex.tools.modules.image.presentation.viewmodel.SegmentationViewModel
@@ -132,7 +133,11 @@ fun ImageWorkbench(
                                 )
                             }
                             WorkbenchTab.FEATURE -> {
-                                // TODO: drawFeaturePickerOverlay
+                                // [新增] 绘制已添加的特征点
+                                drawFeaturePointsOverlay(
+                                    points = editorState.featurePoints,
+                                    textMeasurer = textMeasurer
+                                )
                             }
                             else -> { }
                         }
@@ -165,16 +170,14 @@ fun ImageWorkbench(
                                         event.color
                                     )
                                 }
-
-                                // 2. 抓抓模式 (预埋逻辑)
                                 WorkbenchTab.FEATURE -> {
-                                    // 抓抓模式也需要调用这个，因为我们要加点
-                                    editorViewModel.onCanvasClick(
-                                        Offset(event.pixelPos.x.toFloat(), event.pixelPos.y.toFloat()),
-                                        event.color
+                                    // [新增] 抓抓模式点击 -> 添加点
+                                    editorViewModel.addFeaturePoint(
+                                        x = event.pixelPos.x,
+                                        y = event.pixelPos.y,
+                                        color = event.color
                                     )
                                 }
-
                                 // 3. 切割模式
                                 WorkbenchTab.SEGMENTATION -> {
                                     segmentationViewModel.onCanvasTap(event.pixelPos.x, event.pixelPos.y)
