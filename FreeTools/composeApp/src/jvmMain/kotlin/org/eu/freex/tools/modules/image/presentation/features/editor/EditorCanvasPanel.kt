@@ -40,6 +40,10 @@ import java.awt.Cursor
 import org.eu.freex.tools.modules.image.domain.model.ImageLayer
 import org.eu.freex.tools.modules.image.presentation.features.editor.utils.CanvasUtils
 import org.eu.freex.tools.modules.image.presentation.features.editor.components.MagnifierOverlay
+import org.eu.freex.tools.modules.image.presentation.features.feature.components.RegionSelectorOverlay
+import org.eu.freex.tools.modules.image.presentation.viewmodel.IntRect
+import kotlin.math.abs
+import kotlin.math.min
 
 data class CanvasTapEvent(
     val screenPos: Offset,
@@ -54,6 +58,8 @@ fun EditorCanvasPanel(
     displayImage: ImageLayer?,
     cursorIcon: PointerIcon = PointerIcon(Cursor.getPredefinedCursor(Cursor.DEFAULT_CURSOR)),
     showMagnifier: Boolean = false,
+    isSelectingRegion: Boolean = false,
+    onRegionSelected: (IntRect) -> Unit = {},
     onDrawOverlay: DrawScope.() -> Unit = {},
     onCanvasTap: (CanvasTapEvent) -> Unit = {},
     onCanvasDoubleTap: (CanvasTapEvent) -> Unit = {}
@@ -111,6 +117,7 @@ fun EditorCanvasPanel(
             val bitmap = remember(bufferedImage) { bufferedImage.toComposeImageBitmap() }
             val imageWidth = bufferedImage.width
             val imageHeight = bufferedImage.height
+            val imageSize = IntSize(imageWidth, imageHeight)
 
             // 1. [底层] 绘制画布 (图片 + 网格 + 切割框)
             // 它必须放在前面，作为背景
@@ -173,6 +180,44 @@ fun EditorCanvasPanel(
                         scale = scale,
                         offset = offset,
                         color = null
+                    )
+                }
+            }
+
+            if (isSelectingRegion) {
+                BoxWithConstraints(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .zIndex(200f) // 确保在最上层
+                ) {
+                    RegionSelectorOverlay(
+                        onRegionSelected = { screenRect ->
+                            // === 核心逻辑：这里复用 CanvasUtils 进行坐标转换 ===
+                            // 1. 将屏幕矩形的左上角转为图片坐标
+                            val topLeftScreen = Offset(screenRect.x.toFloat(), screenRect.y.toFloat())
+                            val topLeftImage = CanvasUtils.screenToImage(
+                                topLeftScreen, canvasSize, imageSize, scale, offset
+                            )
+
+                            // 2. 将屏幕矩形的右下角转为图片坐标
+                            val bottomRightScreen = Offset(
+                                (screenRect.x + screenRect.width).toFloat(),
+                                (screenRect.y + screenRect.height).toFloat()
+                            )
+                            val bottomRightImage = CanvasUtils.screenToImage(
+                                bottomRightScreen, canvasSize, imageSize, scale, offset
+                            )
+
+                            // 3. 计算出修正后的矩形 (处理可能的反向拖拽)
+                            val x = min(topLeftImage.x, bottomRightImage.x)
+                            val y = min(topLeftImage.y, bottomRightImage.y)
+                            val w = abs(topLeftImage.x - bottomRightImage.x)
+                            val h = abs(topLeftImage.y - bottomRightImage.y)
+
+                            // 4. 返回真实的图片坐标
+                            onRegionSelected(IntRect(x, y, w, h))
+                        },
+                        onCancel = { /* 可以增加一个取消回调 */ }
                     )
                 }
             }

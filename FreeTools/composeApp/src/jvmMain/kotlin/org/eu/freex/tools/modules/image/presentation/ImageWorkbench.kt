@@ -128,6 +128,7 @@ fun ImageWorkbench(
                         cursorIcon = cursorIcon,
                         showMagnifier = (currentTab == WorkbenchTab.FEATURE) ||
                                 (editorState.pickingType != PickingType.NONE), // 取点模式下也强制开启
+                        isSelectingRegion = isSelectingRegion,
                         onDrawOverlay = {
                             when (currentTab) {
                                 WorkbenchTab.SEGMENTATION -> {
@@ -198,20 +199,15 @@ fun ImageWorkbench(
                                 // 我们可以在 ViewModel 里加一个 checkSelectionAndShowDialog，或者简单地直接调
                                 segmentationViewModel.showLabelDialog()
                             }
+                        },
+                        onRegionSelected = { imageRect ->
+                            editorViewModel.updateSearchRegion(
+                                imageRect.x, imageRect.y, imageRect.width, imageRect.height
+                            )
+                            isSelectingRegion = false
                         }
 
                     )
-                    // 2. [新增] 顶层：区域框选覆盖层 (仅在框选模式下显示)
-                    if (isSelectingRegion) {
-                        RegionSelectorOverlay(
-                            onRegionSelected = { rect ->
-                                // 更新 ViewModel 中的搜索区域 (暂时使用 UI 坐标，后续需映射为图片坐标)
-                                editorViewModel.updateSearchRegion(rect.x, rect.y, rect.width, rect.height)
-                                isSelectingRegion = false // 选完自动退出
-                            },
-                            onCancel = { isSelectingRegion = false }
-                        )
-                    }
                 }
 
 
