@@ -4,6 +4,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntRect
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -29,8 +30,14 @@ data class EditorCanvasUiState(
     val pickingType: PickingType = PickingType.NONE,
     // [修改] 从 Boolean 改为持有具体的 Layer，不为 null 时即代表“正在裁剪模式”
     val cropperLayer: ImageLayer? = null,
-    val featurePoints: List<FeaturePoint> = emptyList()
+    val featurePoints: List<FeaturePoint> = emptyList(),
+    val searchRegion: IntRect? = null,
+    // [新增/确认] 必须要有这两个属性来记录画布状态
+    val scale: Float = 1f,
+    val pan: Offset = Offset.Zero
 )
+
+data class IntRect(val x: Int, val y: Int, val width: Int, val height: Int)
 
 class EditorCanvasViewModel(
     private val projectRepo: ProjectRepository,
@@ -97,34 +104,76 @@ class EditorCanvasViewModel(
         }
     }
 
-    // --- [新增] 特征点管理 (抓抓功能) ---
-
     fun addFeaturePoint(x: Int, y: Int, color: Color) {
-        // 使用 ImageUtils 将颜色转为 Hex (需确保您已在 ImageUtils 添加了 colorToHex)
-        val colorInt = color.value.toInt().shl(32).shr(32).toInt() // Compose Color -> ARGB Int
-        val hexStr = ImageUtils.colorToHex(colorInt)
+        val currentList = _interactionState.value.featurePoints
 
+        // 1. 计算新序号 (当前数量 + 1)
+        val newIndex = currentList.size + 1
+
+        // 2. 将 Color 对象转换为 Hex 字符串 (#RRGGBB)
+        val red = (color.red * 255).toInt()
+        val green = (color.green * 255).toInt()
+        val blue = (color.blue * 255).toInt()
+        val hexColor = String.format("#%02X%02X%02X", red, green, blue)
+
+        // 3. 构建新的 FeaturePoint
         val newPoint = FeaturePoint(
+            index = newIndex,
             x = x,
             y = y,
-            colorHex = hexStr,
-            description = "点 ${ _interactionState.value.featurePoints.size + 1 }"
+            colorHex = hexColor,
+            tolerance = "101010", // 默认偏色
+            isChecked = true
         )
 
+        // 4. 更新状态
         _interactionState.update { state ->
             state.copy(featurePoints = state.featurePoints + newPoint)
         }
     }
 
-    fun removeFeaturePoint(id: String) {
+// === 建议新增以下方法，用于支持修改偏色和删除后重新排序 ===
+
+    /**
+     * 更新特征点 (用于修改偏色或备注)
+     */
+    fun updateFeaturePoint(id: String, newPoint: FeaturePoint) {
         _interactionState.update { state ->
-            state.copy(featurePoints = state.featurePoints.filter { it.id != id })
+            val updatedList = state.featurePoints.map {
+                if (it.id == id) newPoint else it
+            }
+            state.copy(featurePoints = updatedList)
         }
     }
 
-    fun clearFeaturePoints() {
+    /**
+     * 删除特征点并重新计算序号 (保持序号连续 1,2,3...)
+     */
+    fun removeFeaturePoint(id: String) {
         _interactionState.update { state ->
-            state.copy(featurePoints = emptyList())
+            // 过滤掉要删除的点
+            val filteredList = state.featurePoints.filter { it.id != id }
+
+            // 重新建立索引 (Re-indexing)
+            val reIndexedList = filteredList.mapIndexed { index, point ->
+                point.copy(index = index + 1)
+            }
+
+            state.copy(featurePoints = reIndexedList)
         }
+    }
+
+    /**
+     * 更新搜索区域
+     */
+    fun updateSearchRegion(x: Int, y: Int, w: Int, h: Int) {
+        _interactionState.update { it.copy(searchRegion = IntRect(x, y, w, h)) }
+    }
+
+    /**
+     * 清除搜索区域
+     */
+    fun clearSearchRegion() {
+        _interactionState.update { it.copy(searchRegion = null) }
     }
 }

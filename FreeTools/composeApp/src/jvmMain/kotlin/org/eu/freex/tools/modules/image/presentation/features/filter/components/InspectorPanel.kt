@@ -47,7 +47,8 @@ import org.koin.compose.koinInject
 fun InspectorPanel(
     modifier: Modifier = Modifier,
     currentTab: WorkbenchTab,
-    onTabChange: (WorkbenchTab) -> Unit
+    onTabChange: (WorkbenchTab) -> Unit,
+    onStartRegionSelect: () -> Unit = {}
 ) {
 
     Surface(
@@ -73,7 +74,7 @@ fun InspectorPanel(
                     }
                     // [新增] 抓抓工具分支
                     WorkbenchTab.FEATURE -> {
-                        FeatureTabContent()
+                        FeatureTabContent(onStartRegionSelect = onStartRegionSelect)
                     }
                 }
             }
@@ -230,11 +231,13 @@ private fun SegmentationTabContent(
  */
 @Composable
 private fun FeatureTabContent(
-    viewModel: EditorCanvasViewModel = koinInject()
+    viewModel: EditorCanvasViewModel = koinInject(),
+    onStartRegionSelect: () -> Unit
 ) {
     FeatureExtractionPanel(
         modifier = Modifier.fillMaxSize(),
-        viewModel = viewModel
+        viewModel = viewModel,
+        onStartRegionSelect = onStartRegionSelect
     )
 }
 

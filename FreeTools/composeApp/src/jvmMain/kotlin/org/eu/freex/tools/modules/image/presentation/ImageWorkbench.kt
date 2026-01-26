@@ -41,6 +41,7 @@ import org.eu.freex.tools.common.components.LoadingOverlay // 假设你有这个
 import org.eu.freex.tools.common.components.ToastOverlay   // 假设你有这个通用组件
 import org.eu.freex.tools.common.model.PickingType
 import org.eu.freex.tools.common.model.WorkbenchTab
+import org.eu.freex.tools.modules.image.presentation.features.feature.components.RegionSelectorOverlay
 import org.eu.freex.tools.modules.image.presentation.features.feature.components.drawFeaturePointsOverlay
 import org.eu.freex.tools.modules.image.presentation.features.segmentation.components.drawSegmentationOverlay
 import org.eu.freex.tools.modules.image.presentation.features.tools.dialogs.CodeGenDialog
@@ -71,7 +72,10 @@ fun ImageWorkbench(
     // [新增] 文本测量器 (用于 Overlay 中绘制文字)
     val textMeasurer = rememberTextMeasurer()
 
-    // [新增] 根据 PickingType 计算光标样式
+    // 控制是否处于“区域框选”模式
+    var isSelectingRegion by remember { mutableStateOf(false) }
+
+    // 根据 PickingType 计算光标样式
     val cursorIcon = remember(editorState.pickingType, currentTab) {
         if (editorState.pickingType != PickingType.NONE) {
             // 取点/取色模式：十字准星
@@ -117,85 +121,99 @@ fun ImageWorkbench(
             // --- 中间：画布与流水线 ---
             Column(modifier = Modifier.weight(1f).fillMaxHeight()) {
                 // 1. 画布
-                EditorCanvasPanel(
-                    modifier = Modifier.weight(1f),
-                    displayImage = editorState.displayImage,
-                    cursorIcon = cursorIcon,
-                    showMagnifier = (currentTab == WorkbenchTab.FEATURE) ||
-                            (editorState.pickingType != PickingType.NONE), // 取点模式下也强制开启
-                    onDrawOverlay = {
-                        when (currentTab) {
-                            WorkbenchTab.SEGMENTATION -> {
-                                drawSegmentationOverlay(
-                                    project = segmentationState.project,
-                                    textMeasurer = textMeasurer,
-                                    selectedIndex = segmentationState.selectedIndex
-                                )
-                            }
-                            WorkbenchTab.FEATURE -> {
-                                // [新增] 绘制已添加的特征点
-                                drawFeaturePointsOverlay(
-                                    points = editorState.featurePoints,
-                                    textMeasurer = textMeasurer
-                                )
-                            }
-                            else -> { }
-                        }
-                    },
-
-                    // [关键修复]
-                    onCanvasTap = { event -> // event 是 CanvasTapEvent
-                        // 只有在图片范围内点击才有效
-                        if (event.isToBounds) {
-                            if (editorState.pickingType != PickingType.NONE) {
-                                // 处于取色/取点模式，优先处理
-                                editorViewModel.onCanvasClick(
-                                    Offset(event.pixelPos.x.toFloat(), event.pixelPos.y.toFloat()),
-                                    event.color
-                                )
-                                // 拦截事件，不让下面的 Tab 处理
-                                return@EditorCanvasPanel
-                            }
+                Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                    EditorCanvasPanel(
+                        modifier = Modifier.fillMaxSize(),
+                        displayImage = editorState.displayImage,
+                        cursorIcon = cursorIcon,
+                        showMagnifier = (currentTab == WorkbenchTab.FEATURE) ||
+                                (editorState.pickingType != PickingType.NONE), // 取点模式下也强制开启
+                        onDrawOverlay = {
                             when (currentTab) {
-                                // 1. 滤镜模式 (修复颜色选取)
-                                WorkbenchTab.FILTER -> {
-                                    // 调用 ViewModel 的通用点击处理 (用于二值化取色等)
-                                    // 这里的 Offset 我们传 ScreenPos 还是 PixelPos?
-                                    // EditorCanvasViewModel.onCanvasClick 预期的是 Pixel 还是 Screen?
-                                    // 看了下源码，它里面用 offset.x.toInt()，如果是像素操作，应该传 PixelPos。
-                                    // 我们之前传的是 ScreenPos，这其实是错的，因为 ViewModel 里不知道 scale。
-                                    // 所以这里修正为传 PixelPos 对应的 Offset。
+                                WorkbenchTab.SEGMENTATION -> {
+                                    drawSegmentationOverlay(
+                                        project = segmentationState.project,
+                                        textMeasurer = textMeasurer,
+                                        selectedIndex = segmentationState.selectedIndex
+                                    )
+                                }
+                                WorkbenchTab.FEATURE -> {
+                                    // 绘制已添加的特征点
+                                    drawFeaturePointsOverlay(
+                                        points = editorState.featurePoints,
+                                        textMeasurer = textMeasurer
+                                    )
+                                }
+                                else -> { }
+                            }
+                        },
+
+                        // [关键修复]
+                        onCanvasTap = { event -> // event 是 CanvasTapEvent
+                            // 只有在图片范围内点击才有效
+                            if (event.isToBounds) {
+                                if (editorState.pickingType != PickingType.NONE) {
+                                    // 处于取色/取点模式，优先处理
                                     editorViewModel.onCanvasClick(
                                         Offset(event.pixelPos.x.toFloat(), event.pixelPos.y.toFloat()),
                                         event.color
                                     )
+                                    // 拦截事件，不让下面的 Tab 处理
+                                    return@EditorCanvasPanel
                                 }
-                                WorkbenchTab.FEATURE -> {
-                                    // [新增] 抓抓模式点击 -> 添加点
-                                    editorViewModel.addFeaturePoint(
-                                        x = event.pixelPos.x,
-                                        y = event.pixelPos.y,
-                                        color = event.color
-                                    )
-                                }
-                                // 3. 切割模式
-                                WorkbenchTab.SEGMENTATION -> {
-                                    segmentationViewModel.onCanvasTap(event.pixelPos.x, event.pixelPos.y)
+                                when (currentTab) {
+                                    // 1. 滤镜模式 (修复颜色选取)
+                                    WorkbenchTab.FILTER -> {
+                                        // 调用 ViewModel 的通用点击处理 (用于二值化取色等)
+                                        // 这里的 Offset 我们传 ScreenPos 还是 PixelPos?
+                                        // EditorCanvasViewModel.onCanvasClick 预期的是 Pixel 还是 Screen?
+                                        // 看了下源码，它里面用 offset.x.toInt()，如果是像素操作，应该传 PixelPos。
+                                        // 我们之前传的是 ScreenPos，这其实是错的，因为 ViewModel 里不知道 scale。
+                                        // 所以这里修正为传 PixelPos 对应的 Offset。
+                                        editorViewModel.onCanvasClick(
+                                            Offset(event.pixelPos.x.toFloat(), event.pixelPos.y.toFloat()),
+                                            event.color
+                                        )
+                                    }
+                                    WorkbenchTab.FEATURE -> {
+                                        // [新增] 抓抓模式点击 -> 添加点
+                                        editorViewModel.addFeaturePoint(
+                                            x = event.pixelPos.x,
+                                            y = event.pixelPos.y,
+                                            color = event.color
+                                        )
+                                    }
+                                    // 3. 切割模式
+                                    WorkbenchTab.SEGMENTATION -> {
+                                        segmentationViewModel.onCanvasTap(event.pixelPos.x, event.pixelPos.y)
+                                    }
                                 }
                             }
+                        },
+                        onCanvasDoubleTap = { event ->
+                            if (event.isToBounds && currentTab == WorkbenchTab.SEGMENTATION) {
+                                // 1. 先选中该位置的框
+                                segmentationViewModel.onCanvasTap(event.pixelPos.x, event.pixelPos.y)
+                                // 2. 只有选中了有效框，才弹窗
+                                // 我们可以在 ViewModel 里加一个 checkSelectionAndShowDialog，或者简单地直接调
+                                segmentationViewModel.showLabelDialog()
+                            }
                         }
-                    },
-                    onCanvasDoubleTap = { event ->
-                        if (event.isToBounds && currentTab == WorkbenchTab.SEGMENTATION) {
-                            // 1. 先选中该位置的框
-                            segmentationViewModel.onCanvasTap(event.pixelPos.x, event.pixelPos.y)
-                            // 2. 只有选中了有效框，才弹窗
-                            // 我们可以在 ViewModel 里加一个 checkSelectionAndShowDialog，或者简单地直接调
-                            segmentationViewModel.showLabelDialog()
-                        }
-                    }
 
-                )
+                    )
+                    // 2. [新增] 顶层：区域框选覆盖层 (仅在框选模式下显示)
+                    if (isSelectingRegion) {
+                        RegionSelectorOverlay(
+                            onRegionSelected = { rect ->
+                                // 更新 ViewModel 中的搜索区域 (暂时使用 UI 坐标，后续需映射为图片坐标)
+                                editorViewModel.updateSearchRegion(rect.x, rect.y, rect.width, rect.height)
+                                isSelectingRegion = false // 选完自动退出
+                            },
+                            onCancel = { isSelectingRegion = false }
+                        )
+                    }
+                }
+
 
                 // 2. 流水线
                 ProcessingPipeline(
