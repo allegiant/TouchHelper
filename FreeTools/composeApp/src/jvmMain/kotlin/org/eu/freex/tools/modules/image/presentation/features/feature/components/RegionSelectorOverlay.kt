@@ -3,80 +3,81 @@ package org.eu.freex.tools.modules.image.presentation.features.feature.component
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.unit.dp
-import org.eu.freex.tools.modules.image.presentation.viewmodel.IntRect
-import kotlin.math.abs
-import kotlin.math.min
+import androidx.compose.ui.unit.IntRect // [修改] 使用官方标准类
 
-// [新增] 区域框选交互组件
 @Composable
 fun RegionSelectorOverlay(
+    modifier: Modifier = Modifier, // [新增] 接收外部 Modifier
     onRegionSelected: (IntRect) -> Unit,
     onCancel: () -> Unit
 ) {
-    var startOffset by remember { mutableStateOf<Offset?>(null) }
-    var currentOffset by remember { mutableStateOf<Offset?>(null) }
+    var startPoint by remember { mutableStateOf<Offset?>(null) }
+    var currentPoint by remember { mutableStateOf<Offset?>(null) }
 
     Canvas(
-        modifier = Modifier
+        modifier = modifier // [修改] 应用传入的 modifier
             .fillMaxSize()
-            // 拦截点击，变为手势处理
             .pointerInput(Unit) {
                 detectDragGestures(
-                    onDragStart = { startOffset = it },
+                    onDragStart = { offset ->
+                        startPoint = offset
+                        currentPoint = offset
+                    },
                     onDrag = { change, _ ->
                         change.consume()
-                        currentOffset = change.position
+                        currentPoint = change.position
                     },
                     onDragEnd = {
-                        if (startOffset != null && currentOffset != null) {
-                            val x = min(startOffset!!.x, currentOffset!!.x).toInt()
-                            val y = min(startOffset!!.y, currentOffset!!.y).toInt()
-                            val w = abs(startOffset!!.x - currentOffset!!.x).toInt()
-                            val h = abs(startOffset!!.y - currentOffset!!.y).toInt()
+                        val start = startPoint
+                        val end = currentPoint
+                        if (start != null && end != null) {
+                            // [逻辑适配] 计算左上角和右下角
+                            val left = minOf(start.x, end.x).toInt()
+                            val top = minOf(start.y, end.y).toInt()
+                            val right = maxOf(start.x, end.x).toInt()
+                            val bottom = maxOf(start.y, end.y).toInt()
 
-                            // 防止误触，微小移动不算框选
-                            if (w > 5 && h > 5) {
-                                onRegionSelected(IntRect(x, y, w, h))
+                            // [注意] 官方 IntRect 构造函数是 (left, top, right, bottom)
+                            val rect = IntRect(left, top, right, bottom)
+
+                            // 只有当区域足够大时才触发
+                            if (rect.width > 5 && rect.height > 5) {
+                                onRegionSelected(rect)
+                            } else {
+                                onCancel()
                             }
                         }
-                        startOffset = null
-                        currentOffset = null
+                        startPoint = null
+                        currentPoint = null
                     },
-                    onDragCancel = { onCancel() }
+                    onDragCancel = {
+                        startPoint = null
+                        currentPoint = null
+                        onCancel()
+                    }
                 )
             }
     ) {
-        // 1. 绘制半透明黑色遮罩
+        // 绘制半透明背景和选框
         drawRect(Color.Black.copy(alpha = 0.3f))
 
-        // 2. 绘制高亮选区 (挖空+描边)
-        if (startOffset != null && currentOffset != null) {
-            val topLeft = Offset(
-                min(startOffset!!.x, currentOffset!!.x),
-                min(startOffset!!.y, currentOffset!!.y)
-            )
-            val size = Size(
-                abs(startOffset!!.x - currentOffset!!.x),
-                abs(startOffset!!.y - currentOffset!!.y)
-            )
+        val start = startPoint
+        val end = currentPoint
+        if (start != null && end != null) {
+            val topLeft = Offset(minOf(start.x, end.x), minOf(start.y, end.y))
+            val size = Size(kotlin.math.abs(end.x - start.x), kotlin.math.abs(end.y - start.y))
 
-            // 挖空 (Clear 模式)
-            drawRect(Color.Transparent, topLeft = topLeft, size = size, blendMode = BlendMode.Clear)
-            // 红框描边
-            drawRect(Color.Red, topLeft = topLeft, size = size, style = Stroke(2.dp.toPx()))
+            // 挖空选中区域 (使用 BlendMode.Clear 或绘制四个矩形，这里假设您已有实现)
+            drawRect(Color.Transparent, topLeft, size, style = Stroke(2f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 10f))))
+            drawRect(Color.White, topLeft, size, style = Stroke(1f))
         }
     }
 }

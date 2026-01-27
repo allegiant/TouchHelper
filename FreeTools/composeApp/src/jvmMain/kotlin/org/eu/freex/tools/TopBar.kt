@@ -15,6 +15,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Brightness4
 import androidx.compose.material.icons.filled.Brightness7
 import androidx.compose.material.icons.filled.BrightnessAuto
+import androidx.compose.material.icons.filled.DocumentScanner // [新增]
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.FontDownload
 import androidx.compose.material.icons.filled.Image
@@ -45,9 +46,6 @@ import io.github.vinceglb.filekit.core.PickerType
 import org.eu.freex.tools.common.i18n.LocalStrings
 import org.eu.freex.tools.common.model.AppModule
 import org.eu.freex.tools.common.theme.ThemeMode
-import org.eu.freex.tools.modules.image.presentation.features.recognition.RecognitionScreen
-import org.eu.freex.tools.modules.image.presentation.viewmodel.RecognitionViewModel
-import org.koin.compose.koinInject
 import java.io.File
 
 @Composable
@@ -56,15 +54,23 @@ fun TopBar(
     themeMode: ThemeMode,
     onThemeChange: (ThemeMode) -> Unit,
     onModuleChange: (AppModule) -> Unit,
-
-    // [修改] 不再接收 onEvent，而是具体的行为回调
     onLoadProject: (File) -> Unit,
     onSaveProject: (File) -> Unit,
     onExportImage: (File) -> Unit,
-    viewModel: RecognitionViewModel = koinInject()
+    // [新增] 识别测试的回调
+    onRecognitionTest: (File) -> Unit
 ) {
     val backgroundColor = MaterialTheme.colorScheme.surface
     val contentColor = MaterialTheme.colorScheme.onSurface
+
+    // [新增] 识别测试图片选择器
+    val recognitionTester = rememberFilePickerLauncher(
+        title = "选择测试图片",
+        mode = PickerMode.Single,
+        type = PickerType.Image // 限制为图片
+    ) { platformFile ->
+        platformFile?.file?.let { onRecognitionTest(it) }
+    }
 
     Row(
         modifier = Modifier
@@ -104,7 +110,17 @@ fun TopBar(
 
         Spacer(Modifier.weight(1f))
 
-        RecognitionScreen(viewModel)
+        // [修复] 移除了错误的 RecognitionScreen 调用，改为一个功能按钮
+        // 如果你需要它作为工具菜单，也可以像 FileMenu 一样封装，这里先用图标按钮
+        IconButton(onClick = { recognitionTester.launch() }) {
+            Icon(
+                imageVector = Icons.Default.DocumentScanner,
+                contentDescription = "OCR 测试",
+                tint = contentColor
+            )
+        }
+
+        Spacer(Modifier.width(8.dp))
 
         // --- 文件菜单 ---
         FileMenu(
@@ -118,7 +134,7 @@ fun TopBar(
     }
 }
 
-// ... ThemeSwitcher 和 ModuleTab 保持不变 (代码省略以节省篇幅) ...
+// ... ThemeSwitcher 和 ModuleTab 保持不变 ...
 @Composable
 private fun ThemeSwitcher(currentMode: ThemeMode, onChange: (ThemeMode) -> Unit, color: Color) {
     val (icon, tooltip) = when (currentMode) {

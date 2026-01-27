@@ -13,12 +13,15 @@ import org.eu.freex.tools.modules.image.application.RecognitionUseCase
 import org.eu.freex.tools.modules.image.domain.model.LayerConfig
 import org.eu.freex.tools.modules.image.domain.model.RecognitionResult
 import org.eu.freex.tools.modules.image.domain.repository.ProjectRepository
+import java.awt.image.BufferedImage
 import java.io.File
+import javax.imageio.ImageIO
 
 // 定义 UI 状态
 data class RecognitionUiState(
     val isLoading: Boolean = false,
     val selectedImage: File? = null,           // 当前选中的测试图片
+    val displayImage: BufferedImage? = null, // [新增] 用于 UI 显示的图片对象
     val results: List<RecognitionResult> = emptyList(), // 识别结果列表
     val error: String? = null,                 // 错误信息
     val timeCostMs: Long = 0                   // 耗时统计 (毫秒)
@@ -35,6 +38,56 @@ class RecognitionViewModel(
     // 协程作用域 (如果是 Android ViewModel 则使用 viewModelScope)
     private val scope = CoroutineScope(Dispatchers.Main)
     private var job: Job? = null
+
+    fun startRecognition(imageFile: File) {
+        // 1. 先更新 UI 状态 (Loading)
+        _uiState.update { it.copy(isLoading = true, error = null, selectedImage = imageFile) }
+
+        // 2. [核心修复] 启动协程
+        // 使用 Dispatchers.IO 处理耗时操作 (读取图片 + 识别)
+        scope.launch(Dispatchers.IO) {
+            try {
+                // 读取图片
+                val bufferedImage = ImageIO.read(imageFile)
+                // 更新显示图片
+                _uiState.update { it.copy(displayImage = bufferedImage) }
+
+                val workspace = projectRepo.workspace.value
+                val uiSegConfig = workspace.segmentation?.config
+                    ?: throw IllegalStateException("请先在切割面板配置参数")
+
+                val uiFilters = workspace.pipeline?.steps
+                    ?.mapNotNull { step ->
+                        (step.config as? LayerConfig.Filter)?.filter
+                    } ?: emptyList()
+
+                // 3. 调用挂起函数 (现在是在协程里，所以不会报错了)
+                val resultList = recognitionUseCase.recognize(
+                    imageFile = imageFile,
+                    config = uiSegConfig,
+                    filters = uiFilters,
+                    minConfidence = 0.7f
+                ).getOrThrow()
+
+                // 更新结果
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        results = resultList
+                    )
+                }
+
+            } catch (e: Exception) {
+                e.printStackTrace()
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        error = e.message ?: "识别失败"
+                    )
+                }
+            }
+        }
+    }
 
     /**
      * 用户选择了新的测试图片

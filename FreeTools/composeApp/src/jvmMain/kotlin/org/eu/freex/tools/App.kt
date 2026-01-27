@@ -23,10 +23,12 @@ import java.io.File
 // 组件
 import org.eu.freex.tools.modules.image.presentation.ImageWorkbench
 import org.eu.freex.tools.modules.image.presentation.features.library.FontManagerPanel
+import org.eu.freex.tools.modules.image.presentation.features.recognition.RecognitionScreen
 // ViewModels
 import org.eu.freex.tools.modules.image.presentation.viewmodel.FontLibraryViewModel
 import org.eu.freex.tools.modules.image.presentation.viewmodel.MainViewModel
 import org.eu.freex.tools.modules.image.presentation.viewmodel.ProjectListViewModel
+import org.eu.freex.tools.modules.image.presentation.viewmodel.RecognitionViewModel
 
 @Composable
 fun App(window: androidx.compose.ui.awt.ComposeWindow?) {
@@ -40,8 +42,10 @@ fun App(window: androidx.compose.ui.awt.ComposeWindow?) {
     val mainViewModel = koinInject<MainViewModel>()
     val projectListViewModel = koinInject<ProjectListViewModel>()
     val fontViewModel = koinInject<FontLibraryViewModel>()
+    val recognitionViewModel: RecognitionViewModel = koinInject()
 
     val fontState by fontViewModel.uiState.collectAsState()
+    var showRecognitionScreen by remember { mutableStateOf(false) }
 
     // [拖拽支持] (直接调用 VM 方法)
     if (window != null) {
@@ -83,38 +87,50 @@ fun App(window: androidx.compose.ui.awt.ComposeWindow?) {
                 modifier = Modifier.fillMaxSize(),
                 color = MaterialTheme.colorScheme.background
             ) {
-                Column(Modifier.fillMaxSize()) {
-                    // [修改] TopBar 直接接受函数引用
-                    TopBar(
-                        currentModule = currentModule,
-                        themeMode = themeMode,
-                        onThemeChange = { themeMode = it },
-                        onModuleChange = { currentModule = it },
-                        // 直接绑定 ViewModel 方法
-                        onLoadProject = mainViewModel::loadProject,
-                        onSaveProject = mainViewModel::saveProject,
-                        onExportImage = projectListViewModel::exportDisplayImage
+                if (showRecognitionScreen) {
+                    // === 1. OCR 识别结果页 ===
+                    RecognitionScreen(
+                        onBack = { showRecognitionScreen = false }
                     )
-
-                    Box(Modifier.weight(1f)) {
-                        when (currentModule) {
-                            AppModule.IMAGE_PROCESSING -> {
-                                ImageWorkbench()
+                } else {
+                    Column(Modifier.fillMaxSize()) {
+                        // [修改] TopBar 直接接受函数引用
+                        TopBar(
+                            currentModule = currentModule,
+                            themeMode = themeMode,
+                            onThemeChange = { themeMode = it },
+                            onModuleChange = { currentModule = it },
+                            // 直接绑定 ViewModel 方法
+                            onLoadProject = mainViewModel::loadProject,
+                            onSaveProject = mainViewModel::saveProject,
+                            onExportImage = projectListViewModel::exportDisplayImage,
+                            onRecognitionTest = { file ->
+                                recognitionViewModel.startRecognition(file)
+                                showRecognitionScreen = true
                             }
+                        )
 
-                            AppModule.FONT_MANAGER -> {
-                                // [修改] 直接绑定 FontViewModel 方法
-                                FontManagerPanel(
-                                    library = fontState.items,
-                                    onDelete = fontViewModel::deleteItem,
-                                    onSort = fontViewModel::sortLibrary,
-                                    onClear = fontViewModel::clearLibrary,
-                                    onExport = fontViewModel::exportLibrary
-                                )
+                        Box(Modifier.weight(1f)) {
+                            when (currentModule) {
+                                AppModule.IMAGE_PROCESSING -> {
+                                    ImageWorkbench()
+                                }
+
+                                AppModule.FONT_MANAGER -> {
+                                    // [修改] 直接绑定 FontViewModel 方法
+                                    FontManagerPanel(
+                                        library = fontState.items,
+                                        onDelete = fontViewModel::deleteItem,
+                                        onSort = fontViewModel::sortLibrary,
+                                        onClear = fontViewModel::clearLibrary,
+                                        onExport = fontViewModel::exportLibrary
+                                    )
+                                }
                             }
                         }
                     }
                 }
+
             }
         }
     }

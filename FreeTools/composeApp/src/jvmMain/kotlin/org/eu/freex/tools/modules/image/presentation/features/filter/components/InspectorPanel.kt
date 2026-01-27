@@ -63,7 +63,7 @@ fun InspectorPanel(
             )
 
             // 3. 根据 Tab 显示不同内容
-            Box(modifier = Modifier.weight(1f)) {
+            Box(modifier = Modifier.weight(1f).padding(8.dp)) {
                 when (currentTab) {
                     WorkbenchTab.FILTER -> {
                         FilterTabContent()
