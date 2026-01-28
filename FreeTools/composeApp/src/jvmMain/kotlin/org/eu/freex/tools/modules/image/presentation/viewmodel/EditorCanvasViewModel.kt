@@ -37,8 +37,6 @@ data class EditorCanvasUiState(
     val pan: Offset = Offset.Zero
 )
 
-data class IntRect(val x: Int, val y: Int, val width: Int, val height: Int)
-
 class EditorCanvasViewModel(
     private val projectRepo: ProjectRepository,
     private val processingUseCase: ImageProcessingUseCase
@@ -61,10 +59,7 @@ class EditorCanvasViewModel(
         SharingStarted.WhileSubscribed(5000),
         EditorCanvasUiState()
     )
-    // [修改] 进入裁剪模式 (需要传入要裁的图)
-    fun enterCropMode(layer: ImageLayer) {
-        _interactionState.update { it.copy(cropperLayer = layer, pickingType = PickingType.NONE) }
-    }
+
 
     // [修改] 退出裁剪模式
     fun exitCropMode() {
