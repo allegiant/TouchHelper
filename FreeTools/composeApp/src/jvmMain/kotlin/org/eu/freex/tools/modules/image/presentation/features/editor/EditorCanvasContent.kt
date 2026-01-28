@@ -32,6 +32,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.toSize
 import androidx.compose.ui.zIndex
+import org.eu.freex.tools.common.utils.toHexString
 import org.eu.freex.tools.modules.image.domain.model.ImageLayer
 import org.eu.freex.tools.modules.image.presentation.features.editor.components.MagnifierOverlay
 import org.eu.freex.tools.modules.image.presentation.features.editor.strategies.CanvasTabStrategy
@@ -46,21 +47,21 @@ import org.eu.freex.tools.modules.image.presentation.features.editor.utils.Canva
 fun EditorCanvasContent(
     modifier: Modifier = Modifier,
     displayImage: ImageLayer?,
-    strategy: CanvasTabStrategy
+    strategy: CanvasTabStrategy,
+    scale: Float,
+    offset: Offset,
+    // [新增] 变换回调
+    onTransform: (zoomChange: Float, panChange: Offset) -> Unit
 ) {
     // === 1. 画布状态 ===
-    var scale by remember { mutableFloatStateOf(1f) }
-    var offset by remember { mutableStateOf(Offset.Zero) }
     var hoverPos by remember { mutableStateOf<Offset?>(null) }
-
     val textMeasurer = rememberTextMeasurer()
 
     // === 2. 手势处理 ===
     // 只有当策略允许缩放平移时，才启用 Transformable
     val transformableState = rememberTransformableState { zoomChange, panChange, _ ->
         if (strategy.enableZoomPan) {
-            scale = (scale * zoomChange).coerceIn(0.1f, 10f)
-            offset += panChange
+            onTransform(zoomChange, panChange)
         }
     }
 
@@ -94,28 +95,12 @@ fun EditorCanvasContent(
             .pointerInput(displayImage, strategy, scale, offset) {
                 detectTapGestures(
                     onTap = { screenPos ->
-                        // [修正点] 使用 size.toSize() 将 IntSize 转换为 Size
-                        val details = CanvasUtils.calculateTapDetails(
-                            screenPos,
-                            displayImage,
-                            size.toSize(), // 这里修改
-                            scale,
-                            offset
-                        )
-                        if (details != null) {
+                        handleTap(screenPos, displayImage, size.toSize(), scale, offset) { details ->
                             strategy.onTap(details.pixelPos.x, details.pixelPos.y, details.color)
                         }
                     },
                     onDoubleTap = { screenPos ->
-                        // [修正点]同样这里也要修改
-                        val details = CanvasUtils.calculateTapDetails(
-                            screenPos,
-                            displayImage,
-                            size.toSize(), // 这里修改
-                            scale,
-                            offset
-                        )
-                        if (details != null) {
+                        handleTap(screenPos, displayImage, size.toSize(), scale, offset) { details ->
                             strategy.onDoubleTap(details.pixelPos.x, details.pixelPos.y)
                         }
                     }
@@ -214,14 +199,7 @@ private fun HoverInfoOverlay(
             )
             .padding(8.dp)
     ) {
-        val colorHex = if (color != null) {
-            val argb = color.value.toLong()
-            val r = (argb shr 16 and 0xFF).toString(16).padStart(2, '0').uppercase()
-            val g = (argb shr 8 and 0xFF).toString(16).padStart(2, '0').uppercase()
-            val b = (argb and 0xFF).toString(16).padStart(2, '0').uppercase()
-            "#$r$g$b"
-        } else "--"
-
+        val colorHex = color?.toHexString() ?: "--"
         val text = if (inBounds) {
             "X: ${pixelPos.x}  Y: ${pixelPos.y}\nColor: $colorHex"
         } else {
@@ -236,5 +214,27 @@ private fun HoverInfoOverlay(
                 fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
             )
         )
+    }
+}
+
+// [新增] 私有辅助函数，减少代码重复
+// 必须放在文件顶层或类内部，这里作为文件级私有函数
+private fun handleTap(
+    screenPos: Offset,
+    displayImage: ImageLayer?,
+    canvasSize: Size,
+    scale: Float,
+    offset: Offset,
+    onResult: (CanvasUtils.TapDetails) -> Unit
+) {
+    val details = CanvasUtils.calculateTapDetails(
+        screenPos,
+        displayImage,
+        canvasSize,
+        scale,
+        offset
+    )
+    if (details != null) {
+        onResult(details)
     }
 }

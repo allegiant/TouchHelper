@@ -11,13 +11,12 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import org.eu.freex.tools.common.model.PickingType
-import org.eu.freex.tools.common.utils.ImageUtils
+import org.eu.freex.tools.common.utils.toHexString
 import org.eu.freex.tools.modules.image.application.ImageProcessingUseCase
 import org.eu.freex.tools.modules.image.domain.model.FeaturePoint
 import org.eu.freex.tools.modules.image.domain.model.ImageLayer
@@ -38,7 +37,7 @@ data class EditorCanvasUiState(
 )
 
 class EditorCanvasViewModel(
-    private val projectRepo: ProjectRepository,
+    projectRepo: ProjectRepository,
     private val processingUseCase: ImageProcessingUseCase
 ) : ViewModel() {
 
@@ -59,6 +58,28 @@ class EditorCanvasViewModel(
         SharingStarted.WhileSubscribed(5000),
         EditorCanvasUiState()
     )
+
+    /**
+     * 处理画布的变换 (缩放 + 平移)
+     * @param zoomChange 缩放增量 (transformable 的回调值)
+     * @param panChange 平移增量 (transformable 的回调值)
+     */
+    fun updateTransform(zoomChange: Float, panChange: Offset) {
+        _interactionState.update { state ->
+            // 计算新缩放值，限制在 0.1 ~ 10.0 之间
+            val newScale = (state.scale * zoomChange).coerceIn(0.1f, 10f)
+            // 计算新偏移值
+            val newPan = state.pan + panChange
+            state.copy(scale = newScale, pan = newPan)
+        }
+    }
+
+    /**
+     * 重置视图 (例如导入新图片时调用)
+     */
+    fun resetView() {
+        _interactionState.update { it.copy(scale = 1f, pan = Offset.Zero) }
+    }
 
 
     // [修改] 退出裁剪模式
@@ -101,15 +122,11 @@ class EditorCanvasViewModel(
 
     fun addFeaturePoint(x: Int, y: Int, color: Color) {
         val currentList = _interactionState.value.featurePoints
-
         // 1. 计算新序号 (当前数量 + 1)
         val newIndex = currentList.size + 1
 
         // 2. 将 Color 对象转换为 Hex 字符串 (#RRGGBB)
-        val red = (color.red * 255).toInt()
-        val green = (color.green * 255).toInt()
-        val blue = (color.blue * 255).toInt()
-        val hexColor = String.format("#%02X%02X%02X", red, green, blue)
+        val hexColor = color.toHexString()
 
         // 3. 构建新的 FeaturePoint
         val newPoint = FeaturePoint(

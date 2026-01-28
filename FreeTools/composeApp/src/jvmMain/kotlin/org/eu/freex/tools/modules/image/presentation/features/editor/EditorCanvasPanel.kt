@@ -92,6 +92,11 @@ fun EditorCanvasPanel(
     EditorCanvasContent(
         modifier = modifier,
         displayImage = editorState.displayImage,
-        strategy = strategy
+        strategy = strategy,
+        scale = editorState.scale,
+        offset = editorState.pan,
+        onTransform = { zoom, pan ->
+            editorViewModel.updateTransform(zoom, pan)
+        }
     )
 }

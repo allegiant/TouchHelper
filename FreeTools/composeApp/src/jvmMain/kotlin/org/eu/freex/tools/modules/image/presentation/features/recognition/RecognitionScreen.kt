@@ -12,14 +12,18 @@ import org.eu.freex.tools.modules.image.presentation.viewmodel.RecognitionViewMo
 // 引入我们的通用画布和策略
 import org.eu.freex.tools.modules.image.presentation.features.editor.EditorCanvasContent
 import org.eu.freex.tools.modules.image.presentation.features.editor.strategies.RecognitionStrategy
+import org.eu.freex.tools.modules.image.presentation.viewmodel.EditorCanvasViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RecognitionScreen(
     onBack: () -> Unit,
-    viewModel: RecognitionViewModel = koinInject()
+    viewModel: RecognitionViewModel = koinInject(),
+    editorViewModel: EditorCanvasViewModel = koinInject()
 ) {
     val state by viewModel.uiState.collectAsState()
+    val editorState by editorViewModel.uiState.collectAsState()
+
     val bufferedImage = state.displayImage
 
     Scaffold(
@@ -51,7 +55,13 @@ fun RecognitionScreen(
                 EditorCanvasContent(
                     modifier = Modifier.weight(1f).fillMaxWidth(),
                     displayImage = displayImageLayer,
-                    strategy = strategy
+                    strategy = strategy,
+                    scale = editorState.scale,
+                    offset = editorState.pan,
+                    // [新增] 连接事件
+                    onTransform = { zoom, pan ->
+                        editorViewModel.updateTransform(zoom, pan)
+                    }
                 )
 
                 // 底部简单的文本列表 (可选，保留原有的列表视图)
