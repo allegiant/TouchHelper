@@ -1,14 +1,22 @@
 package org.eu.freex.tools.modules.image.presentation.features.editor.strategies
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.text.TextMeasurer
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.zIndex
 import org.eu.freex.tools.modules.image.domain.model.FeaturePoint
 import org.eu.freex.tools.modules.image.domain.model.SegmentationProject
+import org.eu.freex.tools.modules.image.presentation.features.editor.components.MagnifierOverlay
 import org.eu.freex.tools.modules.image.presentation.features.feature.components.drawFeaturePointsOverlay
 import org.eu.freex.tools.modules.image.presentation.features.segmentation.components.drawSegmentationOverlay
 import java.awt.Cursor
+import java.awt.image.BufferedImage
 
 // === 1. 滤镜策略 (Filter) ===
 class FilterStrategy(
@@ -27,9 +35,6 @@ class FeatureStrategy(
     private val onAddPoint: (Int, Int, Color) -> Unit
 ) : CanvasTabStrategy {
 
-    // 特征点模式总是开启放大镜，方便精准点击
-    override val showMagnifier: Boolean = true
-
     override fun getCursorIcon(): PointerIcon {
         return PointerIcon(Cursor.getPredefinedCursor(Cursor.CROSSHAIR_CURSOR))
     }
@@ -43,7 +48,32 @@ class FeatureStrategy(
         onAddPoint(x, y, color)
         return true
     }
-}
+
+
+    @Composable
+    override fun HoverOverlay(
+        modifier: Modifier,
+        image: BufferedImage,
+        screenPos: Offset,
+        pixelPos: IntOffset,
+        inBounds: Boolean
+    ) {
+        // 仅当在图片范围内时显示放大镜
+        if (inBounds) {
+            Box(modifier = Modifier.zIndex(200f)) {
+                MagnifierOverlay(
+                    sourceImage = image,
+                    centerPixel = pixelPos,
+                    screenPos = screenPos,
+                    zoomLevel = 10,
+                    gridSize = 15
+                )
+            }
+        } else {
+            // 超出范围时，回退到默认信息条，或者什么都不显示
+            super.HoverOverlay(modifier, image, screenPos, pixelPos, false)
+        }
+    }}
 
 // === 3. 切割策略 (Segmentation) ===
 class SegmentationStrategy(

@@ -5,19 +5,21 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.rememberTransformableState
 import androidx.compose.foundation.gestures.transformable
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.withTransform
@@ -25,18 +27,15 @@ import androidx.compose.ui.graphics.toComposeImageBitmap
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.toSize
 import androidx.compose.ui.zIndex
-import org.eu.freex.tools.common.utils.toHexString
 import org.eu.freex.tools.modules.image.domain.model.ImageLayer
-import org.eu.freex.tools.modules.image.presentation.features.editor.components.MagnifierOverlay
 import org.eu.freex.tools.modules.image.presentation.features.editor.strategies.CanvasTabStrategy
 import org.eu.freex.tools.modules.image.presentation.features.editor.utils.CanvasUtils
+import org.eu.freex.tools.modules.image.presentation.features.editor.utils.CanvasUtils.conditional
 
 /**
  * [EditorCanvasContent]
@@ -76,7 +75,9 @@ fun EditorCanvasContent(
             .clipToBounds()
             .pointerHoverIcon(strategy.getCursorIcon()) // 动态光标
             // 缩放平移手势
-            .then(if (strategy.enableZoomPan) Modifier.transformable(state = transformableState) else Modifier)
+            .conditional(strategy.enableZoomPan) {
+                transformable(state = transformableState)
+            }
             // 鼠标悬停监听 (用于放大镜/坐标显示)
             .pointerInput(Unit) {
                 awaitPointerEventScope {
@@ -146,32 +147,13 @@ fun EditorCanvasContent(
                 val pixelPos = CanvasUtils.screenToImage(hoverPos!!, canvasSize, imageSize, scale, offset)
                 val inBounds = pixelPos.x in 0 until imageWidth && pixelPos.y in 0 until imageHeight
 
-                // 策略决定是否显示放大镜，且鼠标必须在图片范围内
-                if (inBounds && strategy.showMagnifier) {
-                    Box(modifier = Modifier.zIndex(200f)) {
-                        MagnifierOverlay(
-                            sourceImage = bufferedImage,
-                            centerPixel = pixelPos,
-                            screenPos = hoverPos!!,
-                            zoomLevel = 10,
-                            gridSize = 15
-                        )
-                    }
-                } else {
-                    // 默认显示坐标信息 (如果策略没要求放大镜，或者鼠标在图片外)
-                    val color = if (inBounds) try {
-                        Color(bufferedImage.getRGB(pixelPos.x, pixelPos.y))
-                    } catch (e: Exception) {
-                        null
-                    } else null
-
-                    HoverInfoOverlay(
-                        modifier = Modifier.align(Alignment.BottomStart).padding(10.dp).zIndex(190f),
-                        pixelPos = pixelPos,
-                        inBounds = inBounds,
-                        color = color
-                    )
-                }
+                strategy.HoverOverlay(
+                    modifier = Modifier.align(Alignment.BottomStart).padding(10.dp).zIndex(190f),
+                    image = bufferedImage,
+                    screenPos = hoverPos!!,
+                    pixelPos = pixelPos,
+                    inBounds = inBounds
+                )
             }
         } else {
             Text(
@@ -180,40 +162,6 @@ fun EditorCanvasContent(
                 modifier = Modifier.align(Alignment.Center)
             )
         }
-    }
-}
-
-// 简单的悬浮信息组件 (提取出来保持代码整洁)
-@Composable
-private fun HoverInfoOverlay(
-    modifier: Modifier,
-    pixelPos: androidx.compose.ui.unit.IntOffset,
-    inBounds: Boolean,
-    color: Color?
-) {
-    Box(
-        modifier = modifier
-            .background(
-                MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.9f),
-                MaterialTheme.shapes.small
-            )
-            .padding(8.dp)
-    ) {
-        val colorHex = color?.toHexString() ?: "--"
-        val text = if (inBounds) {
-            "X: ${pixelPos.x}  Y: ${pixelPos.y}\nColor: $colorHex"
-        } else {
-            "Out of bounds"
-        }
-
-        Text(
-            text = text,
-            style = TextStyle(
-                color = MaterialTheme.colorScheme.onSurface,
-                fontSize = 12.sp,
-                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
-            )
-        )
     }
 }
 

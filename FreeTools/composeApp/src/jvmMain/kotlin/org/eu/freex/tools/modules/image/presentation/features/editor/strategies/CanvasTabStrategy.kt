@@ -7,7 +7,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.text.TextMeasurer
-import java.awt.Cursor
+import androidx.compose.ui.unit.IntOffset
+import org.eu.freex.tools.modules.image.presentation.features.editor.components.DefaultHoverInfoOverlay
+import java.awt.image.BufferedImage
 
 /**
  * [CanvasTabStrategy]
@@ -17,9 +19,6 @@ interface CanvasTabStrategy {
     // === 1. 状态标志 ===
     /** 是否允许底图缩放和平移。如果为 false，通常意味着策略接管了拖拽手势 (如框选)。 */
     val enableZoomPan: Boolean get() = true
-    /** 是否显示放大镜悬浮窗 */
-    val showMagnifier: Boolean get() = false
-
     // === 2. 视觉呈现 ===
     fun getCursorIcon(): PointerIcon = PointerIcon.Default
 
@@ -44,4 +43,26 @@ interface CanvasTabStrategy {
     fun onDragStart(start: Offset) {}
     fun onDrag(dragAmount: Offset) {}
     fun onDragEnd() {}
+
+
+    /**
+     * [新增] 定义悬浮层的渲染逻辑
+     * 默认实现：显示坐标信息 (Info Bar)
+     */
+    @Composable
+    fun HoverOverlay(
+        modifier: Modifier,
+        image: BufferedImage, // 放大镜需要源图
+        screenPos: Offset,    // 屏幕坐标
+        pixelPos: IntOffset,  // 像素坐标
+        inBounds: Boolean     // 是否在界内
+    ) {
+        // 默认行为：显示坐标/颜色信息
+        DefaultHoverInfoOverlay(
+            modifier = modifier,
+            pixelPos = pixelPos,
+            inBounds = inBounds,
+            image = image // 传入 image 以便获取颜色
+        )
+    }
 }

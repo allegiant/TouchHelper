@@ -1,5 +1,6 @@
 package org.eu.freex.tools.modules.image.presentation.features.editor.utils
 
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
@@ -65,5 +66,9 @@ object CanvasUtils {
             }
         }
         return null
+    }
+
+    fun Modifier.conditional(condition: Boolean, modifier: Modifier.() -> Modifier): Modifier {
+        return if (condition) then(modifier(Modifier)) else this
     }
 }
