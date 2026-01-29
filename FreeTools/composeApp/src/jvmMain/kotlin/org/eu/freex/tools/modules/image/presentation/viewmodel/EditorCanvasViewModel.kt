@@ -1,7 +1,7 @@
+/* file: EditorCanvasViewModel.kt */
 package org.eu.freex.tools.modules.image.presentation.viewmodel
 
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntRect
@@ -17,28 +17,30 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import org.eu.freex.tools.common.model.PickingType
+import org.eu.freex.tools.common.model.WorkbenchTab
 import org.eu.freex.tools.common.utils.toHexString
 import org.eu.freex.tools.modules.image.application.ImageProcessingUseCase
 import org.eu.freex.tools.modules.image.domain.model.FeaturePoint
 import org.eu.freex.tools.modules.image.domain.model.ImageLayer
+import org.eu.freex.tools.modules.image.domain.model.ImageWorkspace
 import org.eu.freex.tools.modules.image.domain.repository.ProjectRepository
 
-// 专门用于持有高频变换状态的数据类
 data class EditorCanvasTransform(
     val scale: Float = 1f,
     val pan: Offset = Offset.Zero
 )
 
 data class EditorCanvasUiState(
-    // 最终用于渲染的图片 (来自于 Pipeline 的结果)
     val displayImage: ImageLayer? = null,
-    // 交互状态
+    // [修改] 解耦状态：保留 Tab 和 PickingType 独立存在
+    val currentTab: WorkbenchTab? = null,
     val pickingType: PickingType = PickingType.NONE,
-    // 从 Boolean 改为持有具体的 Layer，不为 null 时即代表“正在裁剪模式”
-    val cropperLayer: ImageLayer? = null,
+    val isCropping: Boolean = false,
+
+    // 数据层
     val featurePoints: List<FeaturePoint> = emptyList(),
     val searchRegion: IntRect? = null,
-    val isSelectingRegion: Boolean = false
+    val cropperLayer: ImageLayer? = null
 )
 
 class EditorCanvasViewModel(
@@ -46,21 +48,46 @@ class EditorCanvasViewModel(
     private val processingUseCase: ImageProcessingUseCase
 ) : ViewModel() {
 
-    private val _interactionState = MutableStateFlow(EditorCanvasUiState())
+    private val _currentTab = MutableStateFlow<WorkbenchTab?>(null)
+    private val _isSelectingRegion = MutableStateFlow(false)
+    private val _pickingType = MutableStateFlow(PickingType.NONE)
+    private val _cropperLayer = MutableStateFlow<ImageLayer?>(null)
+    private val _featurePoints = MutableStateFlow<List<FeaturePoint>>(emptyList())
+    private val _searchRegion = MutableStateFlow<IntRect?>(null)
 
-    // 独立的高频变换状态流
     private val _transformState = MutableStateFlow(EditorCanvasTransform())
     val transformState: StateFlow<EditorCanvasTransform> = _transformState.asStateFlow()
 
-    // 1. 用于广播一次性事件 (如取色结果、取点坐标)
     val pickEvent = MutableSharedFlow<Any>()
 
     val uiState: StateFlow<EditorCanvasUiState> = combine(
-        projectRepo.workspace, // 监听 workspace 获取最新的 displayImage
-        _interactionState
-    ) { workspace, interaction ->
-        interaction.copy(
-            displayImage = workspace.displayImage
+        projectRepo.workspace,      // args[0]
+        _currentTab,                // args[1]
+        _isSelectingRegion,         // args[2]
+        _pickingType,               // args[3]
+        _featurePoints,             // args[4]
+        _searchRegion,              // args[5]
+        _cropperLayer               // args[6]
+    ) { args ->
+        val workspace = args[0] as ImageWorkspace
+        val tab = args[1] as? WorkbenchTab
+        val isCrop = args[2] as Boolean
+        val pickType = args[3] as PickingType
+        @Suppress("UNCHECKED_CAST")
+        val points = args[4] as List<FeaturePoint>
+        val region = args[5] as IntRect?
+        val cropLayer = args[6] as ImageLayer?
+
+        // [修改] 不再计算单一的 EditorMode，而是直接透传状态
+        // 让 View 层根据 (Tab + PickingType) 的组合来决定渲染和行为
+        EditorCanvasUiState(
+            displayImage = workspace.displayImage,
+            currentTab = tab,
+            pickingType = pickType,
+            isCropping = isCrop,
+            featurePoints = points,
+            searchRegion = region,
+            cropperLayer = cropLayer
         )
     }.stateIn(
         viewModelScope,
@@ -68,137 +95,93 @@ class EditorCanvasViewModel(
         EditorCanvasUiState()
     )
 
-    /**
-     * 处理画布的变换 (缩放 + 平移)
-     * @param zoomChange 缩放增量 (transformable 的回调值)
-     * @param panChange 平移增量 (transformable 的回调值)
-     */
+    // === View Interactions ===
+
+    fun setTab(tab: WorkbenchTab) {
+        _currentTab.update { tab }
+    }
+
     fun updateTransform(zoomChange: Float, panChange: Offset) {
         _transformState.update { state ->
-            // 计算新缩放值，限制在 0.1 ~ 10.0 之间
             val newScale = (state.scale * zoomChange).coerceIn(0.1f, 10f)
-            // 计算新偏移值
-            // 注意：这里需要考虑旋转带来的影响吗？目前看代码没有旋转逻辑，直接叠加即可。
-            // 如果后续引入旋转，需通过 Matrix 处理。
             val newPan = state.pan + panChange
             state.copy(scale = newScale, pan = newPan)
         }
     }
 
-    /**
-     * 重置视图 (例如导入新图片时调用)
-     */
-    fun resetView() {
-        _transformState.update { EditorCanvasTransform() }
-    }
-
+    // --- Crop ---
     fun startCropMode() {
-        _interactionState.update { it.copy(isSelectingRegion = true, pickingType = PickingType.NONE) }
+        val currentLayer = uiState.value.displayImage
+        if (currentLayer != null) {
+            _cropperLayer.value = currentLayer
+            _isSelectingRegion.value = true
+            _pickingType.value = PickingType.NONE
+        }
     }
 
-
-    //  退出裁剪模式
     fun exitCropMode() {
-        _interactionState.update { it.copy(isSelectingRegion = false) }
+        _isSelectingRegion.value = false
+        _cropperLayer.value = null
     }
 
-    //  确认裁剪
     fun confirmCrop(rect: IntRect) {
-        // 获取当前正在裁的图
-        val sourceLayer = uiState.value.cropperLayer ?: return
-
+        val sourceLayer = _cropperLayer.value ?: return
         viewModelScope.launch {
             processingUseCase.cropImage(sourceLayer, rect)
-                .onSuccess {
-                    exitCropMode() // 裁剪成功，关闭 Dialog
-                }
+                .onSuccess { exitCropMode() }
         }
     }
 
-    // --- 拾取交互 ---
-
+    // --- Picking ---
     fun setPickingType(type: PickingType) {
-        _interactionState.update { it.copy(pickingType = type, cropperLayer = null) }
-    }
-
-    // 处理画布点击 (由 View 层调用)
-    fun onCanvasClick(offset: Offset, color: Color) {
-        val pickingType = uiState.value.pickingType
-        viewModelScope.launch {
-            if (pickingType == PickingType.POINT) {
-                // 发送坐标事件
-                pickEvent.emit(IntOffset(offset.x.toInt(), offset.y.toInt()))
-            } else if (pickingType == PickingType.COLOR) {
-                // 发送颜色事件
-                pickEvent.emit(color)
-            }
+        _pickingType.value = type
+        if (type != PickingType.NONE) {
+            _isSelectingRegion.value = false
         }
     }
 
+    fun pickColor(color: Color) {
+        viewModelScope.launch { pickEvent.emit(color) }
+    }
+
+    fun pickPoint(x: Int, y: Int) {
+        viewModelScope.launch { pickEvent.emit(IntOffset(x, y)) }
+    }
+
+    // --- Features ---
     fun addFeaturePoint(x: Int, y: Int, color: Color) {
-        val currentList = _interactionState.value.featurePoints
-        // 1. 计算新序号 (当前数量 + 1)
+        val currentList = _featurePoints.value
         val newIndex = currentList.size + 1
-
-        // 2. 将 Color 对象转换为 Hex 字符串 (#RRGGBB)
-        val hexColor = color.toHexString()
-
-        // 3. 构建新的 FeaturePoint
         val newPoint = FeaturePoint(
             index = newIndex,
             x = x,
             y = y,
-            colorHex = hexColor,
-            tolerance = "101010", // 默认偏色
+            colorHex = color.toHexString(),
+            tolerance = "101010",
             isChecked = true
         )
-
-        // 4. 更新状态
-        _interactionState.update { state ->
-            state.copy(featurePoints = state.featurePoints + newPoint)
-        }
+        _featurePoints.update { it + newPoint }
     }
 
-    /**
-     * 更新特征点 (用于修改偏色或备注)
-     */
+    // --- Utils ---
     fun updateFeaturePoint(id: String, newPoint: FeaturePoint) {
-        _interactionState.update { state ->
-            val updatedList = state.featurePoints.map {
-                if (it.id == id) newPoint else it
-            }
-            state.copy(featurePoints = updatedList)
+        _featurePoints.update { list ->
+            list.map { if (it.id == id) newPoint else it }
         }
     }
 
-    /**
-     * 删除特征点并重新计算序号 (保持序号连续 1,2,3...)
-     */
     fun removeFeaturePoint(id: String) {
-        _interactionState.update { state ->
-            // 过滤掉要删除的点
-            val filteredList = state.featurePoints.filter { it.id != id }
-
-            // 重新建立索引 (Re-indexing)
-            val reIndexedList = filteredList.mapIndexed { index, point ->
-                point.copy(index = index + 1)
-            }
-
-            state.copy(featurePoints = reIndexedList)
+        _featurePoints.update { list ->
+            val filtered = list.filter { it.id != id }
+            filtered.mapIndexed { index, point -> point.copy(index = index + 1) }
         }
     }
 
-    /**
-     * 更新搜索区域
-     */
     fun updateSearchRegion(x: Int, y: Int, w: Int, h: Int) {
-        _interactionState.update { it.copy(searchRegion = IntRect(x, y, w, h)) }
+        _searchRegion.value = IntRect(x, y, w, h)
     }
 
-    /**
-     * 清除搜索区域
-     */
     fun clearSearchRegion() {
-        _interactionState.update { it.copy(searchRegion = null) }
+        _searchRegion.value = null
     }
 }
