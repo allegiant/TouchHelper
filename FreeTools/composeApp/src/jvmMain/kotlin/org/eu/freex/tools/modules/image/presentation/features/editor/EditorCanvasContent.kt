@@ -6,77 +6,105 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.rememberTransformableState
 import androidx.compose.foundation.gestures.transformable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.State
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.FilterQuality
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.toComposeImageBitmap
 import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import org.eu.freex.tools.common.utils.ImageUtils
 import org.eu.freex.tools.modules.image.domain.model.ImageLayer
-import org.eu.freex.tools.modules.image.presentation.features.editor.strategies.CanvasTabStrategy
+import org.eu.freex.tools.modules.image.presentation.features.editor.components.DefaultHoverInfoOverlay
 import org.eu.freex.tools.modules.image.presentation.viewmodel.EditorCanvasTransform
+import java.awt.image.BufferedImage
 import kotlin.math.floor
 
 /**
- * 核心渲染组件 (Dumb Component)。
+ * [EditorCanvasContent] (Dumb Component)
+ * 职责：
+ * 1. 渲染底图并处理 Zoom/Pan 变换。
+ * 2. 将交互事件 (Tap, Hover) 转换为像素坐标并回调。
+ * 3. 提供 Slot 供外部注入业务渲染层。
  */
 @Composable
 fun EditorCanvasContent(
     modifier: Modifier = Modifier,
     displayImage: ImageLayer?,
-    strategy: CanvasTabStrategy,
     transformState: State<EditorCanvasTransform>,
+
+    // === 1. 行为配置 (来自 Behavior) ===
+    enableZoomPan: Boolean = true,
+    cursorIcon: PointerIcon = PointerIcon.Default,
+
+    // === 2. 渲染插槽 (Slots) ===
+    /** * 在 Canvas 内部绘制 (内容会跟随图片缩放)
+     * 典型用途：绘制特征点、分割 Mask、标注线
+     * [textMeasurer]: 传入测量器以便在 Canvas 中绘制文字
+     */
+    drawOnImage: DrawScope.(TextMeasurer) -> Unit = {},
+
+    /** * 在 Viewport 顶层绘制 (内容不跟随缩放，始终覆盖全屏)
+     * 典型用途：框选组件、复杂的交互式 Composable UI
+     */
+    overlayContent: @Composable BoxScope.() -> Unit = {},
+
+    /** * 自定义悬浮层逻辑
+     * 如果不传 (null)，则使用默认的 [DefaultHoverInfoOverlay]
+     */
+    hoverContent: (@Composable BoxScope.(BufferedImage, Offset, IntOffset, Boolean) -> Unit)? = null,
+
+    // === 3. 事件回调 ===
+    onTap: (x: Int, y: Int, color: Color) -> Unit = { _, _, _ -> },
+    onDoubleTap: (x: Int, y: Int) -> Unit = { _, _ -> },
     onTransform: (zoomChange: Float, panChange: Offset) -> Unit
 ) {
-    // === 1. 画布状态 ===
+    // === 内部状态 ===
     // hoverPixelPos 存储的是相对于图片的像素坐标 (Local Coordinate)
     var hoverPixelPos by remember { mutableStateOf<Offset?>(null) }
-    val textMeasurer = rememberTextMeasurer()
-    val density = LocalDensity.current
 
-    // === 2. 手势处理 (Camera/Viewport 操作) ===
-    // 缩放和平移是针对"视口"的操作，所以保留在最外层
+    // 初始化文字测量器，供 Canvas 使用
+    val textMeasurer = rememberTextMeasurer()
+
+    val density = LocalDensity.current
+    val backgroundColor = MaterialTheme.colorScheme.surfaceContainerLowest
+
+    // === 手势处理 (Camera/Viewport 操作) ===
     val transformableState = rememberTransformableState { zoomChange, panChange, _ ->
-        if (strategy.enableZoomPan) {
+        if (enableZoomPan) {
             onTransform(zoomChange, panChange)
         }
     }
-
-    val backgroundColor = MaterialTheme.colorScheme.surfaceContainerLowest
 
     BoxWithConstraints(
         modifier = modifier
             .fillMaxSize()
             .background(backgroundColor)
             .clipToBounds()
-            .pointerHoverIcon(strategy.getCursorIcon())
-            // 视口手势 (Pan/Zoom)
-            .conditional(strategy.enableZoomPan) {
+            .pointerHoverIcon(cursorIcon) // 应用光标样式
+            .conditional(enableZoomPan) {
                 transformable(state = transformableState)
             }
-        // [新增] 背景点击 (可选：如果需要在图片外点击取消选中，可以在这里处理)
     ) {
         // 获取视口大小，用于后续计算 ScreenPos
         val viewportWidth = constraints.maxWidth.toFloat()
@@ -92,27 +120,22 @@ fun EditorCanvasContent(
             val imageWidthDp = with(density) { imageWidth.toDp() }
             val imageHeightDp = with(density) { imageHeight.toDp() }
 
-            // === 3. 渲染容器 (Inner Box) ===
-            // 这是一个 "1:1 像素映射" 的容器。
-            // 它的 (0,0) 就是图片的 (0,0)。
-            // 我们对它应用 graphicsLayer 进行视觉变换，但 pointerInput 会自动处理逆变换。
+            // === 核心渲染容器 (Inner Box) ===
+            // 这是一个 "1:1 像素映射" 的容器，它的 (0,0) 就是图片的 (0,0)
             Box(
                 modifier = Modifier
-                    .align(Alignment.Center) // 布局上居中
-                    .size(imageWidthDp, imageHeightDp) // 尺寸严格匹配像素
+                    .align(Alignment.Center)
+                    .size(imageWidthDp, imageHeightDp)
                     .graphicsLayer {
-                        // 视觉变换 (GPU)
+                        // 应用缩放和平移 (GPU 变换)
                         val transform = transformState.value
                         scaleX = transform.scale
                         scaleY = transform.scale
                         translationX = transform.pan.x
                         translationY = transform.pan.y
-                        // transformOrigin 默认为 Center，即 Box 中心
                     }
-                    // 将 Tap 和 Hover 监听移到这里！
-                    // Compose 会自动将屏幕坐标转换为这个 Box 的 Local 坐标。
-                    // 这里的 offset.x 几乎等于 pixelX。
-                    .pointerInput(displayImage, strategy) {
+                    // [点击] 监听图片内的点击
+                    .pointerInput(displayImage) {
                         detectTapGestures(
                             onTap = { localOffset ->
                                 // localOffset 是相对于图片左上角的坐标 (Pixels)
@@ -122,14 +145,14 @@ fun EditorCanvasContent(
                                 // 边界检查
                                 if (x in 0 until imageWidth && y in 0 until imageHeight) {
                                     val color = ImageUtils.getPixelColor(bufferedImage, x, y)
-                                    strategy.onTap(x, y, color)
+                                    onTap(x, y, color)
                                 }
                             },
                             onDoubleTap = { localOffset ->
                                 val x = floor(localOffset.x).toInt()
                                 val y = floor(localOffset.y).toInt()
                                 if (x in 0 until imageWidth && y in 0 until imageHeight) {
-                                    strategy.onDoubleTap(x, y)
+                                    onDoubleTap(x, y)
                                 }
                             }
                         )
@@ -153,17 +176,16 @@ fun EditorCanvasContent(
                 // 内部 Canvas，只负责绘制
                 Canvas(modifier = Modifier.fillMaxSize()) {
                     drawImage(bitmap, filterQuality = FilterQuality.None)
-                    // Strategy Overlay 也是在 Image 坐标系中绘制
-                    with(strategy) {
-                        drawOverlay(textMeasurer)
-                    }
+
+                    // [Slot 1] 执行业务绘制 (传入 textMeasurer)
+                    drawOnImage(textMeasurer)
                 }
             }
 
-            // === 4. Overlay & Hover ===
-            strategy.ContentOverlay(modifier = Modifier.fillMaxSize())
+            // [Slot 2] 执行顶层 Overlay (如框选框)
+            overlayContent()
 
-            // 计算悬浮层位置
+            // === 悬浮层 (Hover) 处理 ===
             if (hoverPixelPos != null) {
                 val pixelX = floor(hoverPixelPos!!.x).toInt()
                 val pixelY = floor(hoverPixelPos!!.y).toInt()
@@ -174,21 +196,24 @@ fun EditorCanvasContent(
 
                     // [反算 ScreenPos] 用于放置 Overlay Tooltip
                     // 公式：Screen = ViewportCenter + (Local - ImageCenter) * Scale + Pan
-                    val screenX =
-                        (viewportWidth / 2f) + (hoverPixelPos!!.x - imageWidth / 2f) * transform.scale + transform.pan.x
-                    val screenY =
-                        (viewportHeight / 2f) + (hoverPixelPos!!.y - imageHeight / 2f) * transform.scale + transform.pan.y
+                    val screenX = (viewportWidth / 2f) + (hoverPixelPos!!.x - imageWidth / 2f) * transform.scale + transform.pan.x
+                    val screenY = (viewportHeight / 2f) + (hoverPixelPos!!.y - imageHeight / 2f) * transform.scale + transform.pan.y
 
-                    strategy.HoverOverlay(
-                        modifier = Modifier
-                            .align(Alignment.BottomStart)
-                            .padding(10.dp)
-                            .zIndex(190f),
-                        image = bufferedImage,
-                        screenPos = Offset(screenX, screenY), // 用于 Magnifier 显示在鼠标位置
-                        pixelPos = IntOffset(pixelX, pixelY), // 用于显示 RGB/坐标数值
-                        inBounds = inBounds
-                    )
+                    // [Slot 3] 执行 Hover UI
+                    if (hoverContent != null) {
+                        hoverContent(bufferedImage, Offset(screenX, screenY), IntOffset(pixelX, pixelY), inBounds)
+                    } else {
+                        // 默认实现
+                        DefaultHoverInfoOverlay(
+                            modifier = Modifier
+                                .align(Alignment.BottomStart)
+                                .padding(10.dp)
+                                .zIndex(190f),
+                            image = bufferedImage,
+                            pixelPos = IntOffset(pixelX, pixelY),
+                            inBounds = inBounds
+                        )
+                    }
                 }
             }
         } else {
@@ -201,6 +226,7 @@ fun EditorCanvasContent(
     }
 }
 
-fun Modifier.conditional(condition: Boolean, modifier: Modifier.() -> Modifier): Modifier {
+// 辅助函数：条件 Modifier
+private fun Modifier.conditional(condition: Boolean, modifier: Modifier.() -> Modifier): Modifier {
     return if (condition) then(modifier(Modifier)) else this
 }

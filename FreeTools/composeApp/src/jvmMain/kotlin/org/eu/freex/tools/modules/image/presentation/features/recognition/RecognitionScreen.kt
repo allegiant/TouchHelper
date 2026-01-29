@@ -1,18 +1,30 @@
 package org.eu.freex.tools.modules.image.presentation.features.recognition
 
-import androidx.compose.foundation.layout.*
+// 引入我们的通用画布和策略
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import org.koin.compose.koinInject
 import org.eu.freex.tools.modules.image.domain.model.ImageLayer
-import org.eu.freex.tools.modules.image.presentation.viewmodel.RecognitionViewModel
-// 引入我们的通用画布和策略
 import org.eu.freex.tools.modules.image.presentation.features.editor.EditorCanvasContent
 import org.eu.freex.tools.modules.image.presentation.features.editor.strategies.RecognitionStrategy
 import org.eu.freex.tools.modules.image.presentation.viewmodel.EditorCanvasViewModel
+import org.eu.freex.tools.modules.image.presentation.viewmodel.RecognitionViewModel
+import org.koin.compose.koinInject
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -49,18 +61,10 @@ fun RecognitionScreen(
                     ImageLayer(name = "ocr_preview", image = bufferedImage)
                 }
 
-                // [核心] 构造策略
-                val strategy = remember(state.results) {
-                    RecognitionStrategy(state.results)
-                }
-
                 EditorCanvasContent(
                     modifier = Modifier.weight(1f).fillMaxWidth(),
                     displayImage = displayImageLayer,
-                    strategy = strategy,
-                    // [适配] 替换 scale/offset 为 transformState
                     transformState = transformState,
-                    // [新增] 连接事件
                     onTransform = { zoom, pan ->
                         editorViewModel.updateTransform(zoom, pan)
                     }

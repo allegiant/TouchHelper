@@ -38,6 +38,7 @@ data class EditorCanvasUiState(
     val cropperLayer: ImageLayer? = null,
     val featurePoints: List<FeaturePoint> = emptyList(),
     val searchRegion: IntRect? = null,
+    val isSelectingRegion: Boolean = false
 )
 
 class EditorCanvasViewModel(
@@ -91,14 +92,18 @@ class EditorCanvasViewModel(
         _transformState.update { EditorCanvasTransform() }
     }
 
+    fun startCropMode() {
+        _interactionState.update { it.copy(isSelectingRegion = true, pickingType = PickingType.NONE) }
+    }
+
 
     //  退出裁剪模式
     fun exitCropMode() {
-        _interactionState.update { it.copy(cropperLayer = null) }
+        _interactionState.update { it.copy(isSelectingRegion = false) }
     }
 
     //  确认裁剪
-    fun confirmCrop(rect: Rect) {
+    fun confirmCrop(rect: IntRect) {
         // 获取当前正在裁的图
         val sourceLayer = uiState.value.cropperLayer ?: return
 

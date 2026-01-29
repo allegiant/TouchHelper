@@ -3,12 +3,14 @@ package org.eu.freex.tools.modules.image.domain.model
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntRect
+import androidx.compose.ui.unit.IntSize
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import org.eu.freex.tools.common.model.ColorRule
 import uniffi.touch_core.ImageFilterWrapper
 import uniffi.touch_core.InvertMode
-import uniffi.touch_core.SegmentationConfig
 
 // --- 滤镜 ---
 @Serializable
@@ -417,8 +419,8 @@ data class SegmentationRect(
     val height: UInt
 )
 
-fun SegmentationRect.toComposeRect(): Rect {
-    return Rect(Offset(this.left.toFloat(), this.top.toFloat()), Size(this.width.toFloat(), this.height.toFloat()))
+fun SegmentationRect.toComposeRect(): IntRect{
+    return IntRect(IntOffset(left, top), IntSize(width.toInt(), height.toInt()))
 }
 
 @Serializable

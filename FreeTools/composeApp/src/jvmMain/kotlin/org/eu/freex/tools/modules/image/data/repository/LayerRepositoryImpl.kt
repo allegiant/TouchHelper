@@ -1,6 +1,7 @@
 package org.eu.freex.tools.modules.image.data.repository
 
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.unit.IntRect
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.eu.freex.tools.common.utils.ImageUtils
@@ -176,7 +177,7 @@ class LayerRepositoryImpl(
     }
 
 
-    override suspend fun crop(source: BufferedImage, rect: Rect): BufferedImage = withContext(Dispatchers.Default) {
+    override suspend fun crop(source: BufferedImage, rect: IntRect): BufferedImage = withContext(Dispatchers.Default) {
         ImageUtils.cropImage(source, rect)
     }
 

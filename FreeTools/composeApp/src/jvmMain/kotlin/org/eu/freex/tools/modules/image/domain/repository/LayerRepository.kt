@@ -1,6 +1,7 @@
 package org.eu.freex.tools.modules.image.domain.repository
 
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.unit.IntRect
 import org.eu.freex.tools.modules.image.domain.model.ImageFilter
 import org.eu.freex.tools.modules.image.domain.model.SegmentationConfig
 import org.eu.freex.tools.modules.image.domain.model.SegmentationRect
@@ -18,5 +19,5 @@ interface LayerRepository {
     // 切割计算接口
     suspend fun performSegmentation(image: BufferedImage, config: SegmentationConfig): Result<List<SegmentationRect>>
     suspend fun captureScreen(): BufferedImage
-    suspend fun crop(source: BufferedImage, rect: Rect): BufferedImage
+    suspend fun crop(source: BufferedImage, rect: IntRect): BufferedImage
 }

@@ -14,3 +14,21 @@ fun Color.toHexString(): String {
     val b = (argb and 0xFF).toString(16).padStart(2, '0').uppercase()
     return "#$r$g$b"
 }
+
+/**
+ * 将 Hex 字符串 (#RRGGBB 或 #AARRGGBB) 解析为 Compose Color
+ */
+fun String.toComposeColor(): Color {
+    if (this.isBlank()) return Color.Red
+    return try {
+        val cleanHex = this.removePrefix("#")
+        val colorLong = when (cleanHex.length) {
+            6 -> "FF$cleanHex".toLong(16) // 补全 Alpha 通道: RRGGBB -> FF RRGGBB
+            8 -> cleanHex.toLong(16)      // AARRGGBB
+            else -> 0xFFFF0000 // 格式错误返回红色
+        }
+        Color(colorLong)
+    } catch (e: Exception) {
+        Color.Red // 解析失败返回红色
+    }
+}

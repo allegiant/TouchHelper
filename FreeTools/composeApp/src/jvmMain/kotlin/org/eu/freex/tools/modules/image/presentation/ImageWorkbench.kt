@@ -72,15 +72,6 @@ fun ImageWorkbench(
                 EditorCanvasPanel(
                     modifier = Modifier.weight(1f).fillMaxWidth(),
                     currentTab = currentTab,
-                    isSelectingRegion = isSelectingRegion,
-                    onRegionSelectEnd = { rect ->
-                        // 更新 VM 搜索区域
-                        editorViewModel.updateSearchRegion(rect.left, rect.top, rect.width, rect.height)
-                        isSelectingRegion = false
-                    },
-                    onRegionSelectCancel = {
-                        isSelectingRegion = false
-                    }
                 )
 
                 ProcessingPipeline(

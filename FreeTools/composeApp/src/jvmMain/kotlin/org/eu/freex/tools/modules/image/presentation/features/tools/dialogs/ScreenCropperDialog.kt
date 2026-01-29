@@ -4,10 +4,21 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Button
 import androidx.compose.material3.Text
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -16,9 +27,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toComposeImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.layout.onSizeChanged // 新增导入
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.unit.IntSize // 新增导入
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntRect
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -27,7 +40,7 @@ import org.eu.freex.tools.modules.image.domain.model.ImageLayer
 @Composable
 fun ScreenCropperDialog(
     imageLayer: ImageLayer,
-    onConfirm: (Rect) -> Unit, // 这里传出的将是最终的物理像素坐标
+    onConfirm: (IntRect) -> Unit, // 这里传出的将是最终的物理像素坐标
     onDismiss: () -> Unit
 ) {
     val bitmap = remember(imageLayer) { imageLayer.image?.toComposeImageBitmap() } ?: return
@@ -91,12 +104,11 @@ fun ScreenCropperDialog(
                             val scaleY = bitmap.height.toDouble() / viewSize.height.toDouble()
 
                             // 计算最终坐标 (使用 Float)
-                            val finalRect = Rect(
-                                left = (cropRect.left * scaleX).toFloat(),
-                                top = (cropRect.top * scaleY).toFloat(),
-                                right = (cropRect.right * scaleX).toFloat(),
-                                bottom = (cropRect.bottom * scaleY).toFloat()
-                            )
+                            val topLeft = IntOffset((cropRect.left * scaleX).toInt(), (cropRect.top * scaleY).toInt())
+                            val bottomRight =
+                                IntOffset((cropRect.right * scaleX).toInt(), (cropRect.bottom * scaleY).toInt())
+
+                            val finalRect = IntRect(topLeft, bottomRight)
                             onConfirm(finalRect)
                         }
                     },

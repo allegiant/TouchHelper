@@ -1,9 +1,9 @@
 package org.eu.freex.tools.common.utils
 
-import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.toComposeImageBitmap
+import androidx.compose.ui.unit.IntRect
 import java.awt.image.BufferedImage
 import java.io.ByteArrayOutputStream
 import java.io.File
@@ -11,11 +11,11 @@ import javax.imageio.ImageIO
 
 object ImageUtils {
 
-    fun cropImage(image: BufferedImage, rect: Rect): BufferedImage {
-        val x = rect.left.toInt().coerceAtLeast(0)
-        val y = rect.top.toInt().coerceAtLeast(0)
-        val w = rect.width.toInt().coerceAtMost(image.width - x)
-        val h = rect.height.toInt().coerceAtMost(image.height - y)
+    fun cropImage(image: BufferedImage, rect: IntRect): BufferedImage {
+        val x = rect.left.coerceAtLeast(0)
+        val y = rect.top.coerceAtLeast(0)
+        val w = rect.width.coerceAtMost(image.width - x)
+        val h = rect.height.coerceAtMost(image.height - y)
         return image.getSubimage(x, y, w, h)
     }
 

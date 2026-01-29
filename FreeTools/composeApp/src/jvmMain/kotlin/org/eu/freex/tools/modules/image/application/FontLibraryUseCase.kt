@@ -1,8 +1,5 @@
 package org.eu.freex.tools.modules.image.application
 
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.toComposeImageBitmap
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -22,8 +19,6 @@ class FontLibraryUseCase(
         val workspace = projectRepo.workspace.value
         val sourceImage = workspace.displayImage?.image ?: return@withContext
 
-        // 1. 获取现有字库的特征指纹集合 (用于去重)
-        // 使用 MutableSet，不仅能查现有字库，还能防止当前批次内有重复项
         val existingSignatures = workspace.fontLibrary.map { it.binaryData }.toMutableSet()
 
         val newLibItems = ArrayList<FontLibItem>()
@@ -36,7 +31,6 @@ class FontLibraryUseCase(
             if (w <= 0 || h <= 0) continue
 
             try {
-                // 2. 裁剪图片
                 val subImage = ImageUtils.cropImage(sourceImage, rect.toComposeRect())
                 val pixels = ImageUtils.toRgbaPixels(subImage)
 

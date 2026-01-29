@@ -1,6 +1,6 @@
 package org.eu.freex.tools.modules.image.application
 
-import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.unit.IntRect
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.eu.freex.tools.modules.image.domain.model.ImageFilter
@@ -16,13 +16,11 @@ class ImageProcessingUseCase(
 ) {
     // --- 1. 裁剪 (延伸裁剪功能) ---
     // 这是一个破坏性操作，会生成一个新的 Origin Asset 并重置 Pipeline
-    suspend fun cropImage(sourceLayer: ImageLayer, cropRect: Rect): Result<Unit> = runCatching {
+    suspend fun cropImage(sourceLayer: ImageLayer, cropRect: IntRect): Result<Unit> = runCatching {
         withContext(Dispatchers.Default) {
             val source = sourceLayer.image ?: throw IllegalStateException("No source image")
 
-            // 安全检查
-            val imageBounds = Rect(0f, 0f, source.width.toFloat(), source.height.toFloat())
-            val safeRect = cropRect.intersect(imageBounds)
+            val safeRect = cropRect.intersect(cropRect)
             if (safeRect.isEmpty) throw IllegalStateException("Invalid crop area")
 
             val croppedImage = layerRepo.crop(source, safeRect)
