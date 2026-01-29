@@ -21,7 +21,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import org.eu.freex.tools.modules.image.domain.model.ImageLayer
 import org.eu.freex.tools.modules.image.presentation.features.editor.EditorCanvasContent
-import org.eu.freex.tools.modules.image.presentation.features.editor.strategies.RecognitionStrategy
 import org.eu.freex.tools.modules.image.presentation.viewmodel.EditorCanvasViewModel
 import org.eu.freex.tools.modules.image.presentation.viewmodel.RecognitionViewModel
 import org.koin.compose.koinInject
