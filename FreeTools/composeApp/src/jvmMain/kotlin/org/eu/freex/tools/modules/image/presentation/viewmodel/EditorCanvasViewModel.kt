@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -22,18 +23,21 @@ import org.eu.freex.tools.modules.image.domain.model.FeaturePoint
 import org.eu.freex.tools.modules.image.domain.model.ImageLayer
 import org.eu.freex.tools.modules.image.domain.repository.ProjectRepository
 
+// 专门用于持有高频变换状态的数据类
+data class EditorCanvasTransform(
+    val scale: Float = 1f,
+    val pan: Offset = Offset.Zero
+)
+
 data class EditorCanvasUiState(
     // 最终用于渲染的图片 (来自于 Pipeline 的结果)
     val displayImage: ImageLayer? = null,
     // 交互状态
     val pickingType: PickingType = PickingType.NONE,
-    // [修改] 从 Boolean 改为持有具体的 Layer，不为 null 时即代表“正在裁剪模式”
+    // 从 Boolean 改为持有具体的 Layer，不为 null 时即代表“正在裁剪模式”
     val cropperLayer: ImageLayer? = null,
     val featurePoints: List<FeaturePoint> = emptyList(),
     val searchRegion: IntRect? = null,
-    // [新增/确认] 必须要有这两个属性来记录画布状态
-    val scale: Float = 1f,
-    val pan: Offset = Offset.Zero
 )
 
 class EditorCanvasViewModel(
@@ -42,6 +46,10 @@ class EditorCanvasViewModel(
 ) : ViewModel() {
 
     private val _interactionState = MutableStateFlow(EditorCanvasUiState())
+
+    // 独立的高频变换状态流
+    private val _transformState = MutableStateFlow(EditorCanvasTransform())
+    val transformState: StateFlow<EditorCanvasTransform> = _transformState.asStateFlow()
 
     // 1. 用于广播一次性事件 (如取色结果、取点坐标)
     val pickEvent = MutableSharedFlow<Any>()
@@ -65,10 +73,12 @@ class EditorCanvasViewModel(
      * @param panChange 平移增量 (transformable 的回调值)
      */
     fun updateTransform(zoomChange: Float, panChange: Offset) {
-        _interactionState.update { state ->
+        _transformState.update { state ->
             // 计算新缩放值，限制在 0.1 ~ 10.0 之间
             val newScale = (state.scale * zoomChange).coerceIn(0.1f, 10f)
             // 计算新偏移值
+            // 注意：这里需要考虑旋转带来的影响吗？目前看代码没有旋转逻辑，直接叠加即可。
+            // 如果后续引入旋转，需通过 Matrix 处理。
             val newPan = state.pan + panChange
             state.copy(scale = newScale, pan = newPan)
         }
@@ -78,16 +88,16 @@ class EditorCanvasViewModel(
      * 重置视图 (例如导入新图片时调用)
      */
     fun resetView() {
-        _interactionState.update { it.copy(scale = 1f, pan = Offset.Zero) }
+        _transformState.update { EditorCanvasTransform() }
     }
 
 
-    // [修改] 退出裁剪模式
+    //  退出裁剪模式
     fun exitCropMode() {
         _interactionState.update { it.copy(cropperLayer = null) }
     }
 
-    // [修改] 确认裁剪
+    //  确认裁剪
     fun confirmCrop(rect: Rect) {
         // 获取当前正在裁的图
         val sourceLayer = uiState.value.cropperLayer ?: return
@@ -106,7 +116,7 @@ class EditorCanvasViewModel(
         _interactionState.update { it.copy(pickingType = type, cropperLayer = null) }
     }
 
-    // [新增] 处理画布点击 (由 View 层调用)
+    // 处理画布点击 (由 View 层调用)
     fun onCanvasClick(offset: Offset, color: Color) {
         val pickingType = uiState.value.pickingType
         viewModelScope.launch {
@@ -143,8 +153,6 @@ class EditorCanvasViewModel(
             state.copy(featurePoints = state.featurePoints + newPoint)
         }
     }
-
-// === 建议新增以下方法，用于支持修改偏色和删除后重新排序 ===
 
     /**
      * 更新特征点 (用于修改偏色或备注)

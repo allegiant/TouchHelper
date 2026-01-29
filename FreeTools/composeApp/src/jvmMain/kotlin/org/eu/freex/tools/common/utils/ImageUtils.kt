@@ -1,39 +1,15 @@
 package org.eu.freex.tools.common.utils
 
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.toComposeImageBitmap
-import java.awt.Color
-import java.awt.FileDialog
-import java.awt.Frame
-import java.awt.Rectangle
-import java.awt.Robot
-import java.awt.Toolkit
 import java.awt.image.BufferedImage
 import java.io.ByteArrayOutputStream
 import java.io.File
-import java.io.FilenameFilter
 import javax.imageio.ImageIO
 
 object ImageUtils {
-
-    fun pickFile(): File? {
-        val dialog = FileDialog(null as Frame?, "导入图片", FileDialog.LOAD)
-        dialog.filenameFilter = FilenameFilter { _, name ->
-            val n = name.lowercase()
-            n.endsWith(".png") || n.endsWith(".jpg") ||
-                    n.endsWith(".jpeg") || n.endsWith(".bmp") || n.endsWith(".webp")
-        }
-        dialog.isVisible = true
-        val dir = dialog.directory
-        val file = dialog.file
-        return if (dir != null && file != null) File(dir, file) else null
-    }
-
-    fun captureFullScreen(): BufferedImage {
-        val screenRect = Rectangle(Toolkit.getDefaultToolkit().screenSize)
-        return Robot().createScreenCapture(screenRect)
-    }
 
     fun cropImage(image: BufferedImage, rect: Rect): BufferedImage {
         val x = rect.left.toInt().coerceAtLeast(0)
@@ -90,10 +66,6 @@ object ImageUtils {
         return outputStream.toByteArray()
     }
 
-    fun load(file: File): BufferedImage {
-        return ImageIO.read(file)
-    }
-
     // --- 【新增】安全读取 ---
     fun read(file: File): BufferedImage? {
         return try {
@@ -132,7 +104,7 @@ object ImageUtils {
         val length = minOf(binary.length, width * height)
 
         // 定义颜色 (使用 java.awt.Color 常量更安全)
-        val colorForeground = Color.BLACK.rgb      // 前景：红色
+        val colorForeground = java.awt.Color.BLACK.rgb      // 前景：红色
         val colorTransparent = 0x00000000          // 背景：全透明
 
         for (i in 0 until length) {
@@ -218,5 +190,21 @@ object ImageUtils {
             }
         }
         return pixels
+    }
+
+
+    /**
+     * 安全获取 BufferedImage 指定坐标的颜色
+     */
+    fun getPixelColor(image: BufferedImage, x: Int, y: Int): Color {
+        return try {
+            if (x in 0 until image.width && y in 0 until image.height) {
+                Color(image.getRGB(x, y))
+            } else {
+                Color.Transparent
+            }
+        } catch (e: Exception) {
+            Color.Transparent
+        }
     }
 }

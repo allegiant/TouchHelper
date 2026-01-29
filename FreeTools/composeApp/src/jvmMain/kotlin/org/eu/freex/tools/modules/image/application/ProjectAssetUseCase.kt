@@ -2,6 +2,7 @@ package org.eu.freex.tools.modules.image.application
 
 
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.count
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import org.eu.freex.tools.common.utils.ImageUtils
@@ -20,7 +21,7 @@ class ProjectAssetUseCase(
     private val json = Json { prettyPrint = true; ignoreUnknownKeys = true }
 
     // --- 导入图片 ---
-    suspend fun importImage(file: File): Result<Unit> = runCatching {
+    suspend fun importImage(file: File): Result<ImageLayer> = runCatching {
         withContext(Dispatchers.IO) {
             val image = layerRepo.loadFromFile(file)
             val newLayer = ImageLayer(
@@ -32,6 +33,7 @@ class ProjectAssetUseCase(
             projectRepo.updateWorkspace { old ->
                 old.copy(assets = old.assets + newLayer)
             }
+            newLayer
         }
     }
 
@@ -61,7 +63,7 @@ class ProjectAssetUseCase(
     }
 
     // --- 截图 ---
-    suspend fun captureScreen(): Result<Unit> = runCatching {
+    suspend fun captureScreen(): Result<ImageLayer> = runCatching {
         withContext(Dispatchers.Default) {
             val image = layerRepo.captureScreen()
             val newLayer = ImageLayer(
@@ -73,6 +75,7 @@ class ProjectAssetUseCase(
             projectRepo.updateWorkspace { old ->
                 old.copy(assets = old.assets + newLayer)
             }
+            newLayer
         }
     }
 

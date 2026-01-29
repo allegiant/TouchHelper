@@ -40,15 +40,26 @@ class ProjectListViewModel(
     )
 
     fun importImage(file: File) {
+        val isEmptyAssets = uiState.value.assets.isEmpty()
         viewModelScope.launch {
-            // 错误处理交由 UI 层观察或在这里调用 MainViewModel (如果是简单的 Demo，直接 catch)
             assetUseCase.importImage(file)
+                .onSuccess { newLayer ->
+                    if (isEmptyAssets) {
+                        selectAsset(newLayer.id)
+                    }
+                }
         }
     }
 
     fun captureScreen() {
+        val isEmptyAssets = uiState.value.assets.isEmpty()
         viewModelScope.launch {
             assetUseCase.captureScreen()
+                .onSuccess { newLayer ->
+                    if (isEmptyAssets) {
+                        selectAsset(newLayer.id)
+                    }
+                }
         }
     }
 
@@ -65,13 +76,7 @@ class ProjectListViewModel(
         }
     }
 
-    fun exportImage(layer: ImageLayer, file: File) {
-        viewModelScope.launch {
-            assetUseCase.exportImage(layer, file)
-        }
-    }
-
-    // [新增] 导出当前画布显示的图片（即滤镜处理后的结果）
+    // 导出当前画布显示的图片（即滤镜处理后的结果）
     fun exportDisplayImage(file: File) {
         val currentDisplay = projectRepo.workspace.value.displayImage
         if (currentDisplay != null) {

@@ -25,7 +25,10 @@ fun EditorCanvasPanel(
     editorViewModel: EditorCanvasViewModel = koinInject(),
     segmentationViewModel: SegmentationViewModel = koinInject()
 ) {
+    // [优化] 分离状态流收集
     val editorState by editorViewModel.uiState.collectAsState()
+    val transformState = editorViewModel.transformState.collectAsState() // 保持为 State 对象传递
+
     val segmentationState by segmentationViewModel.uiState.collectAsState()
 
     // [工厂模式] 重组策略
@@ -61,9 +64,7 @@ fun EditorCanvasPanel(
         modifier = modifier,
         displayImage = editorState.displayImage,
         strategy = strategy,
-        // (来自 Phase 1 的改动) 连接 View Model 的变换状态
-        scale = editorState.scale,
-        offset = editorState.pan,
+        transformState = transformState,
         onTransform = { zoom, pan -> editorViewModel.updateTransform(zoom, pan) }
     )
 }

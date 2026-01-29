@@ -22,7 +22,10 @@ fun RecognitionScreen(
     editorViewModel: EditorCanvasViewModel = koinInject()
 ) {
     val state by viewModel.uiState.collectAsState()
-    val editorState by editorViewModel.uiState.collectAsState()
+
+    // [适配] 收集变换状态 (scale/pan)
+    // 传递给 Content 使用，以利用 graphicsLayer 优化
+    val transformState = editorViewModel.transformState.collectAsState()
 
     val bufferedImage = state.displayImage
 
@@ -51,13 +54,12 @@ fun RecognitionScreen(
                     RecognitionStrategy(state.results)
                 }
 
-
                 EditorCanvasContent(
                     modifier = Modifier.weight(1f).fillMaxWidth(),
                     displayImage = displayImageLayer,
                     strategy = strategy,
-                    scale = editorState.scale,
-                    offset = editorState.pan,
+                    // [适配] 替换 scale/offset 为 transformState
+                    transformState = transformState,
                     // [新增] 连接事件
                     onTransform = { zoom, pan ->
                         editorViewModel.updateTransform(zoom, pan)

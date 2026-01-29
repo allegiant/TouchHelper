@@ -62,9 +62,6 @@ fun ProjectListPanel(
         mode = PickerMode.Single, // 单选模式
         title = "导入图片素材" // 窗口标题
     ) { platformFile ->
-        // 【新增 2】回调处理
-        // 这里的 platformFile 是 FileKit 封装的对象
-        // 在 JVM 平台上，platformFile.file 就是 java.io.File
         val file = platformFile?.file
         if (file != null) {
             viewModel.importImage(file)
@@ -91,7 +88,7 @@ fun ProjectListPanel(
             // 导入按钮
             IconButton(
                 onClick = {
-                    // 【新增 3】点击按钮时，启动选择器
+                    // 点击按钮时，启动选择器
                     launcher.launch()
                 },
                 modifier = Modifier.size(28.dp)
