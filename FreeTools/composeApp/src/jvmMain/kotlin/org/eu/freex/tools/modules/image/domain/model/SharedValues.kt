@@ -99,9 +99,16 @@ data class PosterizationFilter(
 
 
 @Serializable
-@SerialName("KEEPCOLORS")
+@SerialName("MULTICOLOR")
 data class MultiColorFilter(
-    val rules: List<ColorRule> = emptyList(),
+    val rules: List<ColorRule> = List(10) { index ->
+        ColorRule(
+            id = index.toLong() + 1,
+            targetHex = "FF0000",
+            biasHex = "101010",
+            isEnabled = true
+        )
+    },
     val isInvert: Boolean = false,
     val keepOriginal: Boolean = false
 ) : ImageFilter {

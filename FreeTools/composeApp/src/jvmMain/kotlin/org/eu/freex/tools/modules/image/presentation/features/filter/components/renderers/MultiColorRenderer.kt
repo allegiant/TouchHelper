@@ -1,202 +1,118 @@
 package org.eu.freex.tools.modules.image.presentation.features.filter.components.renderers
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Colorize
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.size
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import org.koin.compose.koinInject
-import org.eu.freex.tools.common.model.ColorRule
+import org.eu.freex.tools.common.components.ColorRuleListPanel
 import org.eu.freex.tools.common.model.PickingToolState
+import org.eu.freex.tools.common.utils.toHexString
 import org.eu.freex.tools.modules.image.domain.model.ImageFilter
 import org.eu.freex.tools.modules.image.domain.model.MultiColorFilter
 import org.eu.freex.tools.modules.image.presentation.viewmodel.EditorCanvasViewModel
+import org.koin.compose.koinInject
 
 object MultiColorRenderer : FilterRenderer {
 
     @Composable
     override fun Content(filter: ImageFilter, onFilterChange: (ImageFilter) -> Unit) {
         val currentFilter = filter as? MultiColorFilter ?: return
-
         val editorViewModel: EditorCanvasViewModel = koinInject()
 
         // 记录当前正在取色的规则索引
         var activePickingIndex by remember { mutableStateOf<Int?>(null) }
 
+        // 使用 rememberUpdatedState 确保在 Effect 中使用的是最新的回调和状态
         val currentFilterState by rememberUpdatedState(currentFilter)
         val onFilterChangeState by rememberUpdatedState(onFilterChange)
 
-        // [核心修复] 监听取色结果
+        // -------------------------------------------------------------
+        // [核心优化] 监听取色结果 (原地处理，无需 ViewModel 托管)
+        // -------------------------------------------------------------
         LaunchedEffect(Unit) {
             editorViewModel.pickEvent.collect { event ->
                 val index = activePickingIndex
                 if (event is Color && index != null) {
                     val rules = currentFilterState.rules
                     if (index in rules.indices) {
-                        val pickedColor = event
-                        val hex = "#%02X%02X%02X".format(
-                            (pickedColor.red * 255).toInt(),
-                            (pickedColor.green * 255).toInt(),
-                            (pickedColor.blue * 255).toInt()
-                        )
+                        // 1. 使用工具函数转 Hex，简洁安全
+                        val newHex = event.toHexString()
 
-                        val newRule = rules[index].copy(targetHex = hex)
+                        // 2. 更新规则
                         val newRules = rules.toMutableList()
-                        newRules[index] = newRule
+                        newRules[index] = newRules[index].copy(targetHex = newHex)
 
-                        // 提交更新
+                        // 3. 提交变更
                         onFilterChangeState(currentFilterState.copy(rules = newRules))
 
-                        // [新增] 关键一步：成功取色后，告诉 ViewModel 退出取色模式
+                        // 4. 成功取色后，退出取色模式
                         editorViewModel.setActiveTool(PickingToolState.None)
                     }
-                    // 重置本地取色索引
+                    // 5. 重置本地索引
                     activePickingIndex = null
                 }
             }
         }
 
-        fun updateRules(newRules: List<ColorRule>) {
-            onFilterChange(currentFilter.copy(rules = newRules))
-        }
-
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
 
             // --- 全局选项 ---
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                FilterCheckbox("背景色 (反色)", currentFilter.isInvert) { onFilterChange(currentFilter.copy(isInvert = it)) }
-                FilterCheckbox("颜色选留 (原色)", currentFilter.keepOriginal) { onFilterChange(currentFilter.copy(keepOriginal = it)) }
-            }
-
-            HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-
-            Text("颜色列表 (${currentFilter.rules.size})", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-
-            // --- 规则列表 ---
-            currentFilter.rules.forEachIndexed { index, rule ->
-                ColorRuleRow(
-                    index = index + 1,
-                    rule = rule,
-                    onUpdate = { updated ->
-                        val newRules = currentFilter.rules.toMutableList()
-                        newRules[index] = updated
-                        updateRules(newRules)
-                    },
-                    onDelete = {
-                        val newRules = currentFilter.rules.toMutableList()
-                        newRules.removeAt(index)
-                        updateRules(newRules)
-                    },
-                    onPickColor = {
-                        activePickingIndex = index
-                        editorViewModel.setActiveTool(PickingToolState.ColorPicker)
-                    }
-                )
-                if (index < currentFilter.rules.lastIndex) {
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f), thickness = 1.dp)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                FilterCheckbox("背景色 (反色)", currentFilter.isInvert) {
+                    onFilterChange(currentFilter.copy(isInvert = it))
+                }
+                FilterCheckbox("颜色选留 (原色)", currentFilter.keepOriginal) {
+                    onFilterChange(currentFilter.copy(keepOriginal = it))
                 }
             }
 
-            // --- 添加按钮 ---
-            Button(
-                onClick = {
-                    val newId = (currentFilter.rules.maxOfOrNull { it.id } ?: 0) + 1
-                    val newRule = ColorRule(id = newId, targetHex = "FF0000", biasHex = "101010", isEnabled = true)
-                    updateRules(currentFilter.rules + newRule)
+            // --- 颜色列表 (调用公共组件) ---
+            ColorRuleListPanel(
+                rules = currentFilter.rules,
+                onRulesChange = { newRules ->
+                    onFilterChange(currentFilter.copy(rules = newRules))
                 },
-                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondaryContainer, contentColor = MaterialTheme.colorScheme.onSecondaryContainer)
-            ) {
-                Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
-                Spacer(Modifier.width(8.dp))
-                Text("添加颜色规则")
-            }
-        }
-    }
-
-    // ... (ColorRuleRow, CompactHexInput, FilterCheckbox, parseColorSafe 保持不变) ...
-    @Composable
-    private fun ColorRuleRow(
-        index: Int,
-        rule: ColorRule,
-        onUpdate: (ColorRule) -> Unit,
-        onDelete: () -> Unit,
-        onPickColor: () -> Unit
-    ) {
-        Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            Checkbox(
-                checked = rule.isEnabled,
-                onCheckedChange = { onUpdate(rule.copy(isEnabled = it)) },
-                modifier = Modifier.scale(0.8f).size(32.dp)
-            )
-
-            Text("$index", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.width(16.dp))
-
-            val previewColor = remember(rule.targetHex) { parseColorSafe(rule.targetHex) }
-            Box(
-                modifier = Modifier.size(24.dp).background(previewColor, RoundedCornerShape(4.dp)).border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(4.dp))
-            )
-
-            IconButton(onClick = onPickColor, modifier = Modifier.size(28.dp).padding(start = 4.dp)) {
-                Icon(Icons.Default.Colorize, contentDescription = "Pick", modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
-            }
-
-            Spacer(Modifier.width(4.dp))
-
-            Column(modifier = Modifier.weight(1f)) {
-                CompactHexInput("色:", rule.targetHex) { onUpdate(rule.copy(targetHex = it)) }
-                CompactHexInput("偏:", rule.biasHex) { onUpdate(rule.copy(biasHex = it)) }
-            }
-
-            IconButton(onClick = onDelete, modifier = Modifier.size(32.dp)) {
-                Icon(Icons.Default.Delete, contentDescription = "Del", tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(18.dp))
-            }
-        }
-    }
-
-    @Composable
-    private fun CompactHexInput(label: String, value: String, onValueChange: (String) -> Unit) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(label, style = MaterialTheme.typography.labelSmall, fontSize = 10.sp, color = Color.Gray)
-            Spacer(Modifier.width(4.dp))
-            BasicTextField(
-                value = value,
-                onValueChange = { if (it.length <= 7) onValueChange(it) },
-                textStyle = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace, color = MaterialTheme.colorScheme.onSurface),
-                singleLine = true,
-                modifier = Modifier.background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f), RoundedCornerShape(2.dp)).padding(horizontal = 4.dp, vertical = 2.dp).fillMaxWidth()
+                onRequestPickColor = { index ->
+                    // 记录是谁在请求取色，并激活工具
+                    activePickingIndex = index
+                    editorViewModel.setActiveTool(PickingToolState.ColorPicker)
+                }
             )
         }
     }
 
     @Composable
     private fun FilterCheckbox(label: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickable { onCheckedChange(!checked) }) {
-            Checkbox(checked = checked, onCheckedChange = onCheckedChange, modifier = Modifier.scale(0.8f).size(32.dp))
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.clickable { onCheckedChange(!checked) }
+        ) {
+            Checkbox(
+                checked = checked,
+                onCheckedChange = onCheckedChange,
+                modifier = Modifier.scale(0.8f).size(32.dp)
+            )
             Text(label, style = MaterialTheme.typography.bodySmall)
         }
-    }
-
-    private fun parseColorSafe(hex: String): Color {
-        return try {
-            val cleanHex = hex.replace("#", "")
-            if (cleanHex.length == 6) {
-                Color(cleanHex.substring(0, 2).toInt(16), cleanHex.substring(2, 4).toInt(16), cleanHex.substring(4, 6).toInt(16))
-            } else Color.Transparent
-        } catch (e: Exception) { Color.Transparent }
     }
 }

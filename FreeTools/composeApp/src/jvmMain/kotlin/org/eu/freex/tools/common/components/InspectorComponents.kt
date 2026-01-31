@@ -1,5 +1,6 @@
 package org.eu.freex.tools.common.components
 
+
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -16,6 +17,14 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Colorize
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -23,17 +32,23 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import org.eu.freex.tools.common.model.ColorRule
+import org.eu.freex.tools.common.utils.toComposeColor
 
 /**
  * [InspectorComponents.kt]
@@ -216,6 +231,181 @@ fun CompactIconButton(
             contentDescription = contentDescription,
             modifier = Modifier.size(16.dp),
             tint = tint
+        )
+    }
+}
+
+
+// ==========================================
+// 5. 颜色规则列表组件 (新增)
+// ==========================================
+
+/**
+ * 管理颜色规则列表的公共组件
+ * @param rules 当前规则列表
+ * @param onRulesChange 规则更新回调
+ * @param onRequestPickColor 请求取色回调 (参数为规则索引)
+ */
+@Composable
+fun ColorRuleListPanel(
+    rules: List<ColorRule>,
+    onRulesChange: (List<ColorRule>) -> Unit,
+    onRequestPickColor: (Int) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(modifier = modifier.fillMaxWidth()) {
+        HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+
+        Text(
+            text = "颜色列表 (${rules.size})",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.primary
+        )
+
+        // --- 规则列表 ---
+        rules.forEachIndexed { index, rule ->
+            ColorRuleRow(
+                index = index + 1,
+                rule = rule,
+                onUpdate = { updated ->
+                    val newRules = rules.toMutableList()
+                    newRules[index] = updated
+                    onRulesChange(newRules)
+                },
+                onDelete = {
+                    val newRules = rules.toMutableList()
+                    newRules.removeAt(index)
+                    onRulesChange(newRules)
+                },
+                onPickColor = {
+                    onRequestPickColor(index)
+                }
+            )
+            if (index < rules.lastIndex) {
+                HorizontalDivider(
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f),
+                    thickness = 1.dp
+                )
+            }
+        }
+
+        // --- 添加按钮 ---
+        Button(
+            onClick = {
+                val newId = (rules.maxOfOrNull { it.id } ?: 0) + 1
+                val newRule = ColorRule(id = newId, targetHex = "FF0000", biasHex = "101010", isEnabled = true)
+                onRulesChange(rules + newRule)
+            },
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 8.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+            )
+        ) {
+            Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+            Spacer(Modifier.width(8.dp))
+            Text("添加颜色规则")
+        }
+    }
+}
+
+@Composable
+private fun ColorRuleRow(
+    index: Int,
+    rule: ColorRule,
+    onUpdate: (ColorRule) -> Unit,
+    onDelete: () -> Unit,
+    onPickColor: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Checkbox(
+            checked = rule.isEnabled,
+            onCheckedChange = { onUpdate(rule.copy(isEnabled = it)) },
+            modifier = Modifier
+                .scale(0.8f)
+                .size(32.dp)
+        )
+
+        Text(
+            text = "$index",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.width(16.dp)
+        )
+
+        // 使用通用工具解析颜色
+        val previewColor = remember(rule.targetHex) { rule.targetHex.toComposeColor() }
+        Box(
+            modifier = Modifier
+                .size(24.dp)
+                .background(previewColor, RoundedCornerShape(4.dp))
+                .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(4.dp))
+        )
+
+        IconButton(
+            onClick = onPickColor,
+            modifier = Modifier
+                .size(28.dp)
+                .padding(start = 4.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Default.Colorize,
+                contentDescription = "Pick",
+                modifier = Modifier.size(16.dp),
+                tint = MaterialTheme.colorScheme.primary
+            )
+        }
+
+        Spacer(Modifier.width(4.dp))
+
+        Column(modifier = Modifier.weight(1f)) {
+            CompactHexInput("色:", rule.targetHex) { onUpdate(rule.copy(targetHex = it)) }
+            CompactHexInput("偏:", rule.biasHex) { onUpdate(rule.copy(biasHex = it)) }
+        }
+
+        IconButton(onClick = onDelete, modifier = Modifier.size(32.dp)) {
+            Icon(
+                imageVector = Icons.Default.Delete,
+                contentDescription = "Del",
+                tint = MaterialTheme.colorScheme.error,
+                modifier = Modifier.size(18.dp)
+            )
+        }
+    }
+}
+
+@Composable
+private fun CompactHexInput(label: String, value: String, onValueChange: (String) -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            fontSize = 10.sp,
+            color = Color.Gray
+        )
+        Spacer(Modifier.width(4.dp))
+        BasicTextField(
+            value = value,
+            onValueChange = { if (it.length <= 8) onValueChange(it) },
+            textStyle = MaterialTheme.typography.bodyMedium.copy(
+                fontFamily = FontFamily.Monospace,
+                color = MaterialTheme.colorScheme.onSurface
+            ),
+            singleLine = true,
+            modifier = Modifier
+                .background(
+                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                    RoundedCornerShape(2.dp)
+                )
+                .padding(horizontal = 4.dp, vertical = 2.dp)
+                .fillMaxWidth()
         )
     }
 }
