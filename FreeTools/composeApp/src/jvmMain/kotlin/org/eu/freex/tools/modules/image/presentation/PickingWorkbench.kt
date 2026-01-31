@@ -1,41 +1,24 @@
 package org.eu.freex.tools.modules.image.presentation
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AddPhotoAlternate
+import androidx.compose.material.icons.filled.Colorize
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Crop
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.NavigationRail
-import androidx.compose.material3.NavigationRailItem
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.unit.dp
-import org.eu.freex.tools.common.model.PickEvent
 import org.eu.freex.tools.common.model.PickingToolState
 import org.eu.freex.tools.modules.image.presentation.features.editor.EditorCanvasPanel
 import org.eu.freex.tools.modules.image.presentation.features.editor.layers.FeatureLayer
 import org.eu.freex.tools.modules.image.presentation.features.editor.layers.SmartHoverLayer
-import org.eu.freex.tools.modules.image.presentation.features.editor.registry.ToolUIRegistry
+import org.eu.freex.tools.modules.image.presentation.features.editor.registry.ToolRegistry
 import org.eu.freex.tools.modules.image.presentation.features.feature.FeatureExtractionPanel
 import org.eu.freex.tools.modules.image.presentation.features.tools.dialogs.CodeGenDialog
 import org.eu.freex.tools.modules.image.presentation.features.tools.dialogs.ScreenCropperDialog
@@ -55,45 +38,22 @@ fun PickingWorkbench(
     pickingViewModel: PickingToolViewModel = koinInject(),
     mainViewModel: MainViewModel = koinInject()
 ) {
+    val editorState by editorViewModel.uiState.collectAsState()
     var showCodeDialog by remember { mutableStateOf(false) }
     var generatedCode by remember { mutableStateOf("") }
 
-    val editorState by editorViewModel.uiState.collectAsState()
+    // === 生命周期管理 ===
 
-    // [1] 获取当前工具状态
-    val currentTool by pickingViewModel.currentTool.collectAsState()
-
-    // 进入时：默认激活 "取色器"
-    LaunchedEffect(Unit) {
-        editorViewModel.setActiveTool(PickingToolState.ColorPicker)
-    }
-
-    // 状态同步：监听 EditorState 的变化并同步给 ToolVM
-    LaunchedEffect(editorState.activeTool) {
-        pickingViewModel.activateTool(editorState.activeTool)
-    }
-
-    // 退出时：重置为空闲状态
+    // 退出清理
     DisposableEffect(Unit) {
-        onDispose {
-            editorViewModel.setActiveTool(PickingToolState.None)
-        }
+        onDispose { editorViewModel.setActiveTool(PickingToolState.None) }
     }
 
-    // === 事件处理 (核心逻辑) ===
+    // === 事件处理 ===
     LaunchedEffect(Unit) {
         pickingViewModel.pickEvent.collect { event ->
-            // [2] 使用智能类型转换处理事件
-            when (event) {
-                is PickEvent.ColorPicked -> {
-                    // 如果是取色，直接添加带颜色的特征点
-                    editorViewModel.addFeaturePoint(event.x, event.y, event.color)
-                }
-                is PickEvent.PointPicked -> {
-                    // 如果是取点，添加一个默认颜色(如红色)的特征点
-                    editorViewModel.addFeaturePoint(event.x, event.y, Color.Red)
-                }
-            }
+            // 调用 ToolRegistry，它现在会自动做三件事：PickColor + AddFeaturePoint + Exit
+            ToolRegistry.handleEvent(event, editorViewModel)
         }
     }
 
@@ -106,12 +66,15 @@ fun PickingWorkbench(
                 modifier = Modifier.width(80.dp).fillMaxHeight(),
                 header = { Spacer(Modifier.height(8.dp)) }
             ) {
+                // 截图
                 RailActionButton(
                     icon = Icons.Default.Crop,
                     label = "截图",
                     onClick = { projectListViewModel.captureScreen() }
                 )
                 Spacer(Modifier.height(16.dp))
+
+                // 导入
                 RailActionButton(
                     icon = Icons.Default.AddPhotoAlternate,
                     label = "导入",
@@ -124,7 +87,9 @@ fun PickingWorkbench(
                         }
                     }
                 )
-                Spacer(Modifier.weight(1f))
+                Spacer(Modifier.height(16.dp))
+
+                // 复制全部代码 (FeaturePanel 也有复制，这里是全局备份)
                 RailActionButton(
                     icon = Icons.Default.ContentCopy,
                     label = "生成脚本",
@@ -134,6 +99,16 @@ fun PickingWorkbench(
                     }
                 )
                 Spacer(Modifier.height(16.dp))
+
+                // 取色按钮
+                RailActionButton(
+                    icon = Icons.Default.Colorize,
+                    label = "取色",
+                    isActive = editorState.activeTool is PickingToolState.ColorPicker,
+                    onClick = {
+                        editorViewModel.setActiveTool(PickingToolState.ColorPicker)
+                    }
+                )
             }
 
             // --- 中间画布 ---
@@ -145,29 +120,31 @@ fun PickingWorkbench(
             ) {
                 EditorCanvasPanel(
                     modifier = Modifier.fillMaxSize(),
-                    // 1. 光标由外部控制 (十字光标)
-                    cursorIcon = PointerIcon(Cursor.getPredefinedCursor(Cursor.CROSSHAIR_CURSOR)),
+                    cursorIcon = if (editorState.activeTool !is PickingToolState.None)
+                        PointerIcon(Cursor.getPredefinedCursor(Cursor.CROSSHAIR_CURSOR))
+                    else
+                        PointerIcon.Default,
 
-                    // 2. 内部层 (跟随缩放)
                     content = {
                         if (editorState.displayImage?.image != null) {
                             val image = editorState.displayImage!!.image!!
-                            // A. 业务图层：显示已添加的特征点
+
+                            // [加回] 业务图层：显示已添加的特征点 (否则取了色看不到点在哪里)
                             FeatureLayer(
                                 viewModel = editorViewModel,
                                 sourceImage = image
                             )
-                            // B. 工具图层：通过注册表加载 (PointPicker 或 ColorPicker)
-                            val renderer = ToolUIRegistry.getRenderer(currentTool)
+
+                            // 工具图层
+                            val renderer = ToolRegistry.getRenderer(editorState.activeTool)
                             renderer.Content(image = image)
                         }
                     },
 
-                    // 3. 外部层 (固定悬浮)
                     overlay = { size, hoverPos ->
                         if (editorState.displayImage?.image != null) {
-                            // 在抓抓模式下，只要有工具激活(通常常驻)，就显示放大镜
-                            val showMagnifier = currentTool !is PickingToolState.None
+                            // 仅当工具激活时显示放大镜
+                            val showMagnifier = editorState.activeTool !is PickingToolState.None
 
                             SmartHoverLayer(
                                 sourceImage = editorState.displayImage!!.image!!,
@@ -181,7 +158,6 @@ fun PickingWorkbench(
                 )
             }
 
-            // --- 右侧列表 ---
             Box(
                 modifier = Modifier
                     .width(320.dp)
@@ -192,14 +168,13 @@ fun PickingWorkbench(
                     modifier = Modifier.fillMaxSize(),
                     viewModel = editorViewModel,
                     onStartRegionSelect = {
-                        // 如果需要触发框选，调用 ViewModel 的 startCropMode
                         editorViewModel.startCropMode()
                     }
                 )
             }
         }
 
-        // --- 全局弹窗 ---
+        // --- 弹窗 ---
         if (showCodeDialog) {
             CodeGenDialog(code = generatedCode, onDismiss = { showCodeDialog = false })
         }
@@ -218,12 +193,18 @@ fun PickingWorkbench(
 private fun RailActionButton(
     icon: ImageVector,
     label: String,
+    isActive: Boolean = false,
     onClick: () -> Unit
 ) {
     NavigationRailItem(
-        selected = false,
+        selected = isActive,
         onClick = onClick,
         icon = { Icon(icon, contentDescription = label) },
-        label = { Text(label, style = MaterialTheme.typography.labelSmall) }
+        label = { Text(label, style = MaterialTheme.typography.labelSmall) },
+        colors = NavigationRailItemDefaults.colors(
+            selectedIconColor = MaterialTheme.colorScheme.onPrimaryContainer,
+            selectedTextColor = MaterialTheme.colorScheme.onSurface,
+            indicatorColor = MaterialTheme.colorScheme.primaryContainer
+        )
     )
 }

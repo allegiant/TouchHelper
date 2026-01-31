@@ -2,19 +2,54 @@ package org.eu.freex.tools.modules.image.presentation.features.feature
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Crop
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material3.Button
+import androidx.compose.material3.Divider
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Slider
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRow
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
@@ -23,6 +58,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntRect
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import org.eu.freex.tools.common.model.PickEvent
+import org.eu.freex.tools.common.model.PickingToolState
 import org.eu.freex.tools.modules.image.domain.model.FeaturePoint
 import org.eu.freex.tools.modules.image.presentation.viewmodel.EditorCanvasViewModel
 
@@ -54,6 +91,21 @@ fun FeatureExtractionPanel(
     var similarity by remember { mutableStateOf(0.9f) }
     var direction by remember { mutableStateOf(FindDirection.LEFT_TOP_RIGHT_BOTTOM) }
     var expandDirectionMenu by remember { mutableStateOf(false) }
+
+    var activePickingIndex by remember { mutableStateOf<Int?>(null) }
+
+    // [Event Listener] Listens for the broadcast
+    LaunchedEffect(Unit) {
+        viewModel.pickEvent.collect { event ->
+            val index = activePickingIndex
+            if (index != null && event is PickEvent.ColorPicked) {
+                viewModel.addFeaturePoint(event.x, event.y, event.color)
+
+                viewModel.setActiveTool(PickingToolState.ColorPicker)
+                activePickingIndex = null
+            }
+        }
+    }
 
     Column(modifier = modifier.fillMaxHeight().padding(4.dp)) {
 
@@ -88,7 +140,6 @@ fun FeatureExtractionPanel(
             }
         }
 
-        // [区域找色模式下] 显示区域配置栏
         if (selectedTabIndex == 0 && colorSearchMode == ColorSearchMode.AREA) {
             RegionConfigSection(
                 region = uiState.searchRegion,
@@ -126,7 +177,7 @@ fun FeatureExtractionPanel(
                         viewModel.updateFeaturePoint(point.id, point.copy(tolerance = newTolerance))
                     }
                 )
-                Divider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
             }
         }
 
@@ -172,13 +223,14 @@ fun FeatureExtractionPanel(
             Spacer(Modifier.height(8.dp))
 
             // 动态生成代码
-            val generatedCode = remember(uiState.featurePoints, uiState.searchRegion, colorSearchMode, similarity, direction) {
-                if (selectedTabIndex == 0 && colorSearchMode == ColorSearchMode.AREA) {
-                    generateAreaFindColorCode(uiState.featurePoints, uiState.searchRegion, similarity, direction)
-                } else {
-                    generateMultiPointCode(uiState.featurePoints, similarity, direction)
+            val generatedCode =
+                remember(uiState.featurePoints, uiState.searchRegion, colorSearchMode, similarity, direction) {
+                    if (selectedTabIndex == 0 && colorSearchMode == ColorSearchMode.AREA) {
+                        generateAreaFindColorCode(uiState.featurePoints, uiState.searchRegion, similarity, direction)
+                    } else {
+                        generateMultiPointCode(uiState.featurePoints, similarity, direction)
+                    }
                 }
-            }
 
             OutlinedTextField(
                 value = generatedCode,
@@ -228,7 +280,9 @@ fun ScriptPointItem(
             if (hex.length == 6) {
                 Color(hex.substring(0, 2).toInt(16), hex.substring(2, 4).toInt(16), hex.substring(4, 6).toInt(16))
             } else Color.Gray
-        } catch (e: Exception) { Color.Gray }
+        } catch (e: Exception) {
+            Color.Gray
+        }
     }
 
     Row(
@@ -239,7 +293,12 @@ fun ScriptPointItem(
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text("$index", modifier = Modifier.weight(0.8f), fontSize = 12.sp)
-        Text("${point.x},${point.y}", modifier = Modifier.weight(1.5f), fontSize = 12.sp, fontFamily = FontFamily.Monospace)
+        Text(
+            "${point.x},${point.y}",
+            modifier = Modifier.weight(1.5f),
+            fontSize = 12.sp,
+            fontFamily = FontFamily.Monospace
+        )
 
         Row(modifier = Modifier.weight(1.5f), verticalAlignment = Alignment.CenterVertically) {
             Box(
@@ -249,7 +308,7 @@ fun ScriptPointItem(
                     .border(1.dp, Color.Gray)
             )
             Spacer(Modifier.width(4.dp))
-            Text(point.colorHex.replace("#",""), fontSize = 11.sp, fontFamily = FontFamily.Monospace)
+            Text(point.colorHex.replace("#", ""), fontSize = 11.sp, fontFamily = FontFamily.Monospace)
         }
 
         Box(
