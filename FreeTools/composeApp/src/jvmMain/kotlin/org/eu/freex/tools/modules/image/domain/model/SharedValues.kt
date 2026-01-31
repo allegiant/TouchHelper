@@ -101,7 +101,7 @@ data class PosterizationFilter(
 @Serializable
 @SerialName("MULTICOLOR")
 data class MultiColorFilter(
-    val rules: List<ColorRule> = List(10) { index ->
+    val rules: List<ColorRule> = List(6) { index ->
         ColorRule(
             id = index.toLong() + 1,
             targetHex = "FF0000",

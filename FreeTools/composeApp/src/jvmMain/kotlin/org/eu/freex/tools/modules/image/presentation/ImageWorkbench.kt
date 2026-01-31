@@ -142,7 +142,6 @@ fun ImageWorkbench(
                 modifier = Modifier.width(320.dp).fillMaxHeight(),
                 currentTab = currentTab,
                 onTabChange = { currentTab = it },
-                onStartRegionSelect = { isSelectingRegion = true }
             )
         }
 

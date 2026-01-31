@@ -324,7 +324,7 @@ fun HelpTooltip(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.Center
     ) {
-        androidx.compose.material.Text(text, style = MaterialTheme.typography.titleSmall)
+       Text(text, style = MaterialTheme.typography.titleSmall)
 
         Box(modifier = Modifier.padding(start = 4.dp)) {
             Icon(

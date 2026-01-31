@@ -1,18 +1,16 @@
 package org.eu.freex.tools.modules.image.presentation.features.filter.components
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -47,7 +45,6 @@ fun InspectorPanel(
     modifier: Modifier = Modifier,
     currentTab: WorkbenchTab,
     onTabChange: (WorkbenchTab) -> Unit,
-    onStartRegionSelect: () -> Unit = {}
 ) {
 
     Surface(
@@ -90,8 +87,6 @@ private fun FilterTabContent(
     val uiState by viewModel.uiState.collectAsState()
     val pipeline = uiState.pipeline
 
-    // 1. 计算当前的基准滤镜 (Base Filter)
-    // 如果选中了某个滤镜步骤，就以该步骤的参数为基准；如果是原图或空，则使用默认 ViewFilter
     val baseFilter = remember(pipeline?.activeIndex, pipeline?.steps) {
         if (pipeline != null && pipeline.activeIndex != -1) {
             val activeLayer = pipeline.steps.getOrNull(pipeline.activeIndex)
@@ -101,100 +96,82 @@ private fun FilterTabContent(
         }
     }
 
-    // 2. 本地编辑状态：用于 UI 显示和参数调节
-    // 当 baseFilter 变化（比如用户切换了步骤）时，重置 editingFilter
     var editingFilter by remember(baseFilter) { mutableStateOf(baseFilter) }
+    // 如果没有选中任何步骤，默认展开列表；否则默认收起列表，专注调参
+    var isSelectionExpanded by remember { mutableStateOf(pipeline?.activeIndex == -1) }
 
-    // 3. 实时预览逻辑
-    // 当 editingFilter 发生变化且与 baseFilter 不同时，触发预览
     LaunchedEffect(editingFilter) {
         if (editingFilter != baseFilter) {
             viewModel.onFilterPreviewChange(editingFilter)
         }
     }
 
-    // 当组件销毁或切换 Tab 时，应该清除预览 (可选，ViewModel 内部通常也会处理)
-    // DisposableEffect(Unit) { onDispose { viewModel.onFilterPreviewChange(baseFilter) } }
-
     Column(modifier = Modifier.fillMaxSize()) {
-        // A. 滤镜选择列表
-        // 注意：FilterSelectionList 需要支持“选择新类型”来替换当前的 editingFilter
-        FilterSelectionList(
-            modifier = Modifier.weight(1f),
-            currentFilter = editingFilter,
-            onFilterChange = { newFilter ->
-                editingFilter = newFilter
-            }
-        )
-
-        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-
-        // B. 底部参数与按钮区
+        // --- 1. 统一滚动区域 (包含列表和参数) ---
         Column(
             modifier = Modifier
-                .background(MaterialTheme.colorScheme.surfaceContainer)
-                .padding(12.dp)
+                .weight(1f)
+                .verticalScroll(rememberScrollState())
         ) {
-            Text(
-                "参数调节",
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(bottom = 8.dp)
+            // A. 折叠式滤镜列表
+            FilterSelectionSection(
+                currentFilter = editingFilter,
+                isExpanded = isSelectionExpanded,
+                onExpandChange = { isSelectionExpanded = it },
+                onFilterChange = {
+                    editingFilter = it
+                    isSelectionExpanded = false // 选中后自动收起
+                }
             )
 
-            // 动态渲染参数 UI
-            val renderer = remember(editingFilter::class) {
-                FilterUIRegistry.getRenderer(editingFilter)
-            }
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
 
-            renderer.Content(
-                filter = editingFilter,
-                onFilterChange = { newFilter -> editingFilter = newFilter }
+            // B. 参数调节区
+            Column(modifier = Modifier.padding(12.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        "参数调节",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.weight(1f)
+                    )
+                    // 当前滤镜状态标签
+                    Surface(
+                        color = MaterialTheme.colorScheme.primaryContainer,
+                        shape = RoundedCornerShape(4.dp)
+                    ) {
+                        Text(
+                            editingFilter.name,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    }
+                }
+
+                Spacer(Modifier.height(12.dp))
+
+                val renderer = remember(editingFilter::class) {
+                    FilterUIRegistry.getRenderer(editingFilter)
+                }
+                renderer.Content(
+                    filter = editingFilter,
+                    onFilterChange = { newFilter -> editingFilter = newFilter }
+                )
+            }
+        }
+
+        // --- 2. 固定的操作按钮区 ---
+        Surface(
+            tonalElevation = 3.dp,
+            shadowElevation = 8.dp,
+            color = MaterialTheme.colorScheme.surfaceContainer
+        ) {
+            FilterActionButtons(
+                canModify = pipeline?.activeIndex != -1,
+                onModify = { viewModel.onFilterValueConfirmed(editingFilter) },
+                onAdd = { viewModel.addFilter(editingFilter) }
             )
-
-            Spacer(Modifier.height(16.dp))
-
-            // --- 双按钮区域 ---
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                val isOrigin = pipeline?.activeIndex == -1
-                // 只有选中了具体的滤镜步骤(非原图)，才允许“修改步骤”
-                val canModify = !isOrigin
-
-                // 1. 修改步骤
-                Button(
-                    onClick = {
-                        // 确认修改，提交到 ViewModel
-                        viewModel.onFilterValueConfirmed(editingFilter)
-                    },
-                    enabled = canModify,
-                    modifier = Modifier.weight(1f).height(40.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-                    ),
-                    shape = MaterialTheme.shapes.small,
-                    contentPadding = PaddingValues(0.dp)
-                ) {
-                    Text("修改步骤", style = MaterialTheme.typography.labelMedium)
-                }
-
-                // 2. 添加步骤
-                Button(
-                    onClick = {
-                        // 添加新步骤到流水线
-                        viewModel.addFilter(editingFilter)
-                    },
-                    enabled = true,
-                    modifier = Modifier.weight(1f).height(40.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.primary
-                    ),
-                    shape = MaterialTheme.shapes.small,
-                    contentPadding = PaddingValues(0.dp)
-                ) {
-                    Text("添加步骤", style = MaterialTheme.typography.labelMedium)
-                }
-            }
         }
     }
 }

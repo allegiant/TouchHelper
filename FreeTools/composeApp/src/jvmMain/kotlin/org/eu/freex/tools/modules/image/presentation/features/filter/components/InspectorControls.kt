@@ -1,6 +1,9 @@
 package org.eu.freex.tools.modules.image.presentation.features.filter.components
 
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -13,20 +16,23 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.Text
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Lightbulb
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.PlainTooltip
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TooltipAnchorPosition
 import androidx.compose.material3.TooltipBox
-import androidx.compose.material3.TooltipDefaults
+import androidx.compose.material3.TooltipDefaults.rememberTooltipPositionProvider
 import androidx.compose.material3.rememberTooltipState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -95,7 +101,6 @@ fun FilterSelectionList(
 
     Column(
         modifier = modifier
-            .verticalScroll(rememberScrollState())
             .padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
@@ -130,7 +135,7 @@ private fun FilterGroup(
     onSelect: (ImageFilter) -> Unit
 ) {
     Column {
-        androidx.compose.material3.Text(
+        Text(
             text = title,
             color = MaterialTheme.colorScheme.primary,
             style = MaterialTheme.typography.titleSmall,
@@ -182,7 +187,7 @@ fun FilterChip(
     // 【新增】判断是否有 Tooltip 文本
     if (!tooltipText.isNullOrBlank()) {
         TooltipBox(
-            positionProvider = TooltipDefaults.rememberPlainTooltipPositionProvider(),
+            positionProvider = rememberTooltipPositionProvider(positioning = TooltipAnchorPosition.Above),
             tooltip = {
                 PlainTooltip {
                     Text(tooltipText)
@@ -336,4 +341,86 @@ private fun GuideDivider() {
         modifier = Modifier.padding(vertical = 4.dp),
         color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
     )
+}
+
+@Composable
+fun FilterSelectionSection(
+    currentFilter: ImageFilter,
+    isExpanded: Boolean,
+    onExpandChange: (Boolean) -> Unit,
+    onFilterChange: (ImageFilter) -> Unit
+) {
+    Column {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { onExpandChange(!isExpanded) }
+                .padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "选择滤镜",
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.weight(1f)
+            )
+            Text(
+                text = if (isExpanded) "收起列表" else "更换滤镜",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.primary
+            )
+            Icon(
+                imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                contentDescription = null,
+                modifier = Modifier.size(20.dp),
+                tint = MaterialTheme.colorScheme.primary
+            )
+        }
+
+        AnimatedVisibility(
+            visible = isExpanded,
+            enter = expandVertically(),
+            exit = shrinkVertically()
+        ) {
+            // 这里调用原本的列表内容代码，但去掉内部滚动条
+            FilterSelectionList(
+                currentFilter = currentFilter,
+                onFilterChange = onFilterChange
+            )
+        }
+    }
+}
+
+@Composable
+fun FilterActionButtons(
+    canModify: Boolean,
+    onModify: () -> Unit,
+    onAdd: () -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(12.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Button(
+            onClick = onModify,
+            enabled = canModify,
+            modifier = Modifier.weight(1f).height(40.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+            ),
+            shape = MaterialTheme.shapes.small
+        ) {
+            Text("修改当前步骤", style = MaterialTheme.typography.labelMedium)
+        }
+
+        Button(
+            onClick = onAdd,
+            modifier = Modifier.weight(1f).height(40.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+            shape = MaterialTheme.shapes.small
+        ) {
+            Text("作为新步骤添加", style = MaterialTheme.typography.labelMedium)
+        }
+    }
 }
