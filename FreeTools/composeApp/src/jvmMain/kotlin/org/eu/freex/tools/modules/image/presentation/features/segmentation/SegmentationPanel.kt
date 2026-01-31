@@ -13,7 +13,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import org.eu.freex.tools.common.model.PickingType
+import org.eu.freex.tools.common.model.PickingToolState
 import org.koin.compose.koinInject
 import java.awt.image.BufferedImage
 import java.util.ArrayList
@@ -65,7 +65,7 @@ fun SegmentationPanel(
                 segViewModel.runSegmentation(newConfig)
 
                 // 取点完成后退出取点模式
-                editorViewModel.setPickingType(PickingType.NONE)
+                editorViewModel.setActiveTool(PickingToolState.None)
             }
         }
     }
@@ -117,7 +117,7 @@ fun SegmentationPanel(
                 config = config,
                 onChange = { newConfig -> segViewModel.runSegmentation(newConfig) },
                 onPickPoint = {
-                    editorViewModel.setPickingType(PickingType.POINT)
+                    editorViewModel.setActiveTool(PickingToolState.PointPicker)
                 }
             )
         }

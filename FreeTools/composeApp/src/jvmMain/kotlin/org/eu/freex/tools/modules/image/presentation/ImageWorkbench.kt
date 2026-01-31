@@ -1,23 +1,37 @@
-/* Path: composeApp/src/jvmMain/kotlin/org/eu/freex/tools/modules/image/presentation/ImageWorkbench.kt */
 package org.eu.freex.tools.modules.image.presentation
 
-import androidx.compose.foundation.layout.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.PointerIcon
-import androidx.compose.ui.unit.IntSize // [新增导入]
 import androidx.compose.ui.unit.dp
-import org.koin.compose.koinInject
 import org.eu.freex.tools.common.components.LoadingOverlay
 import org.eu.freex.tools.common.components.ToastOverlay
-import org.eu.freex.tools.common.model.PickingType
+import org.eu.freex.tools.common.model.PickEvent
+import org.eu.freex.tools.common.model.PickingToolState
 import org.eu.freex.tools.common.model.WorkbenchTab
 import org.eu.freex.tools.modules.image.presentation.features.editor.EditorCanvasPanel
-import org.eu.freex.tools.modules.image.presentation.features.editor.layers.ColorPickerLayer
-import org.eu.freex.tools.modules.image.presentation.features.editor.layers.PointPickerLayer
 import org.eu.freex.tools.modules.image.presentation.features.editor.layers.SegmentationLayer
 import org.eu.freex.tools.modules.image.presentation.features.editor.layers.SmartHoverLayer
+import org.eu.freex.tools.modules.image.presentation.features.editor.registry.ToolUIRegistry
 import org.eu.freex.tools.modules.image.presentation.features.filter.components.InspectorPanel
 import org.eu.freex.tools.modules.image.presentation.features.pipeline.ProcessingPipeline
 import org.eu.freex.tools.modules.image.presentation.features.project.ProjectListPanel
@@ -28,6 +42,7 @@ import org.eu.freex.tools.modules.image.presentation.viewmodel.MainViewModel
 import org.eu.freex.tools.modules.image.presentation.viewmodel.PickingToolViewModel
 import org.eu.freex.tools.modules.image.presentation.viewmodel.ProjectListViewModel
 import org.eu.freex.tools.modules.image.presentation.viewmodel.SegmentationViewModel
+import org.koin.compose.koinInject
 import java.awt.Cursor
 
 @Composable
@@ -40,53 +55,53 @@ fun ImageWorkbench(
 ) {
     val mainState by mainViewModel.uiState.collectAsState()
     val editorState by editorViewModel.uiState.collectAsState()
-    val isToolActive by pickingViewModel.isActive.collectAsState()
+
+    // [1] 获取当前工具状态 (Sealed Interface)
+    val currentTool by pickingViewModel.currentTool.collectAsState()
 
     var currentTab by remember { mutableStateOf(WorkbenchTab.FILTER) }
     var showCodeDialog by remember { mutableStateOf(false) }
     var generatedCode by remember { mutableStateOf("") }
     var isSelectingRegion by remember { mutableStateOf(false) }
 
-    // === 1. 监听来自属性面板的取色请求 ===
-    LaunchedEffect(editorState.pickingType) {
-        if (editorState.pickingType != PickingType.NONE) {
-            pickingViewModel.setMode(editorState.pickingType)
-            pickingViewModel.setToolActive(true)
-        } else {
-            pickingViewModel.setToolActive(false)
-        }
+    // === 状态桥接 [修复后] ===
+
+    // 直接监听 EditorState 的 activeTool 变化，并同步给 PickingViewModel
+    LaunchedEffect(editorState.activeTool) {
+        // 不需要 when 了，直接传过去！
+        pickingViewModel.activateTool(editorState.activeTool)
     }
 
     // === 2. 监听工具点击事件并分发 [核心修复] ===
     LaunchedEffect(Unit) {
-        pickingViewModel.pickEvent.collect { data ->
-            when (data.type) {
-                // 情况 A: 取色
-                PickingType.COLOR -> {
-                    editorViewModel.pickColor(data.color)
-                    editorViewModel.setPickingType(PickingType.NONE)
+        pickingViewModel.pickEvent.collect { event ->
+            when (event) {
+                // 情况 A: 取色事件 (event 自动被智能转换为 PickEvent.ColorPicked)
+                is PickEvent.ColorPicked -> {
+                    editorViewModel.pickColor(event.color)
+
+                    // 退出工具模式 (注意：这里改为调用 setActiveTool 并传入 State 对象)
+                    editorViewModel.setActiveTool(PickingToolState.None)
                 }
 
-                // 情况 B: 取点 (修复此处)
-                PickingType.POINT -> {
-                    // [关键修改]
-                    // 不要调用 segmentationViewModel.onCanvasTap (那是用来选框的)
-                    // 要调用 editorViewModel.pickPoint (这是用来回填坐标给属性面板的)
-                    editorViewModel.pickPoint(data.x, data.y)
+                // 情况 B: 取点事件 (event 自动被智能转换为 PickEvent.PointPicked)
+                is PickEvent.PointPicked -> {
+                    // [关键修改] 将坐标转发给 EditorViewModel
+                    editorViewModel.pickPoint(event.x, event.y)
 
                     // 打印日志方便调试
-                    println("ImageWorkbench 取点: (${data.x}, ${data.y})")
+                    println("ImageWorkbench 取点: (${event.x}, ${event.y})")
 
-                    // 退出取点模式
-                    editorViewModel.setPickingType(PickingType.NONE)
+                    // 退出工具模式
+                    editorViewModel.setActiveTool(PickingToolState.None)
                 }
-
-                else -> {}
             }
         }
     }
 
-    val currentCursor = if (isToolActive) {
+
+    // 动态计算光标
+    val currentCursor = if (currentTool !is PickingToolState.None) {
         PointerIcon(Cursor.getPredefinedCursor(Cursor.CROSSHAIR_CURSOR))
     } else {
         PointerIcon.Default
@@ -128,37 +143,25 @@ fun ImageWorkbench(
                             else -> {}
                         }
 
-                        // 2. 工具交互层 (必须存在，否则放大镜模式下点击无效)
-                        // 注意：因为它盖在 SegmentationLayer 上面，所以它会拦截点击事件。
-                        // 这就是为什么我们需要上面的 "pickEvent.collect" 来手动把坐标传回给 segmentationViewModel。
-                        if (isToolActive && editorState.displayImage?.image != null) {
+                        // 2. 工具交互层 [注册表模式实现]
+                        if (editorState.displayImage?.image != null) {
                             val image = editorState.displayImage!!.image!!
-                            // [修改点] 根据当前的 PickingType 决定加载哪个 Layer
-                            when (editorState.pickingType) {
-                                PickingType.COLOR -> {
-                                    ColorPickerLayer(sourceImage = image)
-                                }
-                                PickingType.POINT -> {
-                                    // 取点只需要尺寸
-                                    PointPickerLayer(
-                                        imageSize = IntSize(image.width, image.height)
-                                    )
-                                }
-                                else -> {
-                                    // 如果有其他模式，或者为了兼容，可以保留老的 PickingToolLayer
-                                    // 但既然拆分了，建议这里只处理这两个
-                                }
-                            }
+                            // A. 查表
+                            val renderer = ToolUIRegistry.getRenderer(currentTool)
+                            // B. 渲染
+                            renderer.Content(image = image)
                         }
                     },
                     overlay = { size, hoverPos ->
                         if (editorState.displayImage?.image != null) {
+                            // 只要不是 None，就显示放大镜
+                            val showMagnifier = currentTool !is PickingToolState.None
                             SmartHoverLayer(
                                 sourceImage = editorState.displayImage!!.image!!,
                                 containerSize = size,
                                 transformState = editorViewModel.transformState.value,
                                 hoverPixelPos = hoverPos,
-                                showMagnifier = isToolActive
+                                showMagnifier = showMagnifier
                             )
                         }
                     }

@@ -29,14 +29,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.PointerIcon
-import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
-import org.eu.freex.tools.common.model.PickingType
+import org.eu.freex.tools.common.model.PickEvent
+import org.eu.freex.tools.common.model.PickingToolState
 import org.eu.freex.tools.modules.image.presentation.features.editor.EditorCanvasPanel
-import org.eu.freex.tools.modules.image.presentation.features.editor.layers.ColorPickerLayer
 import org.eu.freex.tools.modules.image.presentation.features.editor.layers.FeatureLayer
-import org.eu.freex.tools.modules.image.presentation.features.editor.layers.PointPickerLayer
 import org.eu.freex.tools.modules.image.presentation.features.editor.layers.SmartHoverLayer
+import org.eu.freex.tools.modules.image.presentation.features.editor.registry.ToolUIRegistry
 import org.eu.freex.tools.modules.image.presentation.features.feature.FeatureExtractionPanel
 import org.eu.freex.tools.modules.image.presentation.features.tools.dialogs.CodeGenDialog
 import org.eu.freex.tools.modules.image.presentation.features.tools.dialogs.ScreenCropperDialog
@@ -61,36 +60,40 @@ fun PickingWorkbench(
 
     val editorState by editorViewModel.uiState.collectAsState()
 
-    // === 1. 初始化与生命周期管理 ===
-    // 进入时：强制激活工具，设置为取点模式
+    // [1] 获取当前工具状态
+    val currentTool by pickingViewModel.currentTool.collectAsState()
+
+    // 进入时：默认激活 "取色器"
     LaunchedEffect(Unit) {
-        editorViewModel.setPickingType(PickingType.POINT)
-        pickingViewModel.setToolActive(true)
-        pickingViewModel.setMode(PickingType.POINT)
+        editorViewModel.setActiveTool(PickingToolState.ColorPicker)
     }
 
-    // 退出时：关闭工具，重置 Editor 状态
+    // 状态同步：监听 EditorState 的变化并同步给 ToolVM
+    LaunchedEffect(editorState.activeTool) {
+        pickingViewModel.activateTool(editorState.activeTool)
+    }
+
+    // 退出时：重置为空闲状态
     DisposableEffect(Unit) {
         onDispose {
-            pickingViewModel.setToolActive(false)
-            editorViewModel.setPickingType(PickingType.NONE)
+            editorViewModel.setActiveTool(PickingToolState.None)
         }
     }
 
-    // === 2. 核心业务桥接 ===
-    // 监听 PickingTool 的事件，并分发给 EditorViewModel
+    // === 事件处理 (核心逻辑) ===
     LaunchedEffect(Unit) {
-        pickingViewModel.pickEvent.collect { data ->
-            // 无论是取色还是取点，只要在抓抓工具里点击了，就视为添加一个特征点
-            // 注意：FeatureExtractionPanel 监听的是 editorViewModel.featurePoints
-            editorViewModel.addFeaturePoint(data.x, data.y, data.color)
-        }
-    }
-
-    // 反向同步：如果 Editor 改变了 pickingType (比如点击列表里的"取色")，工具也要跟进
-    LaunchedEffect(editorState.pickingType) {
-        if (editorState.pickingType != PickingType.NONE) {
-            pickingViewModel.setMode(editorState.pickingType)
+        pickingViewModel.pickEvent.collect { event ->
+            // [2] 使用智能类型转换处理事件
+            when (event) {
+                is PickEvent.ColorPicked -> {
+                    // 如果是取色，直接添加带颜色的特征点
+                    editorViewModel.addFeaturePoint(event.x, event.y, event.color)
+                }
+                is PickEvent.PointPicked -> {
+                    // 如果是取点，添加一个默认颜色(如红色)的特征点
+                    editorViewModel.addFeaturePoint(event.x, event.y, Color.Red)
+                }
+            }
         }
     }
 
@@ -140,8 +143,6 @@ fun PickingWorkbench(
                     .fillMaxHeight()
                     .background(Color.Black)
             ) {
-                val viewportSize = remember { mutableStateOf(IntSize.Zero) }
-
                 EditorCanvasPanel(
                     modifier = Modifier.fillMaxSize(),
                     // 1. 光标由外部控制 (十字光标)
@@ -149,37 +150,33 @@ fun PickingWorkbench(
 
                     // 2. 内部层 (跟随缩放)
                     content = {
-                        val image = editorState.displayImage!!.image!!
-
-                        // A. 业务图层 (特征点)
-                        FeatureLayer(
-                            viewModel = editorViewModel,
-                            sourceImage = image
-                        )
-
-                        // B. 工具交互层 (拦截点击)
-                        // 它放在 FeatureLayer 上面，所以点击会先被它捕获
-                        // 2. 工具交互层 [拆分后]
-                        val mode by pickingViewModel.pickingMode.collectAsState()
-                        when (mode) {
-                            PickingType.COLOR -> ColorPickerLayer(sourceImage = image)
-                            PickingType.POINT -> PointPickerLayer(imageSize = IntSize(image.width, image.height))
-                            else -> {}
+                        if (editorState.displayImage?.image != null) {
+                            val image = editorState.displayImage!!.image!!
+                            // A. 业务图层：显示已添加的特征点
+                            FeatureLayer(
+                                viewModel = editorViewModel,
+                                sourceImage = image
+                            )
+                            // B. 工具图层：通过注册表加载 (PointPicker 或 ColorPicker)
+                            val renderer = ToolUIRegistry.getRenderer(currentTool)
+                            renderer.Content(image = image)
                         }
-
                     },
 
                     // 3. 外部层 (固定悬浮)
                     overlay = { size, hoverPos ->
-                        val image = editorState.displayImage!!.image!!
+                        if (editorState.displayImage?.image != null) {
+                            // 在抓抓模式下，只要有工具激活(通常常驻)，就显示放大镜
+                            val showMagnifier = currentTool !is PickingToolState.None
 
-                        SmartHoverLayer(
-                            sourceImage = image,
-                            containerSize = size,
-                            transformState = editorViewModel.transformState.value,
-                            hoverPixelPos = hoverPos, // 传入位置
-                            showMagnifier = true      // [修改] 抓抓工具：强制显示放大镜
-                        )
+                            SmartHoverLayer(
+                                sourceImage = editorState.displayImage!!.image!!,
+                                containerSize = size,
+                                transformState = editorViewModel.transformState.value,
+                                hoverPixelPos = hoverPos,
+                                showMagnifier = showMagnifier
+                            )
+                        }
                     }
                 )
             }

@@ -17,7 +17,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import org.koin.compose.koinInject // [新增]
 import org.eu.freex.tools.common.components.ModeSelectionRow
-import org.eu.freex.tools.common.model.PickingType
+import org.eu.freex.tools.common.model.PickingToolState
 import org.eu.freex.tools.modules.image.domain.model.ExtendCropFilter
 import org.eu.freex.tools.modules.image.domain.model.ImageFilter
 // [新增] 引入新架构组件
@@ -60,7 +60,7 @@ object ExtendCropRenderer: FilterRenderer {
                             )
                             // 进入下一阶段，并再次请求取点
                             pickingStage = 2
-                            editorViewModel.setPickingType(PickingType.POINT)
+                            editorViewModel.setActiveTool(PickingToolState.PointPicker)
                         }
                         2 -> {
                             // 收到第2个点
@@ -109,7 +109,7 @@ object ExtendCropRenderer: FilterRenderer {
                 onClick = {
                     // [修改] 启动取点流程
                     pickingStage = 1
-                    editorViewModel.setPickingType(PickingType.POINT)
+                    editorViewModel.setActiveTool(PickingToolState.PointPicker)
                 }
             ) {
                 Icon(if (current.status == 2) Icons.Default.Crop else Icons.Default.TouchApp, contentDescription = null)

@@ -1,4 +1,4 @@
-/* file: .../editor/layers/ColorPickerLayer.kt */
+/* Path: .../features/editor/layers/ColorPickerLayer.kt */
 package org.eu.freex.tools.modules.image.presentation.features.editor.layers
 
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -13,11 +13,6 @@ import org.koin.compose.koinInject
 import java.awt.image.BufferedImage
 import kotlin.math.floor
 
-/**
- * [ColorPickerLayer]
- * 专用取色工具层。
- * 职责：拦截点击 -> 读取像素颜色 -> 触发 ViewModel 取色逻辑。
- */
 @Composable
 fun ColorPickerLayer(
     sourceImage: BufferedImage,
@@ -30,12 +25,12 @@ fun ColorPickerLayer(
                 detectTapGestures { offset ->
                     val x = floor(offset.x).toInt()
                     val y = floor(offset.y).toInt()
-
+                    // 边界检查
                     if (x in 0 until sourceImage.width && y in 0 until sourceImage.height) {
-                        // 1. 获取颜色 (耗时操作，只在这里做)
+                        // 1. 耗时操作：获取颜色
                         val color = ImageUtils.getPixelColor(sourceImage, x, y)
-                        // 2. 仅通知取色
-                        viewModel.triggerColorPick(x, y, color)
+                        // 2. 触发事件
+                        viewModel.emitColorPick(x, y, color)
                     }
                 }
             }

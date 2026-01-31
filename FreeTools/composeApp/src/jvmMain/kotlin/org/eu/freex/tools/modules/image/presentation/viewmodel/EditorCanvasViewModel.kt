@@ -17,7 +17,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import org.eu.freex.tools.common.model.PickingType
+import org.eu.freex.tools.common.model.PickingToolState
 import org.eu.freex.tools.common.model.WorkbenchTab
 import org.eu.freex.tools.common.utils.toHexString
 import org.eu.freex.tools.modules.image.application.ImageProcessingUseCase
@@ -35,7 +35,7 @@ data class EditorCanvasUiState(
     val displayImage: ImageLayer? = null,
     // [修改] 解耦状态：保留 Tab 和 PickingType 独立存在
     val currentTab: WorkbenchTab? = null,
-    val pickingType: PickingType = PickingType.NONE,
+    val activeTool: PickingToolState = PickingToolState.None,
     val isCropping: Boolean = false,
 
     // 数据层
@@ -51,7 +51,6 @@ class EditorCanvasViewModel(
 
     private val _currentTab = MutableStateFlow<WorkbenchTab?>(null)
     private val _isSelectingRegion = MutableStateFlow(false)
-    private val _pickingType = MutableStateFlow(PickingType.NONE)
     private val _cropperLayer = MutableStateFlow<ImageLayer?>(null)
     private val _featurePoints = MutableStateFlow<List<FeaturePoint>>(emptyList())
     private val _searchRegion = MutableStateFlow<IntRect?>(null)
@@ -60,12 +59,13 @@ class EditorCanvasViewModel(
     val transformState: StateFlow<EditorCanvasTransform> = _transformState.asStateFlow()
 
     val pickEvent = MutableSharedFlow<Any>()
+    private val _activeTool = MutableStateFlow<PickingToolState>(PickingToolState.None)
 
     val uiState: StateFlow<EditorCanvasUiState> = combine(
         projectRepo.workspace,      // args[0]
         _currentTab,                // args[1]
         _isSelectingRegion,         // args[2]
-        _pickingType,               // args[3]
+        _activeTool,                // args[3] [修改]
         _featurePoints,             // args[4]
         _searchRegion,              // args[5]
         _cropperLayer               // args[6]
@@ -73,7 +73,7 @@ class EditorCanvasViewModel(
         val workspace = args[0] as ImageWorkspace
         val tab = args[1] as? WorkbenchTab
         val isCrop = args[2] as Boolean
-        val pickType = args[3] as PickingType
+        val toolState = args[3] as PickingToolState
         @Suppress("UNCHECKED_CAST")
         val points = args[4] as List<FeaturePoint>
         val region = args[5] as IntRect?
@@ -84,7 +84,7 @@ class EditorCanvasViewModel(
         EditorCanvasUiState(
             displayImage = workspace.displayImage,
             currentTab = tab,
-            pickingType = pickType,
+            activeTool = toolState,
             isCropping = isCrop,
             featurePoints = points,
             searchRegion = region,
@@ -116,7 +116,7 @@ class EditorCanvasViewModel(
         if (currentLayer != null) {
             _cropperLayer.value = currentLayer
             _isSelectingRegion.value = true
-            _pickingType.value = PickingType.NONE
+            _activeTool.value = PickingToolState.None
         }
     }
 
@@ -133,13 +133,15 @@ class EditorCanvasViewModel(
         }
     }
 
-    // --- Picking ---
-    fun setPickingType(type: PickingType) {
-        _pickingType.value = type
-        if (type != PickingType.NONE) {
+    // [修改] 方法名和参数都变了
+    fun setActiveTool(tool: PickingToolState) {
+        _activeTool.value = tool
+        // 如果激活了工具，通常要退出选区模式
+        if (tool !is PickingToolState.None) {
             _isSelectingRegion.value = false
         }
     }
+
 
     fun pickColor(color: Color) {
         viewModelScope.launch { pickEvent.emit(color) }

@@ -42,7 +42,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import org.eu.freex.tools.common.components.ModeSelectionRow
-import org.eu.freex.tools.common.model.PickingType
+import org.eu.freex.tools.common.model.PickingToolState
 import org.eu.freex.tools.modules.image.domain.model.AutoCropFilter
 import org.eu.freex.tools.modules.image.domain.model.AutoCropMode
 import org.eu.freex.tools.modules.image.domain.model.ImageFilter
@@ -81,7 +81,7 @@ object AutoCropRenderer : FilterRenderer {
                     // 更新 Filter
                     onFilterChangeState(currentFilterState.copy(fixedColorHex = hex))
                     // [新增] 关键一步：成功取色后，告诉 ViewModel 退出取色模式
-                    editorViewModel.setPickingType(PickingType.NONE)
+                    editorViewModel.setActiveTool(PickingToolState.None)
                     // 重置标记
                     isPickingColor = false
                 }
@@ -153,7 +153,7 @@ object AutoCropRenderer : FilterRenderer {
                         onPickColor = {
                             // [修改] 触发取色流程
                             isPickingColor = true
-                            editorViewModel.setPickingType(PickingType.COLOR)
+                            editorViewModel.setActiveTool(PickingToolState.ColorPicker)
                         }
                     )
 

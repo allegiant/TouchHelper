@@ -8,105 +8,92 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import org.eu.freex.tools.common.model.PickingType
+import org.eu.freex.tools.common.model.PickEvent
+import org.eu.freex.tools.common.model.PickingToolState
 import org.eu.freex.tools.common.utils.toHexString
 
-data class PickedData(
-    val type: PickingType,
-    val x: Int,
-    val y: Int,
-    val color: Color, // [修改] 直接保留 Color 对象方便使用
-    val colorHex: String,
-    val timestamp: Long = System.currentTimeMillis()
-)
-
+/**
+ * [PickingToolViewModel]
+ * 抓抓工具的核心 ViewModel (重构版)
+ *
+ * 职责：
+ * 1. 管理当前激活的工具状态 (State: None / ColorPicker / PointPicker)
+ * 2. 接收来自工具图层 (Layer) 的操作数据
+ * 3. 向界面 (Workbench) 发送采集事件 (Event)
+ */
 class PickingToolViewModel : ViewModel() {
 
-    private val _isActive = MutableStateFlow(false)
-    val isActive = _isActive.asStateFlow()
+    // === 1. 状态管理 ===
 
-    private val _pickingMode = MutableStateFlow(PickingType.COLOR)
-    val pickingMode = _pickingMode.asStateFlow()
+    // 当前激活的工具
+    // 替代了原来的 _pickingMode 和 _isActive
+    private val _currentTool = MutableStateFlow<PickingToolState>(PickingToolState.None)
+    val currentTool = _currentTool.asStateFlow()
 
+    // 工具的放大倍率 (保留配置项，供放大镜使用)
     private val _magnification = MutableStateFlow(12)
     val magnification = _magnification.asStateFlow()
 
-    private val _history = MutableStateFlow<List<PickedData>>(emptyList())
-    val history = _history.asStateFlow()
+    // === 2. 事件流 ===
 
-    // [新增] 实时事件流，用于桥接老代码
-    private val _pickEvent = MutableSharedFlow<PickedData>()
-    val pickEvent: SharedFlow<PickedData> = _pickEvent.asSharedFlow()
+    // 采集结果事件 (多态事件)
+    // 替代了原来的 PickedData
+    private val _pickEvent = MutableSharedFlow<PickEvent>()
+    val pickEvent: SharedFlow<PickEvent> = _pickEvent.asSharedFlow()
 
-    fun setToolActive(active: Boolean) {
-        _isActive.value = active
+    // === 3. 状态控制方法 ===
+
+    /**
+     * 激活指定工具
+     * 例如：activateTool(PickingToolState.ColorPicker)
+     */
+    fun activateTool(tool: PickingToolState) {
+        _currentTool.value = tool
     }
 
-    fun setMode(mode: PickingType) {
-        _pickingMode.value = mode
-        if (mode != PickingType.NONE) {
-            _isActive.value = true
-        } else {
-            _isActive.value = false
-        }
+    /**
+     * 关闭当前工具 (回到空闲状态)
+     */
+    fun deactivate() {
+        _currentTool.value = PickingToolState.None
     }
 
-    fun setMagnification(level: Int) {
-        _magnification.value = level.coerceIn(2, 32)
+    fun setMagnification(value: Int) {
+        _magnification.value = value.coerceIn(1, 32)
     }
 
-    // [新增] 专用取色入口
-    fun triggerColorPick(x: Int, y: Int, color: Color) {
-        val data = PickedData(
-            type = PickingType.COLOR,
-            x = x,
-            y = y,
-            color = color,
-            colorHex = color.toHexString()
-        )
-        // 记录历史 + 发送事件
-        _history.update { listOf(data) + it }
-        viewModelScope.launch { _pickEvent.emit(data) }
-    }
+    // === 4. 数据采集入口 (供 Layer 调用) ===
 
-    // [新增] 专用取点入口
-    fun triggerPointPick(x: Int, y: Int) {
-        val data = PickedData(
-            type = PickingType.POINT,
-            x = x,
-            y = y,
-            color = Color.Transparent, // 取点不关心颜色，给个默认值
-            colorHex = ""
-        )
-        // 记录历史 + 发送事件
-        _history.update { listOf(data) + it }
-        viewModelScope.launch { _pickEvent.emit(data) }
-    }
-
-    fun recordPick(x: Int, y: Int, color: Color) {
-        val type = _pickingMode.value
-        if (type == PickingType.NONE) return
-
-        val data = PickedData(
-            type = type,
-            x = x,
-            y = y,
-            color = color,
-            colorHex = color.toHexString()
-        )
-
-        // 1. 存历史
-        _history.update { listOf(data) + it }
-
-        // 2. 发广播
+    /**
+     * 触发取色事件
+     * @param color: 获取到的颜色对象
+     */
+    fun emitColorPick(x: Int, y: Int, color: Color) {
         viewModelScope.launch {
-            _pickEvent.emit(data)
+            _pickEvent.emit(
+                PickEvent.ColorPicked(
+                    x = x,
+                    y = y,
+                    color = color,
+                    hex = color.toHexString()
+                )
+            )
         }
     }
 
-    fun clearHistory() {
-        _history.value = emptyList()
+    /**
+     * 触发取点事件
+     * (取点不需要颜色信息，性能更高)
+     */
+    fun emitPointPick(x: Int, y: Int) {
+        viewModelScope.launch {
+            _pickEvent.emit(
+                PickEvent.PointPicked(
+                    x = x,
+                    y = y
+                )
+            )
+        }
     }
 }

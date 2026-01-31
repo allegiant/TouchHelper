@@ -21,7 +21,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.koin.compose.koinInject
 import org.eu.freex.tools.common.model.ColorRule
-import org.eu.freex.tools.common.model.PickingType
+import org.eu.freex.tools.common.model.PickingToolState
 import org.eu.freex.tools.modules.image.domain.model.ImageFilter
 import org.eu.freex.tools.modules.image.domain.model.MultiColorFilter
 import org.eu.freex.tools.modules.image.presentation.viewmodel.EditorCanvasViewModel
@@ -62,7 +62,7 @@ object MultiColorRenderer : FilterRenderer {
                         onFilterChangeState(currentFilterState.copy(rules = newRules))
 
                         // [新增] 关键一步：成功取色后，告诉 ViewModel 退出取色模式
-                        editorViewModel.setPickingType(PickingType.NONE)
+                        editorViewModel.setActiveTool(PickingToolState.None)
                     }
                     // 重置本地取色索引
                     activePickingIndex = null
@@ -103,7 +103,7 @@ object MultiColorRenderer : FilterRenderer {
                     },
                     onPickColor = {
                         activePickingIndex = index
-                        editorViewModel.setPickingType(PickingType.COLOR)
+                        editorViewModel.setActiveTool(PickingToolState.ColorPicker)
                     }
                 )
                 if (index < currentFilter.rules.lastIndex) {
