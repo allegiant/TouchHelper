@@ -35,10 +35,8 @@ import androidx.compose.ui.unit.dp
 import org.eu.freex.tools.common.model.WorkbenchTab
 import org.eu.freex.tools.modules.image.domain.model.LayerConfig
 import org.eu.freex.tools.modules.image.domain.model.ViewFilter
-import org.eu.freex.tools.modules.image.presentation.features.feature.FeatureExtractionPanel
 import org.eu.freex.tools.modules.image.presentation.features.filter.components.renderers.FilterUIRegistry
 import org.eu.freex.tools.modules.image.presentation.features.segmentation.SegmentationPanel
-import org.eu.freex.tools.modules.image.presentation.viewmodel.EditorCanvasViewModel
 import org.eu.freex.tools.modules.image.presentation.viewmodel.PipelineViewModel
 import org.eu.freex.tools.modules.image.presentation.viewmodel.SegmentationViewModel
 import org.koin.compose.koinInject
@@ -72,16 +70,12 @@ fun InspectorPanel(
                     WorkbenchTab.SEGMENTATION -> {
                         SegmentationTabContent()
                     }
-                    // [新增] 抓抓工具分支
-                    WorkbenchTab.FEATURE -> {
-                        FeatureTabContent(onStartRegionSelect = onStartRegionSelect)
-                    }
+                    else -> {}
                 }
             }
         }
     }
 }
-
 
 
 /**
@@ -226,21 +220,6 @@ private fun SegmentationTabContent(
     }
 }
 
-/**
- * 抓抓工具 Tab 的内容
- */
-@Composable
-private fun FeatureTabContent(
-    viewModel: EditorCanvasViewModel = koinInject(),
-    onStartRegionSelect: () -> Unit
-) {
-    FeatureExtractionPanel(
-        modifier = Modifier.fillMaxSize(),
-        viewModel = viewModel,
-        onStartRegionSelect = onStartRegionSelect
-    )
-}
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun InspectorTabs(
@@ -261,11 +240,6 @@ private fun InspectorTabs(
             selected = currentTab == WorkbenchTab.SEGMENTATION,
             onClick = { onSwitch(WorkbenchTab.SEGMENTATION) },
             text = { Text("切割识别", style = MaterialTheme.typography.titleSmall) }
-        )
-        Tab(
-            selected = currentTab == WorkbenchTab.FEATURE,
-            onClick = { onSwitch(WorkbenchTab.FEATURE) },
-            text = { Text("抓抓工具", style = MaterialTheme.typography.titleSmall) }
         )
     }
 }

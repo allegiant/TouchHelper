@@ -15,6 +15,7 @@ import org.eu.freex.tools.modules.image.domain.repository.ProjectRepository
 import org.eu.freex.tools.modules.image.presentation.viewmodel.EditorCanvasViewModel
 import org.eu.freex.tools.modules.image.presentation.viewmodel.FontLibraryViewModel
 import org.eu.freex.tools.modules.image.presentation.viewmodel.MainViewModel
+import org.eu.freex.tools.modules.image.presentation.viewmodel.PickingToolViewModel
 import org.eu.freex.tools.modules.image.presentation.viewmodel.PipelineViewModel
 import org.eu.freex.tools.modules.image.presentation.viewmodel.ProjectListViewModel
 import org.eu.freex.tools.modules.image.presentation.viewmodel.RecognitionViewModel
@@ -77,5 +78,6 @@ val appDiModule = module {
 
     // 画布交互：显示最终结果、处理点击/裁剪
     single{ EditorCanvasViewModel(get(), get()) }
+    single { PickingToolViewModel() }
     single { RecognitionViewModel(get(), get()) }
 }

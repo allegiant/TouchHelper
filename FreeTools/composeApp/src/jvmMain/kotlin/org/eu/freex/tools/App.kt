@@ -22,6 +22,7 @@ import java.io.File
 
 // 组件
 import org.eu.freex.tools.modules.image.presentation.ImageWorkbench
+import org.eu.freex.tools.modules.image.presentation.PickingWorkbench
 import org.eu.freex.tools.modules.image.presentation.features.library.FontManagerPanel
 import org.eu.freex.tools.modules.image.presentation.features.recognition.RecognitionScreen
 // ViewModels
@@ -125,6 +126,9 @@ fun App(window: androidx.compose.ui.awt.ComposeWindow?) {
                                         onClear = fontViewModel::clearLibrary,
                                         onExport = fontViewModel::exportLibrary
                                     )
+                                }
+                                AppModule.PICKING_TOOL -> {
+                                    PickingWorkbench()
                                 }
                             }
                         }

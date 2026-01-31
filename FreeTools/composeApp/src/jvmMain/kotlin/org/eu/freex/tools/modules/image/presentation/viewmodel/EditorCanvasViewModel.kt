@@ -1,6 +1,7 @@
 /* file: EditorCanvasViewModel.kt */
 package org.eu.freex.tools.modules.image.presentation.viewmodel
 
+import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.IntOffset
@@ -40,7 +41,7 @@ data class EditorCanvasUiState(
     // 数据层
     val featurePoints: List<FeaturePoint> = emptyList(),
     val searchRegion: IntRect? = null,
-    val cropperLayer: ImageLayer? = null
+    val cropperLayer: ImageLayer? = null,
 )
 
 class EditorCanvasViewModel(

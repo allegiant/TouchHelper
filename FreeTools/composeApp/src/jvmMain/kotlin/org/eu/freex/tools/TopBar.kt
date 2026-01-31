@@ -16,6 +16,7 @@ import androidx.compose.material.icons.filled.Brightness4
 import androidx.compose.material.icons.filled.Brightness7
 import androidx.compose.material.icons.filled.BrightnessAuto
 import androidx.compose.material.icons.filled.DocumentScanner // [新增]
+import androidx.compose.material.icons.filled.FlashOn
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.FontDownload
 import androidx.compose.material.icons.filled.Image
@@ -46,6 +47,7 @@ import io.github.vinceglb.filekit.core.PickerType
 import org.eu.freex.tools.common.i18n.LocalStrings
 import org.eu.freex.tools.common.model.AppModule
 import org.eu.freex.tools.common.theme.ThemeMode
+import org.koin.dsl.module
 import java.io.File
 
 @Composable
@@ -106,6 +108,13 @@ fun TopBar(
             isSelected = currentModule == AppModule.FONT_MANAGER,
             baseColor = contentColor,
             onClick = { onModuleChange(AppModule.FONT_MANAGER) }
+        )
+        ModuleTab(
+            text = "抓抓工具",
+            icon = Icons.Default.FlashOn,
+            isSelected = currentModule == AppModule.PICKING_TOOL,
+            baseColor = contentColor,
+            onClick = { onModuleChange(AppModule.PICKING_TOOL) }
         )
 
         Spacer(Modifier.weight(1f))
