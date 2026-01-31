@@ -6,7 +6,10 @@ import androidx.compose.foundation.TooltipArea
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -40,6 +43,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
@@ -304,5 +308,59 @@ fun HelpTooltip(description: String) {
                 .size(16.dp),
             tint = MaterialTheme.colorScheme.onSurfaceVariant
         )
+    }
+}
+
+@Composable
+fun HelpTooltip(
+    text: String,
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit
+) {
+    var showPopup by remember { mutableStateOf(false) }
+
+    Row(
+        modifier = modifier,
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.Center
+    ) {
+        androidx.compose.material.Text(text, style = MaterialTheme.typography.titleSmall)
+
+        Box(modifier = Modifier.padding(start = 4.dp)) {
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.HelpOutline,
+                contentDescription = "帮助",
+                modifier = Modifier
+                    .size(14.dp)
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null // 移除点击水波纹避免干扰文字
+                    ) { showPopup = true },
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            if (showPopup) {
+                androidx.compose.ui.window.Popup(
+                    alignment = Alignment.TopCenter,
+                    // 这里的 Offset 可以根据实际 UI 表现微调
+                    // x=160 使其向右偏移出侧边栏，y=30 向下偏移避开手指
+                    offset = IntOffset(x = 160, y = 30),
+                    onDismissRequest = { showPopup = false }
+                ) {
+                    Surface(
+                        modifier = Modifier.width(320.dp), // 强制固定宽度，防止内容挤乱
+                        shape = MaterialTheme.shapes.medium,
+                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        tonalElevation = 6.dp,
+                        shadowElevation = 8.dp,
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            content()
+                        }
+                    }
+                }
+            }
+        }
     }
 }

@@ -32,6 +32,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import org.eu.freex.tools.common.components.HelpTooltip
 import org.eu.freex.tools.common.model.WorkbenchTab
 import org.eu.freex.tools.modules.image.domain.model.LayerConfig
 import org.eu.freex.tools.modules.image.domain.model.ViewFilter
@@ -70,6 +71,7 @@ fun InspectorPanel(
                     WorkbenchTab.SEGMENTATION -> {
                         SegmentationTabContent()
                     }
+
                     else -> {}
                 }
             }
@@ -234,8 +236,14 @@ private fun InspectorTabs(
         Tab(
             selected = currentTab == WorkbenchTab.FILTER,
             onClick = { onSwitch(WorkbenchTab.FILTER) },
-            text = { Text("滤镜处理", style = MaterialTheme.typography.titleSmall) }
+            text = {
+                HelpTooltip(text = "滤镜处理") {
+                    FilterUsageGuide()
+                }
+            }
         )
+
+        // --- 切割识别 Tab ---
         Tab(
             selected = currentTab == WorkbenchTab.SEGMENTATION,
             onClick = { onSwitch(WorkbenchTab.SEGMENTATION) },
