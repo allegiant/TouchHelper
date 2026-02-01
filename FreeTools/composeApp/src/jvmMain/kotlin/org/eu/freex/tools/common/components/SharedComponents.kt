@@ -90,7 +90,8 @@ fun CompactNumericInput(
     onValueChange: (UInt?) -> Unit,
     unit: String = "",
     // 【新增】仅允许奇数开关
-    onlyOdd: Boolean = false
+    onlyOdd: Boolean = false,
+    modifier: Modifier = Modifier
 ) {
     val intRegex = Regex("^\\d*$")
 
@@ -116,7 +117,8 @@ fun CompactNumericInput(
         keyboardType = KeyboardType.Number,
         unit = unit,
         // 【新增】传入错误状态
-        isError = isEvenError
+        isError = isEvenError,
+        modifier = modifier
     )
 }
 
@@ -128,7 +130,8 @@ fun CompactNumericInput(
     label: String,
     value: Double?,
     onValueChange: (Double?) -> Unit,
-    unit: String = ""
+    unit: String = "",
+    modifier: Modifier = Modifier,
 ) {
     val floatRegex = Regex("^\\d*\\.?\\d*$")
 
@@ -146,7 +149,8 @@ fun CompactNumericInput(
         validationRegex = floatRegex,
         keyboardType = KeyboardType.Decimal,
         unit = unit,
-        isError = false // 小数版本暂时没有错误状态需求
+        isError = false, // 小数版本暂时没有错误状态需求
+        modifier = modifier
     )
 }
 
@@ -161,8 +165,8 @@ private fun CompactNumericInputBase(
     validationRegex: Regex,
     keyboardType: KeyboardType,
     unit: String,
-    // 【新增】错误状态标志
-    isError: Boolean
+    isError: Boolean,
+    modifier: Modifier = Modifier
 ) {
     var textState by remember { mutableStateOf(valueStr) }
 
@@ -181,27 +185,27 @@ private fun CompactNumericInputBase(
 
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.fillMaxWidth()
+        modifier = modifier
     ) {
         Text(
             text = label,
-            style = MaterialTheme.typography.bodyMedium,
+            style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.width(80.dp)
+            maxLines = 1,
+            modifier = Modifier.padding(end = 4.dp)
         )
 
         Surface(
             shape = RoundedCornerShape(4.dp),
             color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-            // 使用动态边框色
             border = BorderStroke(1.dp, borderColor),
             modifier = Modifier
-                .height(32.dp)
+                .height(28.dp)
                 .weight(1f)
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.padding(horizontal = 8.dp)
+                modifier = Modifier.padding(horizontal = 6.dp)
             ) {
                 BasicTextField(
                     value = textState,
@@ -214,7 +218,7 @@ private fun CompactNumericInputBase(
                     // 应用动态颜色
                     textStyle = LocalTextStyle.current.copy(
                         color = textColor,
-                        fontSize = 14.sp
+                        fontSize = 13.sp
                     ),
                     keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
                     singleLine = true,
@@ -226,7 +230,8 @@ private fun CompactNumericInputBase(
                     Text(
                         text = unit,
                         style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(start = 2.dp)
                     )
                 }
             }

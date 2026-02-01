@@ -5,10 +5,23 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.LocationOn
-import androidx.compose.material3.*
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Slider
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -41,31 +54,29 @@ fun SegmentationConfigSection(
             exit = shrinkVertically() + fadeOut()
         ) {
             Column(
-                modifier = Modifier.padding(start = 32.dp, bottom = 8.dp).fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                modifier = Modifier.padding(start = 24.dp, end = 8.dp, bottom = 8.dp).fillMaxWidth(), // 稍微减小左边距
+                verticalArrangement = Arrangement.spacedBy(12.dp) // 增加行间距，防止垂直拥挤
             ) {
                 // 1. 起点位置 + 坐标拾取
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Box(modifier = Modifier.weight(1f)) {
-                        CompactNumericInput(
-                            label = "起点 X",
-                            value = config.startX.toUInt(),
-                            onValueChange = { v -> v?.let { onChange(config.copy(startX = it.toInt())) } }
-                        )
-                    }
-                    Box(modifier = Modifier.weight(1f)) {
-                        CompactNumericInput(
-                            label = "起点 Y",
-                            value = config.startY.toUInt(),
-                            onValueChange = { v -> v?.let { onChange(config.copy(startY = it.toInt())) } }
-                        )
-                    }
+                    CompactNumericInput(
+                        label = "起点 X",
+                        value = config.startX.toUInt(),
+                        onValueChange = { v -> v?.let { onChange(config.copy(startX = it.toInt())) } },
+                        modifier = Modifier.weight(1.2f) // 增加一点权重
+                    )
+                    CompactNumericInput(
+                        label = "起点 Y",
+                        value = config.startY.toUInt(),
+                        onValueChange = { v -> v?.let { onChange(config.copy(startY = it.toInt())) } },
+                        modifier = Modifier.weight(1.2f)
+                    )
                     IconButton(
                         onClick = onPickPoint,
-                        modifier = Modifier.size(32.dp),
+                        modifier = Modifier.size(40.dp).padding(4.dp), // 确保按钮点击区域足够且不占大位
                         colors = IconButtonDefaults.iconButtonColors(contentColor = MaterialTheme.colorScheme.primary)
                     ) {
                         Icon(Icons.Default.LocationOn, contentDescription = "拾取坐标")
@@ -73,57 +84,53 @@ fun SegmentationConfigSection(
                 }
 
                 // 2. 切割大小
-                Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    Box(modifier = Modifier.weight(1f)) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         CompactNumericInput(
-                            label = "宽 (W)",
+                            label = "宽 (W)", // 优化 Label 名称，使其更易读
                             value = config.cellWidth,
-                            onValueChange = { it?.let { v -> onChange(config.copy(cellWidth = v)) } }
+                            onValueChange = { it?.let { v -> onChange(config.copy(cellWidth = v)) } },
+                            modifier = Modifier.weight(1f)
                         )
-                    }
-                    Box(modifier = Modifier.weight(1f)) {
                         CompactNumericInput(
                             label = "高 (H)",
                             value = config.cellHeight,
-                            onValueChange = { it?.let { v -> onChange(config.copy(cellHeight = v)) } }
+                            onValueChange = { it?.let { v -> onChange(config.copy(cellHeight = v)) } },
+                            modifier = Modifier.weight(1f)
                         )
                     }
                 }
 
                 // 3. 间距
                 Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    Box(modifier = Modifier.weight(1f)) {
-                        CompactNumericInput(
-                            label = "列间隙",
-                            value = config.colGap.toUInt(),
-                            onValueChange = { v -> v?.let { onChange(config.copy(colGap = it.toInt())) } }
-                        )
-                    }
-                    Box(modifier = Modifier.weight(1f)) {
-                        CompactNumericInput(
-                            label = "行间隙",
-                            value = config.rowGap.toUInt(),
-                            onValueChange = { v -> v?.let { onChange(config.copy(rowGap = it.toInt())) } }
-                        )
-                    }
+                    CompactNumericInput(
+                        label = "列间距",
+                        value = config.colGap.toUInt(),
+                        onValueChange = { v -> v?.let { onChange(config.copy(colGap = it.toInt())) } },
+                        modifier = Modifier.weight(1f)
+                    )
+                    CompactNumericInput(
+                        label = "行间距",
+                        value = config.rowGap.toUInt(),
+                        onValueChange = { v -> v?.let { onChange(config.copy(rowGap = it.toInt())) } },
+                        modifier = Modifier.weight(1f)
+                    )
                 }
 
                 // 4. 行列数量
-                Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    Box(modifier = Modifier.weight(1f)) {
-                        CompactNumericInput(
-                            label = "列数 (Cols)",
-                            value = config.colCount,
-                            onValueChange = { it?.let { v -> onChange(config.copy(colCount = v)) } }
-                        )
-                    }
-                    Box(modifier = Modifier.weight(1f)) {
-                        CompactNumericInput(
-                            label = "行数 (Rows)",
-                            value = config.rowCount,
-                            onValueChange = { it?.let { v -> onChange(config.copy(rowCount = v)) } }
-                        )
-                    }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    CompactNumericInput(
+                        label = "总列数",
+                        value = config.colCount,
+                        onValueChange = { it?.let { v -> onChange(config.copy(colCount = v)) } },
+                        modifier = Modifier.weight(1f)
+                    )
+                    CompactNumericInput(
+                        label = "总行数",
+                        value = config.rowCount,
+                        onValueChange = { it?.let { v -> onChange(config.copy(rowCount = v)) } },
+                        modifier = Modifier.weight(1f)
+                    )
                 }
             }
         }
