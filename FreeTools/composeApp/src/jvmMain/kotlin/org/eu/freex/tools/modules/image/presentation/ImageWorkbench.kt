@@ -58,7 +58,6 @@ fun ImageWorkbench(
     var currentTab by remember { mutableStateOf(WorkbenchTab.FILTER) }
     var showCodeDialog by remember { mutableStateOf(false) }
     var generatedCode by remember { mutableStateOf("") }
-    var isSelectingRegion by remember { mutableStateOf(false) }
 
     // === 2. 监听工具点击事件并分发 ===
     LaunchedEffect(Unit) {
@@ -68,13 +67,6 @@ fun ImageWorkbench(
         }
     }
 
-
-    // 动态计算光标
-    val currentCursor = if (editorState.activeTool !is PickingToolState.None) {
-        PointerIcon(Cursor.getPredefinedCursor(Cursor.CROSSHAIR_CURSOR))
-    } else {
-        PointerIcon.Default
-    }
 
     Box(modifier = Modifier.fillMaxSize()) {
         Row(modifier = Modifier.fillMaxSize()) {
@@ -103,7 +95,7 @@ fun ImageWorkbench(
             Column(modifier = Modifier.weight(1f).fillMaxHeight()) {
                 EditorCanvasPanel(
                     modifier = Modifier.weight(1f).fillMaxWidth(),
-                    cursorIcon = currentCursor,
+                    cursorIcon = PointerIcon(Cursor.getPredefinedCursor(editorState.activeTool.cursor)),
                     // [核心修复区]
                     content = {
                         // 1. 业务层
@@ -122,14 +114,12 @@ fun ImageWorkbench(
                     },
                     overlay = { size, hoverPos ->
                         if (editorState.displayImage?.image != null) {
-                            // 只要不是 None，就显示放大镜
-                            val showMagnifier = editorState.activeTool !is PickingToolState.None
                             SmartHoverLayer(
                                 sourceImage = editorState.displayImage!!.image!!,
                                 containerSize = size,
                                 transformState = editorViewModel.transformState.value,
                                 hoverPixelPos = hoverPos,
-                                showMagnifier = showMagnifier
+                                showMagnifier =editorState.activeTool.showMagnifier
                             )
                         }
                     }

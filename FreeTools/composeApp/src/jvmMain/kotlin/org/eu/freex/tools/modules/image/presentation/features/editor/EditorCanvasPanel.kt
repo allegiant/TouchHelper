@@ -29,6 +29,7 @@ fun EditorCanvasPanel(
     modifier: Modifier = Modifier,
     editorViewModel: EditorCanvasViewModel = koinInject(),
     cursorIcon: PointerIcon = PointerIcon.Default,
+    enablePan: Boolean = true,
     // [插槽 1] 内部层
     content: @Composable (BoxScope.() -> Unit) = {},
     // [插槽 2] 外部层 (升级：传入 ViewportSize 和 HoverPos)
@@ -46,6 +47,7 @@ fun EditorCanvasPanel(
             displayImage = uiState.displayImage,
             transformState = transformState,
             cursorIcon = cursorIcon,
+            enablePan = enablePan,
             onTransform = { zoom, pan -> editorViewModel.updateTransform(zoom, pan) },
             onHover = { hoverPixelPos = it } // 捕获鼠标位置
 

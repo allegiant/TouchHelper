@@ -136,6 +136,7 @@ class EditorCanvasViewModel(
     // [修改] 方法名和参数都变了
     fun setActiveTool(tool: PickingToolState) {
         _activeTool.value = tool
+        println("当前激活的工具是: ${_activeTool.value.icon.name}")
         // 如果激活了工具，通常要退出选区模式
         if (tool !is PickingToolState.None) {
             _isSelectingRegion.value = false
@@ -159,7 +160,7 @@ class EditorCanvasViewModel(
             index = newIndex,
             x = x,
             y = y,
-            colorHex = color.toHexString(),
+            colorHex = color.toHexString(false),
             tolerance = "101010",
             isChecked = true
         )

@@ -2,11 +2,13 @@
 package org.eu.freex.tools.modules.image.presentation.features.editor.registry
 
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.IntSize
 import org.eu.freex.tools.common.model.PickEvent
 import org.eu.freex.tools.common.model.PickingToolState
 import org.eu.freex.tools.modules.image.presentation.features.editor.layers.ColorPickerLayer
 import org.eu.freex.tools.modules.image.presentation.features.editor.layers.PointPickerLayer
+import org.eu.freex.tools.modules.image.presentation.features.editor.layers.RegionPickerLayer
 import org.eu.freex.tools.modules.image.presentation.viewmodel.EditorCanvasViewModel
 import java.awt.image.BufferedImage
 import kotlin.reflect.KClass
@@ -17,7 +19,6 @@ import kotlin.reflect.KClass
  * 职责：
  * 1. UI 渲染 (怎么长)
  * 2. 逻辑处理 (怎么做)
- * * 不再区分 Context，因为现在所有地方的行为都一样。
  */
 object ToolRegistry {
 
@@ -50,6 +51,20 @@ object ToolRegistry {
             // Logic: 取点 -> 退出 (所有界面通用)
             onEvent = { event, vm ->
                 vm.pickPoint(event.x, event.y)
+                vm.setActiveTool(PickingToolState.None)
+            }
+        )
+
+        register<PickingToolState.RegionPicker, PickEvent.RegionPicked>(
+            // UI: 直接调用 Composable 函数
+            rendererContent = { image -> RegionPickerLayer(sourceImage = image) },
+
+            // Logic:
+            // 因为 RegionPickerLayer 内部直接调用了 PickingToolViewModel，
+            // 这里的 onEvent 回调可能不会被触发（取决于你怎么设计事件流）。
+            // 如果你希望保持架构一致性，也可以在这里处理“退出工具”的逻辑。
+            onEvent = { event, vm ->
+                // 如果需要，可以在这里重置工具状态
                 vm.setActiveTool(PickingToolState.None)
             }
         )

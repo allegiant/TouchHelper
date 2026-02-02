@@ -36,6 +36,7 @@ fun EditorCanvasContainer(
     displayImage: ImageLayer?,
     transformState: EditorCanvasTransform,
     cursorIcon: PointerIcon = PointerIcon.Default,
+    enablePan: Boolean = true, // 控制是否允许拖拽平移。默认为 true
     onTransform: (zoomChange: Float, panChange: Offset) -> Unit,
     onHover: (Offset?) -> Unit = {}, // [新增] 接收 Hover 回调
     content: @Composable BoxScope.() -> Unit
@@ -69,7 +70,7 @@ fun EditorCanvasContainer(
                 }
             }
             .transformable(state = transformableState)
-            .pointerInput(Unit) {
+            .pointerInput(enablePan) {
                 detectDragGestures { _, dragAmount ->
                     onTransform(1f, dragAmount)
                 }

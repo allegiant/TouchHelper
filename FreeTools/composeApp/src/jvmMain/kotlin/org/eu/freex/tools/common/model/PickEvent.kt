@@ -21,4 +21,8 @@ sealed interface PickEvent {
         val x: Int,
         val y: Int
     ) : PickEvent
+
+    // 虽然 RegionPickerLayer 可能直接调用 ViewModel，
+    // 但为了满足 Registry 的类型系统，我们定义这个事件。
+    data object RegionPicked : PickEvent
 }

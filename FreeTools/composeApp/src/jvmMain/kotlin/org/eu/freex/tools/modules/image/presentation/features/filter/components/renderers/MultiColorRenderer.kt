@@ -53,7 +53,7 @@ object MultiColorRenderer : FilterRenderer {
                     val rules = currentFilterState.rules
                     if (index in rules.indices) {
                         // 1. 使用工具函数转 Hex，简洁安全
-                        val newHex = event.toHexString()
+                        val newHex = event.toHexString(false)
 
                         // 2. 更新规则
                         val newRules = rules.toMutableList()

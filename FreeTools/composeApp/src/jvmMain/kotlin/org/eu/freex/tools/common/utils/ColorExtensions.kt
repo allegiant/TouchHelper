@@ -8,7 +8,7 @@ import androidx.compose.ui.graphics.toArgb
 /**
  * 将 Compose Color 转换为 Hex 字符串格式 (#RRGGBB)
  */
-fun Color.toHexString(): String {
+fun Color.toHexString(bool: Boolean): String {
     // [关键修复] 使用 toArgb() 获取标准的 ARGB 整数，而不是直接操作 value (ULong)
     // 直接操作 value 会导致颜色空间位移错误，从而一直是 0 (黑色)
     val argb = this.toArgb()
