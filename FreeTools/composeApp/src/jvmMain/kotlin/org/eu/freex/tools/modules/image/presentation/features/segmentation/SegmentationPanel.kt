@@ -33,6 +33,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.eu.freex.tools.common.model.PickEvent
 import org.eu.freex.tools.common.model.PickingToolState
 import org.eu.freex.tools.modules.image.domain.model.SegmentationConfig
 import org.eu.freex.tools.modules.image.presentation.features.segmentation.components.LabelingDialog
@@ -72,7 +73,7 @@ fun SegmentationPanel(
 
     LaunchedEffect(Unit) {
         workbenchViewModel.pickEvent.collect { event ->
-            if (event is IntOffset) {
+            if (event is PickEvent.PointPicked) {
                 // 使用 currentConfig (最新状态) 进行拷贝
                 val newConfig = currentConfig.copy(startX = event.x, startY = event.y)
 

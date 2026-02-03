@@ -19,6 +19,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import org.eu.freex.tools.common.model.PickEvent
 import org.eu.freex.tools.common.model.PickingToolState
+import org.eu.freex.tools.common.utils.ImageUtils
 import org.eu.freex.tools.modules.image.presentation.components.PickingToolRail
 import org.eu.freex.tools.modules.image.presentation.components.RulerCanvasContainer
 import org.eu.freex.tools.modules.image.presentation.components.panel.PickingControlPanel
@@ -128,6 +129,10 @@ fun PickingWorkbench(
                                         when (event) {
                                             is PickEvent.ColorPicked -> {
                                                 pickingViewModel.addPoint(event.x, event.y, event.color)
+                                            }
+                                            is PickEvent.PointPicked -> {
+                                                val color = ImageUtils.getPixelColor(image, event.x, event.y)
+                                                pickingViewModel.addPoint(event.x, event.y, color)
                                             }
 
                                             is PickEvent.RegionPicked -> {

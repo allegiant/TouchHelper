@@ -51,19 +51,8 @@ object ToolRegistry {
         register<PickingToolState.PointPicker> { image, onEvent ->
             PointPickerLayer(
                 imageSize = IntSize(image.width, image.height),
-
-                // 2. 处理点击回调
                 onPick = { x, y ->
-                    val color = org.eu.freex.tools.common.utils.ImageUtils.getPixelColor(image, x, y)
-
-                    onEvent(
-                        PickEvent.ColorPicked(
-                            x = x,
-                            y = y,
-                            color = color,
-                            hex = color.toHexString()
-                        )
-                    )
+                    onEvent(PickEvent.PointPicked(x, y))
                 }
             )
         }

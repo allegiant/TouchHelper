@@ -22,6 +22,7 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import org.eu.freex.tools.common.components.ColorRuleListPanel
+import org.eu.freex.tools.common.model.PickEvent
 import org.eu.freex.tools.common.model.PickingToolState
 import org.eu.freex.tools.common.utils.toHexString
 import org.eu.freex.tools.modules.image.domain.model.ImageFilter
@@ -50,11 +51,11 @@ object MultiColorRenderer : FilterRenderer {
             workbenchViewModel.pickEvent.collect { event ->
                 val index = activePickingIndex
                 println("接收到: color: $event, index: $index")
-                if (event is Color && index != null) {
+                if (event is PickEvent.ColorPicked && index != null) {
                     val rules = currentFilterState.rules
                     if (index in rules.indices) {
                         // 1. 使用工具函数转 Hex，简洁安全
-                        val newHex = event.toHexString()
+                        val newHex = event.color.toHexString()
 
                         // 2. 更新规则
                         val newRules = rules.toMutableList()
