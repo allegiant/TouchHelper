@@ -30,13 +30,6 @@ fun BinarizationPreview(
             .background(Color.Black)
             .padding(8.dp)
     ) {
-        Text(
-            "区域二值化 (Target Preview)",
-            color = Color.Gray,
-            fontSize = 11.sp,
-            modifier = Modifier.padding(bottom = 6.dp)
-        )
-
         Box(
             modifier = Modifier
                 .fillMaxWidth()
