@@ -1,11 +1,13 @@
-/* Path: .../presentation/components/panel/PickingControlPanel.kt */
 package org.eu.freex.tools.modules.image.presentation.components.panel
 
+import org.eu.freex.tools.common.components.CompactNumericInput
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -34,6 +36,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import org.eu.freex.tools.common.components.CompactNumericInput
 import org.eu.freex.tools.modules.image.presentation.components.panel.sections.BinarizationPreview
 import org.eu.freex.tools.modules.image.presentation.components.panel.sections.ColorRecordTable
 import org.eu.freex.tools.modules.image.presentation.viewmodel.FindDirection
@@ -56,7 +59,7 @@ fun PickingControlPanel(
 
     // UI 本地状态
     var selectedTabIndex by remember { mutableStateOf(0) }
-    val tabs = listOf("多点找色", "区域找图", "字库")
+    val tabs = listOf("多点找色","区域找色", "区域找图")
 
     Column(
         modifier = modifier
@@ -98,9 +101,43 @@ fun PickingControlPanel(
         }
 
         HorizontalDivider()
+        // === 4. 查找测试
+        Column(modifier = Modifier.height(150.dp).padding(8.dp).fillMaxWidth()) {
+            Text("查找测试", style = MaterialTheme.typography.bodyMedium)
+            Spacer(Modifier.height(4.dp))
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(8.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "结果 -1,-1",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(8.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Button(
+                    onClick = {
+                        val code = viewModel.generateScript()
+                        onGenerateCode(code)
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("开始测试")
+                }
+            }
+        }
 
+        HorizontalDivider()
         // === 4. 底部记录表 ===
-        Column(modifier = Modifier.height(250.dp).fillMaxWidth()) {
+        Column(modifier = Modifier.height(200.dp).fillMaxWidth()) {
             ColorRecordTable(
                 records = featurePoints,
                 onUpdate = { point -> viewModel.updatePoint(point) },

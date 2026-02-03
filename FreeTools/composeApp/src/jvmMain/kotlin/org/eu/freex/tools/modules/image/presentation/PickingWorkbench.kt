@@ -2,6 +2,7 @@ package org.eu.freex.tools.modules.image.presentation
 
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
@@ -64,25 +65,7 @@ fun PickingWorkbench(
     val scope = rememberCoroutineScope()
 
     Column(modifier = Modifier.fillMaxSize()) {
-
-        // 1. 顶部：多文件标签页
-        WorkbenchTabRow(
-            openedImages = screenshots,
-            selectedIndex = safeIndex, // [使用修复后的 safeIndex]
-            onTabSelected = { index -> pickingViewModel.selectScreenshot(index) },
-            // [关键修复2] 解决 "Type Mismatch" 报错
-            // TabRow 传出来的是 ImageLayer 对象，我们在这里手动转成 index 再传给 ViewModel
-            onTabClosed = { layer ->
-                val indexToRemove = screenshots.indexOfFirst { it.id == layer.id }
-                if (indexToRemove != -1) {
-                    pickingViewModel.closeScreenshot(indexToRemove)
-                }
-            }
-        )
-
-        // 2. 主工作区
         Row(modifier = Modifier.weight(1f)) {
-            // 2.1 左侧：工具条
             PickingToolRail(
                 activeTool = currentTool,
                 onToolSelect = { pickingViewModel.activateTool(it) },
@@ -105,57 +88,74 @@ fun PickingWorkbench(
                     }
                 }
             )
-
-            // 2.2 中间：带标尺画布
-            RulerCanvasContainer(
-                modifier = Modifier.weight(1f)
-            ) {
-                EditorCanvasPanel(
-                    modifier = Modifier.fillMaxSize(),
-                    displayImage = currentLayer,
-                    cursorIcon = PointerIcon(Cursor.getPredefinedCursor(currentTool.cursor)),
-                    enablePan = currentTool.enablePan,
-                    editorViewModel = editorViewModel,
-                    content = {
-                        val image = currentLayer?.image
-                        if (image != null) {
-                            // A. 业务图层 (显示已添加的点)
-                            // [注意] 确保 FeatureLayer 已经改为只接收 List<FeaturePoint>
-                            FeatureLayer(points = featurePoints)
-
-                            // B. 工具图层 (响应点击/框选)
-                            ToolRegistry.getRenderer(currentTool).Content(
-                                image = image,
-                                onEvent = { event ->
-                                    when (event) {
-                                        is PickEvent.ColorPicked -> {
-                                            pickingViewModel.addPoint(event.x, event.y, event.color)
-                                        }
-                                        is PickEvent.RegionPicked -> {
-                                            pickingViewModel.setTargetRegion(event.image)
-                                            pickingViewModel.activateTool(PickingToolState.None)
-                                        }
-                                        else -> {}
-                                    }
-                                }
-                            )
-                        }
-                    },
-                    overlay = { size, hoverPos ->
-                        val image = currentLayer?.image
-                        if (image != null) {
-                            SmartHoverLayer(
-                                sourceImage = image,
-                                containerSize = size,
-                                transformState = editorViewModel.transformState.value,
-                                hoverPixelPos = hoverPos,
-                                showMagnifier = currentTool.showMagnifier
-                            )
+            Column(modifier = Modifier.weight(1f).fillMaxHeight()) {
+                // 1. 顶部：多文件标签页
+                WorkbenchTabRow(
+                    openedImages = screenshots,
+                    selectedIndex = safeIndex, // [使用修复后的 safeIndex]
+                    onTabSelected = { index -> pickingViewModel.selectScreenshot(index) },
+                    // [关键修复2] 解决 "Type Mismatch" 报错
+                    // TabRow 传出来的是 ImageLayer 对象，我们在这里手动转成 index 再传给 ViewModel
+                    onTabClosed = { layer ->
+                        val indexToRemove = screenshots.indexOfFirst { it.id == layer.id }
+                        if (indexToRemove != -1) {
+                            pickingViewModel.closeScreenshot(indexToRemove)
                         }
                     }
                 )
-            }
+                // 2.2 中间：带标尺画布
+                RulerCanvasContainer(
+                    modifier = Modifier.weight(1f),
+                    viewModel = editorViewModel
+                ) {
+                    EditorCanvasPanel(
+                        modifier = Modifier.fillMaxSize(),
+                        displayImage = currentLayer,
+                        cursorIcon = PointerIcon(Cursor.getPredefinedCursor(currentTool.cursor)),
+                        enablePan = currentTool.enablePan,
+                        editorViewModel = editorViewModel,
+                        content = {
+                            val image = currentLayer?.image
+                            if (image != null) {
+                                // A. 业务图层 (显示已添加的点)
+                                // [注意] 确保 FeatureLayer 已经改为只接收 List<FeaturePoint>
+                                FeatureLayer(points = featurePoints)
 
+                                // B. 工具图层 (响应点击/框选)
+                                ToolRegistry.getRenderer(currentTool).Content(
+                                    image = image,
+                                    onEvent = { event ->
+                                        when (event) {
+                                            is PickEvent.ColorPicked -> {
+                                                pickingViewModel.addPoint(event.x, event.y, event.color)
+                                            }
+
+                                            is PickEvent.RegionPicked -> {
+                                                pickingViewModel.setTargetRegion(event.image)
+                                                pickingViewModel.activateTool(PickingToolState.None)
+                                            }
+
+                                            else -> {}
+                                        }
+                                    }
+                                )
+                            }
+                        },
+                        overlay = { size, hoverPos ->
+                            val image = currentLayer?.image
+                            if (image != null) {
+                                SmartHoverLayer(
+                                    sourceImage = image,
+                                    containerSize = size,
+                                    transformState = editorViewModel.transformState.value,
+                                    hoverPixelPos = hoverPos,
+                                    showMagnifier = currentTool.showMagnifier
+                                )
+                            }
+                        }
+                    )
+                }
+            }
             // 2.3 右侧：控制面板
             PickingControlPanel(
                 viewModel = pickingViewModel,
