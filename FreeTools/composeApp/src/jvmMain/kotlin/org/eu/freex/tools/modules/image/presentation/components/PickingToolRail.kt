@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.FileOpen
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationRail
@@ -25,6 +26,7 @@ fun PickingToolRail(
     activeTool: PickingToolState,
     onToolSelect: (PickingToolState) -> Unit,
     onCapture: () -> Unit,
+    onImport: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     NavigationRail(
@@ -39,6 +41,15 @@ fun PickingToolRail(
                 icon = { Icon(Icons.Default.CameraAlt, "截图") },
                 colors = actionItemColors()
             )
+            Spacer(Modifier.height(8.dp))
+            // 2. [新增] 导入按钮
+            NavigationRailItem(
+                selected = false,
+                onClick = onImport,
+                icon = { Icon(Icons.Default.FileOpen, "导入图片") },
+                colors = actionItemColors()
+            )
+
             Spacer(Modifier.height(8.dp))
         }
     ) {

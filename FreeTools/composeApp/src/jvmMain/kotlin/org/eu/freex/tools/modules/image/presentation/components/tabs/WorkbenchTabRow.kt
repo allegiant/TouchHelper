@@ -22,21 +22,25 @@ fun WorkbenchTabRow(
 ) {
     if (openedImages.isEmpty()) return
 
+    // [修复]：计算安全索引
+    // 即使 ViewModel 中的 selectedIndex 跑到了 1，而 openedImages 这里还是长度 1，
+    // 我们强制把它限制在 0，防止 TabRow 内部崩溃。
+    val safeIndex = selectedIndex.coerceIn(0, (openedImages.size - 1).coerceAtLeast(0))
+
     ScrollableTabRow(
-        selectedTabIndex = selectedIndex,
-        modifier = Modifier.fillMaxWidth().height(40.dp), // 比较矮的标签栏
+        selectedTabIndex = safeIndex, // 使用安全索引
+        modifier = Modifier.fillMaxWidth().height(40.dp),
         containerColor = MaterialTheme.colorScheme.surface,
         contentColor = MaterialTheme.colorScheme.onSurface,
         edgePadding = 0.dp
     ) {
         openedImages.forEachIndexed { index, image ->
             Tab(
-                selected = index == selectedIndex,
+                selected = index == safeIndex, // 这里也建议用 safeIndex 判断高亮
                 onClick = { onTabSelected(index) },
                 text = { Text(image.name ?: "未命名") },
-                // 选中时显示关闭按钮
                 modifier = Modifier.background(
-                    if (index == selectedIndex) MaterialTheme.colorScheme.surfaceContainerHigh
+                    if (index == safeIndex) MaterialTheme.colorScheme.surfaceContainerHigh
                     else Color.Transparent
                 )
             )

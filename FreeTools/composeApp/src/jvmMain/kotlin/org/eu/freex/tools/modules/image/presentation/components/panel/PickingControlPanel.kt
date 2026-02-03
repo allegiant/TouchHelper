@@ -1,16 +1,27 @@
+/* Path: .../presentation/components/panel/PickingControlPanel.kt */
 package org.eu.freex.tools.modules.image.presentation.components.panel
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material3.Button
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
@@ -25,20 +36,23 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import org.eu.freex.tools.modules.image.presentation.components.panel.sections.BinarizationPreview
 import org.eu.freex.tools.modules.image.presentation.components.panel.sections.ColorRecordTable
+import org.eu.freex.tools.modules.image.presentation.viewmodel.FindDirection
 import org.eu.freex.tools.modules.image.presentation.viewmodel.PickingToolViewModel
 
 @Composable
 fun PickingControlPanel(
     viewModel: PickingToolViewModel,
-    onGenerateCode: () -> Unit,
+    onGenerateCode: (String) -> Unit, // [修改] 回调带回生成的代码
     modifier: Modifier = Modifier
 ) {
     // === 1. 收集状态 ===
     val binaryResult by viewModel.binaryResultState.collectAsState()
     val previewState by viewModel.previewState.collectAsState()
-
-    // [修改] 监听 featurePoints 而不是 pickedRecords
     val featurePoints by viewModel.featurePoints.collectAsState()
+
+    // 新增配置状态
+    val similarity by viewModel.globalSimilarity.collectAsState()
+    val direction by viewModel.searchDirection.collectAsState()
 
     // UI 本地状态
     var selectedTabIndex by remember { mutableStateOf(0) }
@@ -51,8 +65,6 @@ fun PickingControlPanel(
             .background(MaterialTheme.colorScheme.surface)
     ) {
         // === 2. 顶部预览区 ===
-        // 这里可以根据需求决定显示 BinarizationPreview 还是 放大镜
-        // 目前你的设计是显示二值化结果
         BinarizationPreview(
             binaryBitmap = binaryResult,
             modifier = Modifier.height(200.dp)
@@ -73,22 +85,25 @@ fun PickingControlPanel(
 
             Box(modifier = Modifier.weight(1f).padding(8.dp)) {
                 when(selectedTabIndex) {
-                    0 -> Text("这里放 [相似度] [查找方向] [偏色] 等配置")
-                    1 -> Text("图片列表")
-                    2 -> Text("OCR 配置")
+                    0 -> ConfigTabContent(
+                        similarity = similarity,
+                        onSimilarityChange = viewModel::updateSimilarity,
+                        direction = direction,
+                        onDirectionChange = viewModel::updateDirection
+                    )
+                    1 -> Text("图片列表已移至顶部标签页管理")
+                    2 -> Text("OCR 功能开发中...")
                 }
             }
         }
 
         HorizontalDivider()
 
-        // === 4. 底部记录表 (使用 FeaturePoint) ===
+        // === 4. 底部记录表 ===
         Column(modifier = Modifier.height(250.dp).fillMaxWidth()) {
             ColorRecordTable(
                 records = featurePoints,
-                // [新增] 勾选/反选时更新 ViewModel
                 onUpdate = { point -> viewModel.updatePoint(point) },
-                // [修改] 删除时调用 removePointById
                 onRemove = { id -> viewModel.removePointById(id) },
                 modifier = Modifier.weight(1f)
             )
@@ -101,10 +116,65 @@ fun PickingControlPanel(
                 contentAlignment = Alignment.Center
             ) {
                 Button(
-                    onClick = onGenerateCode,
+                    onClick = {
+                        val code = viewModel.generateScript()
+                        onGenerateCode(code)
+                    },
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text("复制完整脚本")
+                }
+            }
+        }
+    }
+}
+
+// [新增] 配置页组件
+@Composable
+private fun ConfigTabContent(
+    similarity: Float,
+    onSimilarityChange: (Float) -> Unit,
+    direction: FindDirection,
+    onDirectionChange: (FindDirection) -> Unit
+) {
+    Column {
+        Spacer(Modifier.height(8.dp))
+
+        // 1. 相似度滑块
+        Text("相似度: ${"%.2f".format(similarity)}", style = MaterialTheme.typography.bodyMedium)
+        Slider(
+            value = similarity,
+            onValueChange = onSimilarityChange,
+            valueRange = 0.5f..1.0f,
+            steps = 50 // 0.01 一档
+        )
+
+        Spacer(Modifier.height(16.dp))
+
+        // 2. 方向选择
+        Text("查找方向", style = MaterialTheme.typography.bodyMedium)
+        Spacer(Modifier.height(4.dp))
+
+        var expanded by remember { mutableStateOf(false) }
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(4.dp))
+                .clickable { expanded = true }
+                .padding(12.dp)
+        ) {
+            Text(direction.label, style = MaterialTheme.typography.bodyMedium)
+            Icon(Icons.Default.ArrowDropDown, "", Modifier.align(Alignment.CenterEnd))
+
+            DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                FindDirection.entries.forEach { dir ->
+                    DropdownMenuItem(
+                        text = { Text(dir.label) },
+                        onClick = {
+                            onDirectionChange(dir)
+                            expanded = false
+                        }
+                    )
                 }
             }
         }

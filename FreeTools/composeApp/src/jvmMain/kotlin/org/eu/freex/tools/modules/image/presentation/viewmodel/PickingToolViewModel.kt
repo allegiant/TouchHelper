@@ -1,3 +1,4 @@
+/* Path: .../modules/image/presentation/viewmodel/PickingToolViewModel.kt */
 package org.eu.freex.tools.modules.image.presentation.viewmodel
 
 import androidx.compose.ui.graphics.Color
@@ -19,75 +20,91 @@ import org.eu.freex.tools.modules.image.presentation.viewmodel.model.PreviewStat
 import java.awt.image.BufferedImage
 import java.util.UUID
 
+// [新增] 查找方向枚举
+enum class FindDirection(val label: String, val code: Int) {
+    LEFT_TOP_RIGHT_BOTTOM("左上 -> 右下", 0),
+    RIGHT_TOP_LEFT_BOTTOM("右上 -> 左下", 1),
+    LEFT_BOTTOM_RIGHT_TOP("左下 -> 右上", 2),
+    RIGHT_BOTTOM_LEFT_TOP("右下 -> 左上", 3),
+    CENTER_OUT("中心 -> 四周", 4);
+}
+
 class PickingToolViewModel : ViewModel() {
 
     // ============================================================================================
-    // State (状态)
+    // State (原有状态)
     // ============================================================================================
 
-    // 1. 当前激活的工具
     private val _currentTool = MutableStateFlow<PickingToolState>(PickingToolState.None)
     val currentTool = _currentTool.asStateFlow()
 
-    // 2. 当前正在分析的图层 (Session Layer)
-    // [修改点]：这里现在持有完整的 ImageLayer 对象，而不仅仅是 Bitmap
     private val _displayImage = MutableStateFlow<ImageLayer?>(null)
     val displayImage = _displayImage.asStateFlow()
 
-    // 3. 特征点列表 (统一使用 FeaturePoint)
     private val _featurePoints = MutableStateFlow<List<FeaturePoint>>(emptyList())
     val featurePoints = _featurePoints.asStateFlow()
 
-    // 4. 预览状态 (用于右侧面板放大镜)
     private val _previewState = MutableStateFlow(PreviewState())
     val previewState = _previewState.asStateFlow()
 
-    // 5. 二值化结果 (UI 显示用，这里保持 ImageBitmap 即可，因为它是临时生成的预览)
     private val _binaryResultState = MutableStateFlow<ImageBitmap?>(null)
     val binaryResultState = _binaryResultState.asStateFlow()
 
-    // 6. 内部状态：目标区域的原图 (用于计算二值化)
     private var _targetRegionRaw: BufferedImage? = null
 
     private val _screenshots = MutableStateFlow<List<ImageLayer>>(emptyList())
     val screenshots = _screenshots.asStateFlow()
 
-    // 当前选中的 Tab 索引
     private val _selectedIndex = MutableStateFlow(0)
     val selectedIndex = _selectedIndex.asStateFlow()
 
-    /**
-     * 接收一张新截图 (通常由 ScreenCaptureService 调用)
-     */
+    // ============================================================================================
+    // [新增] 找色配置参数
+    // ============================================================================================
+
+    // 1. 全局相似度 (默认 0.9)
+    private val _globalSimilarity = MutableStateFlow(0.9f)
+    val globalSimilarity = _globalSimilarity.asStateFlow()
+
+    // 2. 查找方向
+    private val _searchDirection = MutableStateFlow(FindDirection.LEFT_TOP_RIGHT_BOTTOM)
+    val searchDirection = _searchDirection.asStateFlow()
+
+    // 配置更新方法
+    fun updateSimilarity(value: Float) { _globalSimilarity.value = value }
+    fun updateDirection(direction: FindDirection) { _searchDirection.value = direction }
+
+    // ============================================================================================
+    // 截图管理 (保持不变)
+    // ============================================================================================
+
     fun addScreenshot(image: BufferedImage) {
         val newLayer = ImageLayer(
             id = UUID.randomUUID().toString(),
-            name = "截图 ${System.currentTimeMillis() / 1000 % 10000}", // 简短命名
+            name = "截图 ${System.currentTimeMillis() / 1000 % 10000}",
             image = image
         )
-
         val newList = _screenshots.value + newLayer
         _screenshots.value = newList
-
-        // 自动选中刚截的那张
         selectScreenshot(newList.lastIndex)
     }
 
-    /**
-     * 切换选中的截图
-     */
     fun selectScreenshot(index: Int) {
         val list = _screenshots.value
         if (index in list.indices) {
             _selectedIndex.value = index
-            // [关键] 同步设置当前正在分析的图片 (setImage 是我们之前定义的)
             setImage(list[index])
         }
     }
 
-    /**
-     * 关闭截图 Tab
-     */
+    fun closeScreenshot(layer: ImageLayer) {
+        val currentList = _screenshots.value
+        val index = currentList.indexOfFirst { it.id == layer.id }
+        if (index != -1) {
+            closeScreenshot(index)
+        }
+    }
+
     fun closeScreenshot(index: Int) {
         val currentList = _screenshots.value.toMutableList()
         if (index !in currentList.indices) return
@@ -95,19 +112,22 @@ class PickingToolViewModel : ViewModel() {
         currentList.removeAt(index)
         _screenshots.value = currentList
 
-        // 如果列表空了，清空当前显示
         if (currentList.isEmpty()) {
             setImage(null)
             _selectedIndex.value = -1
         } else {
-            // 否则选中前一张或第一张
-            val newIndex = (index - 1).coerceAtLeast(0)
-            selectScreenshot(newIndex)
+            val currentIndex = _selectedIndex.value
+            if (index == currentIndex) {
+                val newIndex = (index - 1).coerceAtLeast(0)
+                selectScreenshot(newIndex)
+            } else if (index < currentIndex) {
+                _selectedIndex.value = currentIndex - 1
+            }
         }
     }
 
     // ============================================================================================
-    // Actions (动作)
+    // Actions & Logic (保持不变)
     // ============================================================================================
 
     fun activateTool(tool: PickingToolState) {
@@ -117,16 +137,9 @@ class PickingToolViewModel : ViewModel() {
         }
     }
 
-    /**
-     * 设置当前工作的图层
-     * [修改点]：接收 ImageLayer
-     */
     fun setImage(layer: ImageLayer?) {
-        // 通过 ID 判断是否是同一张图，避免重复刷新
         if (_displayImage.value?.id != layer?.id) {
             _displayImage.value = layer
-
-            // 切换图片时，重置会话状态
             _featurePoints.value = emptyList()
             _targetRegionRaw = null
             _binaryResultState.value = null
@@ -134,17 +147,11 @@ class PickingToolViewModel : ViewModel() {
         }
     }
 
-    /**
-     * 设置二值化分析的目标区域
-     */
     fun setTargetRegion(image: BufferedImage?) {
         _targetRegionRaw = image
         recalculateBinarization()
     }
 
-    /**
-     * 更新放大镜预览
-     */
     fun updatePreview(x: Int, y: Int, color: Color, magnifier: ImageBitmap) {
         _previewState.update {
             it.copy(
@@ -161,23 +168,17 @@ class PickingToolViewModel : ViewModel() {
         _previewState.update { it.copy(hasContent = false) }
     }
 
-    // ============================================================================================
-    // Feature Point Management (特征点管理)
-    // ============================================================================================
-
     fun addPoint(x: Int, y: Int, color: Color) {
         val currentList = _featurePoints.value
         val newIndex = currentList.size + 1
-
         val newPoint = FeaturePoint(
             index = newIndex,
             x = x,
             y = y,
             colorHex = color.toHexString(),
-            tolerance = "101010",
+            tolerance = "101010", // 默认偏色
             isChecked = true
         )
-
         _featurePoints.update { it + newPoint }
         recalculateBinarization()
     }
@@ -205,14 +206,9 @@ class PickingToolViewModel : ViewModel() {
         recalculateBinarization()
     }
 
-    // ============================================================================================
-    // Logic (二值化计算)
-    // ============================================================================================
-
     private fun recalculateBinarization() {
         val rawImage = _targetRegionRaw ?: return
         val points = _featurePoints.value
-
         viewModelScope.launch(Dispatchers.Default) {
             val binaryBitmap = generateBinaryImage(rawImage, points)
             _binaryResultState.value = binaryBitmap
@@ -223,7 +219,6 @@ class PickingToolViewModel : ViewModel() {
         val width = image.width
         val height = image.height
         val binaryImage = BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB)
-
         val activePoints = points.filter { it.isChecked }
 
         for (y in 0 until height) {
@@ -233,10 +228,7 @@ class PickingToolViewModel : ViewModel() {
                 val pixelColor = Color(javaColor.red, javaColor.green, javaColor.blue, javaColor.alpha)
 
                 var isMatch = false
-
-                if (activePoints.isEmpty()) {
-                    isMatch = false
-                } else {
+                if (activePoints.isNotEmpty()) {
                     for (point in activePoints) {
                         val targetColor = parseHexColor(point.colorHex)
                         if (ColorMatcher.isMatch(targetColor, pixelColor, point.tolerance)) {
@@ -245,7 +237,6 @@ class PickingToolViewModel : ViewModel() {
                         }
                     }
                 }
-
                 val resultColor = if (isMatch) java.awt.Color.WHITE.rgb else java.awt.Color.BLACK.rgb
                 binaryImage.setRGB(x, y, resultColor)
             }
@@ -262,5 +253,46 @@ class PickingToolViewModel : ViewModel() {
         } catch (e: Exception) {
             Color.Black
         }
+    }
+
+    // ============================================================================================
+    // [新增] 脚本生成逻辑
+    // ============================================================================================
+
+    fun generateScript(): String {
+        val points = _featurePoints.value.filter { it.isChecked }
+        if (points.isEmpty()) return "// 错误：请先在图片上点击取几个点"
+
+        val sb = StringBuilder()
+        val sim = _globalSimilarity.value
+        val dir = _searchDirection.value.code
+        val first = points.first()
+
+        sb.append("// 多点找色：相似度 $sim, 方向 ${_searchDirection.value.label}\n")
+        sb.append("var points = [\n")
+
+        points.forEachIndexed { index, p ->
+            val hex = if(p.colorHex.startsWith("#")) p.colorHex else "#${p.colorHex}"
+            if (index == 0) {
+                // 第一个点是主色: ["#RRGGBB", x, y]
+                sb.append("    [\"$hex\", ${p.x}, ${p.y}], // 主色点\n")
+            } else {
+                // 后续点是相对坐标: ["#RRGGBB", offsetX, offsetY]
+                val offsetX = p.x - first.x
+                val offsetY = p.y - first.y
+                sb.append("    [\"$hex\", $offsetX, $offsetY], // 第${index+1}点\n")
+            }
+        }
+        sb.append("];\n\n")
+
+        sb.append("var pos = findMultiColor(points, $sim, $dir);\n")
+        sb.append("if (pos) {\n")
+        sb.append("    console.log(\"找到了: \" + pos.x + \",\" + pos.y);\n")
+        sb.append("    click(pos.x, pos.y);\n")
+        sb.append("} else {\n")
+        sb.append("    console.log(\"没找到\");\n")
+        sb.append("}")
+
+        return sb.toString()
     }
 }
