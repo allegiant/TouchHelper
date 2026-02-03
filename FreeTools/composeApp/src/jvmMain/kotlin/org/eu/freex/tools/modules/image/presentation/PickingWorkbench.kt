@@ -3,13 +3,14 @@ package org.eu.freex.tools.modules.image.presentation
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.toComposeImageBitmap
 import androidx.compose.ui.input.pointer.PointerIcon
+import androidx.compose.ui.unit.dp
+import org.eu.freex.tools.common.model.PickEvent
 import org.eu.freex.tools.common.model.PickingToolState
 import org.eu.freex.tools.modules.image.presentation.components.PickingToolRail
 import org.eu.freex.tools.modules.image.presentation.components.RulerCanvasContainer
@@ -20,74 +21,87 @@ import org.eu.freex.tools.modules.image.presentation.features.editor.layers.Feat
 import org.eu.freex.tools.modules.image.presentation.features.editor.layers.SmartHoverLayer
 import org.eu.freex.tools.modules.image.presentation.features.editor.registry.ToolRegistry
 import org.eu.freex.tools.modules.image.presentation.viewmodel.EditorCanvasViewModel
-import org.eu.freex.tools.modules.image.presentation.viewmodel.MainViewModel
 import org.eu.freex.tools.modules.image.presentation.viewmodel.PickingToolViewModel
-import org.eu.freex.tools.modules.image.presentation.viewmodel.ProjectListViewModel
 import org.koin.compose.koinInject
 import java.awt.Cursor
 
 @Composable
 fun PickingWorkbench(
-    projectListViewModel: ProjectListViewModel = koinInject(),
-    editorViewModel: EditorCanvasViewModel = koinInject(),
     pickingViewModel: PickingToolViewModel = koinInject(),
-    mainViewModel: MainViewModel = koinInject()
+    editorViewModel: EditorCanvasViewModel = koinInject()
 ) {
-    val editorState by editorViewModel.uiState.collectAsState()
-    val projectListState by projectListViewModel.uiState.collectAsState()
-    val pickingState by pickingViewModel.currentTool.collectAsState()
+    val activeTool by pickingViewModel.currentTool.collectAsState()
+
+    val currentTool by pickingViewModel.currentTool.collectAsState()
+    val currentLayer by pickingViewModel.displayImage.collectAsState()
+    val featurePoints by pickingViewModel.featurePoints.collectAsState()
+
+    val screenshots by pickingViewModel.screenshots.collectAsState()
+    val selectedIndex by pickingViewModel.selectedIndex.collectAsState()
 
     Column(modifier = Modifier.fillMaxSize()) {
 
         // 1. 顶部：多文件标签页
         WorkbenchTabRow(
-            openedImages = projectListState.assets, // 假设 ProjectListViewModel 有这个列表
-            selectedIndex = 0, // 暂时写死，后续绑定到 ViewModel
-            onTabSelected = {},
-            onTabClosed = {}
+            openedImages = screenshots,
+            selectedIndex = selectedIndex,
+            onTabSelected = { index -> pickingViewModel.selectScreenshot(index) },
+            onTabClosed = { index -> pickingViewModel.closeScreenshot(index) }
         )
 
         // 2. 主工作区
         Row(modifier = Modifier.weight(1f)) {
-
             // 2.1 左侧：工具条
             PickingToolRail(
-                activeTool = pickingState,
+                activeTool = activeTool,
                 onToolSelect = { pickingViewModel.activateTool(it) },
-                onCapture = { projectListViewModel.captureScreen() }
+                onCapture = {  }
             )
 
             // 2.2 中间：带标尺画布
             RulerCanvasContainer(
                 modifier = Modifier.weight(1f)
             ) {
-                println("光标: ${editorState.activeTool.cursor}")
                 // 复用核心画布
                 EditorCanvasPanel(
                     modifier = Modifier.fillMaxSize(),
-                    cursorIcon =  PointerIcon(Cursor.getPredefinedCursor(editorState.activeTool.cursor)),
-                    enablePan = pickingState.enablePan,
+                    displayImage = currentLayer,
+                    cursorIcon = PointerIcon(Cursor.getPredefinedCursor(activeTool.cursor)),
+                    enablePan = activeTool.enablePan,
                     content = {
-                        if (editorState.displayImage?.image != null) {
-                            val image = editorState.displayImage!!.image!!
+                        if (currentLayer?.image != null) {
+                            val image = currentLayer!!.image!!
                             // 业务图层：显示点
-                            FeatureLayer(editorViewModel, image)
+                            FeatureLayer(pickingViewModel, image)
                             // 工具图层：显示框选/准星
-                            ToolRegistry.getRenderer(pickingState).Content(image)
+                            ToolRegistry.getRenderer(activeTool).Content(
+                                image = image,
+                                onEvent = { event ->
+                                    when (event) {
+                                        is PickEvent.RegionPicked -> {
+                                            // 收到图片，传给 VM 设置为二值化目标
+                                            pickingViewModel.setTargetRegion(event.image)
+                                            // 可选：裁剪完后自动切回普通模式
+                                            pickingViewModel.activateTool(PickingToolState.None)
+                                        }
+                                        else -> {}
+                                    }
+                                }
+                            )
                         }
                     },
 
                     overlay = { size, hoverPos ->
-                        val image = editorState.displayImage?.image
+                        val image = pickingViewModel.displayImage.value
 
                         // 任务 A: 恢复画布上的跟随放大镜
                         if (image != null) {
                             SmartHoverLayer(
-                                sourceImage = image,
+                                sourceImage = image.image!!,
                                 containerSize = size,
                                 transformState = editorViewModel.transformState.value,
                                 hoverPixelPos = hoverPos,
-                                showMagnifier = editorState.activeTool.showMagnifier
+                                showMagnifier = activeTool.showMagnifier
                             )
                         }
 
@@ -111,7 +125,8 @@ fun PickingWorkbench(
             // 2.3 右侧：控制面板
             PickingControlPanel(
                 viewModel = pickingViewModel,
-                onGenerateCode = { /* TODO */ }
+                onGenerateCode = { /* TODO */ },
+                modifier = Modifier.width(320.dp)
             )
         }
     }

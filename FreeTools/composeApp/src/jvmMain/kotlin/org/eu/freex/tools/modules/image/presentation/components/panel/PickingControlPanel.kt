@@ -33,12 +33,14 @@ fun PickingControlPanel(
     onGenerateCode: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    // 收集 ViewModel 的状态
+    // === 1. 收集状态 ===
     val binaryResult by viewModel.binaryResultState.collectAsState()
     val previewState by viewModel.previewState.collectAsState()
-    val records by viewModel.pickedRecords.collectAsState()
 
-    // UI 本地状态 (Tab 切换)
+    // [修改] 监听 featurePoints 而不是 pickedRecords
+    val featurePoints by viewModel.featurePoints.collectAsState()
+
+    // UI 本地状态
     var selectedTabIndex by remember { mutableStateOf(0) }
     val tabs = listOf("多点找色", "区域找图", "字库")
 
@@ -48,15 +50,16 @@ fun PickingControlPanel(
             .fillMaxHeight()
             .background(MaterialTheme.colorScheme.surface)
     ) {
-        // === 1. 顶部预览区 (放大镜) ===
-        // 占据顶部 200dp
+        // === 2. 顶部预览区 ===
+        // 这里可以根据需求决定显示 BinarizationPreview 还是 放大镜
+        // 目前你的设计是显示二值化结果
         BinarizationPreview(
             binaryBitmap = binaryResult,
             modifier = Modifier.height(200.dp)
         )
         HorizontalDivider()
 
-        // === 2. 中间功能 Tab 区 ===
+        // === 3. 中间 Tab 区 ===
         Column(modifier = Modifier.weight(1f).fillMaxWidth()) {
             TabRow(selectedTabIndex = selectedTabIndex) {
                 tabs.forEachIndexed { index, title ->
@@ -68,29 +71,29 @@ fun PickingControlPanel(
                 }
             }
 
-            // Tab 内容区 (配置参数)
             Box(modifier = Modifier.weight(1f).padding(8.dp)) {
                 when(selectedTabIndex) {
-                    0 -> Text("这里放 [相似度] [查找方向] [偏色] 等滑块配置") // TODO: 下一步实现 Slide 配置
-                    1 -> Text("这里放图片选择列表")
-                    2 -> Text("OCR 字典配置")
+                    0 -> Text("这里放 [相似度] [查找方向] [偏色] 等配置")
+                    1 -> Text("图片列表")
+                    2 -> Text("OCR 配置")
                 }
             }
         }
 
         HorizontalDivider()
 
-        // === 3. 底部记录表 ===
-        // 占据底部 250dp (包括生成按钮)
+        // === 4. 底部记录表 (使用 FeaturePoint) ===
         Column(modifier = Modifier.height(250.dp).fillMaxWidth()) {
-            // 列表
             ColorRecordTable(
-                records = records,
-                onRemove = { id -> viewModel.removeRecord(id) },
+                records = featurePoints,
+                // [新增] 勾选/反选时更新 ViewModel
+                onUpdate = { point -> viewModel.updatePoint(point) },
+                // [修改] 删除时调用 removePointById
+                onRemove = { id -> viewModel.removePointById(id) },
                 modifier = Modifier.weight(1f)
             )
 
-            // 底部按钮栏
+            // 底部按钮
             Box(
                 modifier = Modifier
                     .fillMaxWidth()

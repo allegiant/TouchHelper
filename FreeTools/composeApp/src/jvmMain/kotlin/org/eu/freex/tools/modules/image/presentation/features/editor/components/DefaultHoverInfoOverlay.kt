@@ -37,7 +37,7 @@ fun DefaultHoverInfoOverlay(
             null
         } else null
 
-        val colorHex = color?.toHexString(false) ?: "--"
+        val colorHex = color?.toHexString() ?: "--"
         val text = if (inBounds) {
             "X: ${pixelPos.x}  Y: ${pixelPos.y}\nColor: $colorHex"
         } else {

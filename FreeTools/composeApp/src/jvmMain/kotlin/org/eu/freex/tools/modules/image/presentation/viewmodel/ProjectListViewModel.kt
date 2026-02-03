@@ -16,7 +16,10 @@ import java.io.File
 data class ProjectListUiState(
     val assets: List<ImageLayer> = emptyList(),
     val activeAssetId: String? = null
-)
+) {
+    val selectedIndex : Int
+        get() = assets.indexOfFirst { it.id == activeAssetId }
+}
 
 class ProjectListViewModel(
     private val projectRepo: ProjectRepository,

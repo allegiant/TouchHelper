@@ -14,6 +14,7 @@ import org.eu.freex.tools.modules.image.domain.repository.LayerRepository
 import org.eu.freex.tools.modules.image.domain.repository.ProjectRepository
 import org.eu.freex.tools.modules.image.presentation.viewmodel.EditorCanvasViewModel
 import org.eu.freex.tools.modules.image.presentation.viewmodel.FontLibraryViewModel
+import org.eu.freex.tools.modules.image.presentation.viewmodel.ImageWorkbenchViewModel
 import org.eu.freex.tools.modules.image.presentation.viewmodel.MainViewModel
 import org.eu.freex.tools.modules.image.presentation.viewmodel.PickingToolViewModel
 import org.eu.freex.tools.modules.image.presentation.viewmodel.PipelineViewModel
@@ -22,7 +23,6 @@ import org.eu.freex.tools.modules.image.presentation.viewmodel.RecognitionViewMo
 import org.eu.freex.tools.modules.image.presentation.viewmodel.SegmentationViewModel
 import org.eu.freex.tools.platform.DesktopScreenCaptureService
 import org.eu.freex.tools.platform.ScreenCaptureService
-import org.koin.core.module.dsl.viewModel
 import org.koin.dsl.module
 
 val appDiModule = module {
@@ -62,22 +62,23 @@ val appDiModule = module {
     // =================================================================================
 
     // 全局协调者：Loading, Error, Toast
-    single{ MainViewModel(get(), get()) }
+    single { MainViewModel(get(), get()) }
 
     // 左侧资源列表：导入、导出、管理图片
-    single{ ProjectListViewModel(get(), get(), get()) }
+    single { ProjectListViewModel(get(), get(), get()) }
 
     // 右侧滤镜流水线：滤镜链管理、预览
-    single{ PipelineViewModel(get(), get()) }
+    single { PipelineViewModel(get(), get()) }
 
     // 智能切割：参数配置、运行算法、标注
-    single{ SegmentationViewModel(get(), get()) }
+    single { SegmentationViewModel(get(), get()) }
 
     // 字库管理：预览、导出
-    single{ FontLibraryViewModel(get(), get()) }
+    single { FontLibraryViewModel(get(), get()) }
 
     // 画布交互：显示最终结果、处理点击/裁剪
-    single{ EditorCanvasViewModel(get(), get()) }
+    single { EditorCanvasViewModel() }
+    single { ImageWorkbenchViewModel(get(), get()) }
     single { PickingToolViewModel() }
     single { RecognitionViewModel(get(), get()) }
 }

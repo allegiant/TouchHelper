@@ -42,7 +42,7 @@ fun PixelInfoBoard(
         val colorHex = if (inBounds) {
             try {
                 val rgb = image.getRGB(pixelPos.x, pixelPos.y)
-                Color(rgb).toHexString(false)
+                Color(rgb).toHexString()
             } catch (e: Exception) { "--" }
         } else "--"
 

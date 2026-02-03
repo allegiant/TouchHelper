@@ -6,17 +6,16 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import org.eu.freex.tools.common.utils.ImageUtils
-import org.eu.freex.tools.modules.image.presentation.viewmodel.PickingToolViewModel
-import org.koin.compose.koinInject
 import java.awt.image.BufferedImage
 import kotlin.math.floor
 
 @Composable
 fun ColorPickerLayer(
     sourceImage: BufferedImage,
-    viewModel: PickingToolViewModel = koinInject()
+    onPick: (Int, Int, Color) -> Unit
 ) {
     Box(
         modifier = Modifier
@@ -30,7 +29,7 @@ fun ColorPickerLayer(
                         // 1. 耗时操作：获取颜色
                         val color = ImageUtils.getPixelColor(sourceImage, x, y)
                         // 2. 触发事件
-                        viewModel.emitColorPick(x, y, color)
+                        onPick(x, y, color)
                     }
                 }
             }

@@ -46,7 +46,7 @@ import org.eu.freex.tools.common.model.PickingToolState
 import org.eu.freex.tools.modules.image.domain.model.AutoCropFilter
 import org.eu.freex.tools.modules.image.domain.model.AutoCropMode
 import org.eu.freex.tools.modules.image.domain.model.ImageFilter
-import org.eu.freex.tools.modules.image.presentation.viewmodel.EditorCanvasViewModel
+import org.eu.freex.tools.modules.image.presentation.viewmodel.ImageWorkbenchViewModel
 import org.koin.compose.koinInject
 
 object AutoCropRenderer : FilterRenderer {
@@ -59,7 +59,7 @@ object AutoCropRenderer : FilterRenderer {
         val currentFilter = filter as? AutoCropFilter ?: return
 
         // [修改] 注入 ViewModel
-        val editorViewModel: EditorCanvasViewModel = koinInject()
+        val workbenchViewModel: ImageWorkbenchViewModel = koinInject()
 
         // [新增] 标记是否正在等待取色结果
         var isPickingColor by remember { mutableStateOf(false) }
@@ -70,7 +70,7 @@ object AutoCropRenderer : FilterRenderer {
 
         // [新增] 监听取色事件
         LaunchedEffect(Unit) {
-            editorViewModel.pickEvent.collect { event ->
+            workbenchViewModel.pickEvent.collect { event ->
                 if (event is Color && isPickingColor) {
                     val picked = event
                     val hex = "#%02X%02X%02X".format(
@@ -81,7 +81,7 @@ object AutoCropRenderer : FilterRenderer {
                     // 更新 Filter
                     onFilterChangeState(currentFilterState.copy(fixedColorHex = hex))
                     // [新增] 关键一步：成功取色后，告诉 ViewModel 退出取色模式
-                    editorViewModel.setActiveTool(PickingToolState.None)
+                    workbenchViewModel.activeTool(PickingToolState.None)
                     // 重置标记
                     isPickingColor = false
                 }
@@ -153,7 +153,7 @@ object AutoCropRenderer : FilterRenderer {
                         onPickColor = {
                             // [修改] 触发取色流程
                             isPickingColor = true
-                            editorViewModel.setActiveTool(PickingToolState.ColorPicker)
+                            workbenchViewModel.activeTool(PickingToolState.ColorPicker)
                         }
                     )
 

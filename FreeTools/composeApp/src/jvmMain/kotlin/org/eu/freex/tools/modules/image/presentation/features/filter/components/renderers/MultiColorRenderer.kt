@@ -26,7 +26,7 @@ import org.eu.freex.tools.common.model.PickingToolState
 import org.eu.freex.tools.common.utils.toHexString
 import org.eu.freex.tools.modules.image.domain.model.ImageFilter
 import org.eu.freex.tools.modules.image.domain.model.MultiColorFilter
-import org.eu.freex.tools.modules.image.presentation.viewmodel.EditorCanvasViewModel
+import org.eu.freex.tools.modules.image.presentation.viewmodel.ImageWorkbenchViewModel
 import org.koin.compose.koinInject
 
 object MultiColorRenderer : FilterRenderer {
@@ -34,7 +34,7 @@ object MultiColorRenderer : FilterRenderer {
     @Composable
     override fun Content(filter: ImageFilter, onFilterChange: (ImageFilter) -> Unit) {
         val currentFilter = filter as? MultiColorFilter ?: return
-        val editorViewModel: EditorCanvasViewModel = koinInject()
+        val workbenchViewModel: ImageWorkbenchViewModel = koinInject()
 
         // 记录当前正在取色的规则索引
         var activePickingIndex by remember { mutableStateOf<Int?>(null) }
@@ -47,13 +47,14 @@ object MultiColorRenderer : FilterRenderer {
         // [核心优化] 监听取色结果 (原地处理，无需 ViewModel 托管)
         // -------------------------------------------------------------
         LaunchedEffect(Unit) {
-            editorViewModel.pickEvent.collect { event ->
+            workbenchViewModel.pickEvent.collect { event ->
                 val index = activePickingIndex
+                println("接收到: color: $event, index: $index")
                 if (event is Color && index != null) {
                     val rules = currentFilterState.rules
                     if (index in rules.indices) {
                         // 1. 使用工具函数转 Hex，简洁安全
-                        val newHex = event.toHexString(false)
+                        val newHex = event.toHexString()
 
                         // 2. 更新规则
                         val newRules = rules.toMutableList()
@@ -63,7 +64,7 @@ object MultiColorRenderer : FilterRenderer {
                         onFilterChangeState(currentFilterState.copy(rules = newRules))
 
                         // 4. 成功取色后，退出取色模式
-                        editorViewModel.setActiveTool(PickingToolState.None)
+                        workbenchViewModel.activeTool(PickingToolState.None)
                     }
                     // 5. 重置本地索引
                     activePickingIndex = null
@@ -95,7 +96,7 @@ object MultiColorRenderer : FilterRenderer {
                 onRequestPickColor = { index ->
                     // 记录是谁在请求取色，并激活工具
                     activePickingIndex = index
-                    editorViewModel.setActiveTool(PickingToolState.ColorPicker)
+                    workbenchViewModel.activeTool(PickingToolState.ColorPicker)
                 }
             )
         }

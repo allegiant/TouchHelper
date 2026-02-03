@@ -12,6 +12,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.unit.IntSize
+import org.eu.freex.tools.modules.image.domain.model.ImageLayer
 import org.eu.freex.tools.modules.image.presentation.features.editor.components.foundation.EditorCanvasContainer
 import org.eu.freex.tools.modules.image.presentation.viewmodel.EditorCanvasViewModel
 import org.koin.compose.koinInject
@@ -27,6 +28,7 @@ import org.koin.compose.koinInject
 @Composable
 fun EditorCanvasPanel(
     modifier: Modifier = Modifier,
+    displayImage: ImageLayer?,
     editorViewModel: EditorCanvasViewModel = koinInject(),
     cursorIcon: PointerIcon = PointerIcon.Default,
     enablePan: Boolean = true,
@@ -35,7 +37,6 @@ fun EditorCanvasPanel(
     // [插槽 2] 外部层 (升级：传入 ViewportSize 和 HoverPos)
     overlay: @Composable (BoxScope.(IntSize, Offset?) -> Unit) = { _, _ -> }
 ) {
-    val uiState by editorViewModel.uiState.collectAsState()
     val transformState by editorViewModel.transformState.collectAsState()
 
     var hoverPixelPos by remember { mutableStateOf<Offset?>(null) }
@@ -44,7 +45,7 @@ fun EditorCanvasPanel(
         val viewportSize = IntSize(constraints.maxWidth, constraints.maxHeight)
 
         EditorCanvasContainer(
-            displayImage = uiState.displayImage,
+            displayImage = displayImage,
             transformState = transformState,
             cursorIcon = cursorIcon,
             enablePan = enablePan,
@@ -52,15 +53,15 @@ fun EditorCanvasPanel(
             onHover = { hoverPixelPos = it } // 捕获鼠标位置
 
         ) {
-            if (uiState.displayImage?.image != null) {
+            if (displayImage?.image != null) {
                 // 渲染内部跟随缩放的内容
                 content()
             }
         }
 
         // 渲染外部固定悬浮的内容
-        if (uiState.displayImage?.image != null) {
-            overlay(viewportSize,hoverPixelPos)
+        if (displayImage?.image != null) {
+            overlay(viewportSize, hoverPixelPos)
         }
     }
 }

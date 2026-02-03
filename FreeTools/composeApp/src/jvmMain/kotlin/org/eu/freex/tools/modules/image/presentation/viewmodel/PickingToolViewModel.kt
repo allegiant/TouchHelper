@@ -6,56 +6,146 @@ import androidx.compose.ui.graphics.toComposeImageBitmap
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharedFlow
-import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import org.eu.freex.tools.common.model.PickEvent
 import org.eu.freex.tools.common.model.PickingToolState
 import org.eu.freex.tools.common.utils.ColorMatcher
 import org.eu.freex.tools.common.utils.toHexString
-import org.eu.freex.tools.modules.image.presentation.viewmodel.model.PickRecord
+import org.eu.freex.tools.modules.image.domain.model.FeaturePoint
+import org.eu.freex.tools.modules.image.domain.model.ImageLayer
 import org.eu.freex.tools.modules.image.presentation.viewmodel.model.PreviewState
 import java.awt.image.BufferedImage
+import java.util.UUID
 
 class PickingToolViewModel : ViewModel() {
 
-    // === 1. 工具状态 ===
+    // ============================================================================================
+    // State (状态)
+    // ============================================================================================
+
+    // 1. 当前激活的工具
     private val _currentTool = MutableStateFlow<PickingToolState>(PickingToolState.None)
     val currentTool = _currentTool.asStateFlow()
 
-    // === 2. 核心数据：取色记录列表 (驱动右下角列表和中间的标记点) ===
-    private val _pickedRecords = MutableStateFlow<List<PickRecord>>(emptyList())
-    val pickedRecords = _pickedRecords.asStateFlow()
+    // 2. 当前正在分析的图层 (Session Layer)
+    // [修改点]：这里现在持有完整的 ImageLayer 对象，而不仅仅是 Bitmap
+    private val _displayImage = MutableStateFlow<ImageLayer?>(null)
+    val displayImage = _displayImage.asStateFlow()
 
-    // === 3. 核心数据：实时预览 (驱动右上角放大镜) ===
+    // 3. 特征点列表 (统一使用 FeaturePoint)
+    private val _featurePoints = MutableStateFlow<List<FeaturePoint>>(emptyList())
+    val featurePoints = _featurePoints.asStateFlow()
+
+    // 4. 预览状态 (用于右侧面板放大镜)
     private val _previewState = MutableStateFlow(PreviewState())
     val previewState = _previewState.asStateFlow()
 
-    // === 4. 事件流 (用于通知 UI 进行一次性操作，如 Toast 提示) ===
-    private val _pickEvent = MutableSharedFlow<PickEvent>()
-    val pickEvent: SharedFlow<PickEvent> = _pickEvent.asSharedFlow()
-
-    // 原图 (用户框选的那一块)
-    private var _targetRegionRaw: BufferedImage? = null
-    // 二值化后的图 (用于 UI 显示)
+    // 5. 二值化结果 (UI 显示用，这里保持 ImageBitmap 即可，因为它是临时生成的预览)
     private val _binaryResultState = MutableStateFlow<ImageBitmap?>(null)
     val binaryResultState = _binaryResultState.asStateFlow()
 
-    // --- Actions ---
+    // 6. 内部状态：目标区域的原图 (用于计算二值化)
+    private var _targetRegionRaw: BufferedImage? = null
 
-    fun activateTool(tool: PickingToolState) {
-        _currentTool.value = tool
+    private val _screenshots = MutableStateFlow<List<ImageLayer>>(emptyList())
+    val screenshots = _screenshots.asStateFlow()
+
+    // 当前选中的 Tab 索引
+    private val _selectedIndex = MutableStateFlow(0)
+    val selectedIndex = _selectedIndex.asStateFlow()
+
+    /**
+     * 接收一张新截图 (通常由 ScreenCaptureService 调用)
+     */
+    fun addScreenshot(image: BufferedImage) {
+        val newLayer = ImageLayer(
+            id = UUID.randomUUID().toString(),
+            name = "截图 ${System.currentTimeMillis() / 1000 % 10000}", // 简短命名
+            image = image
+        )
+
+        val newList = _screenshots.value + newLayer
+        _screenshots.value = newList
+
+        // 自动选中刚截的那张
+        selectScreenshot(newList.lastIndex)
     }
 
     /**
-     * 处理画布的 Hover 事件 (由 RulerCanvasContainer 调用)
-     * 更新右上角的预览图
+     * 切换选中的截图
      */
-    fun updatePreview(x: Int, y: Int, color: Color, magnifier: ImageBitmap?) {
+    fun selectScreenshot(index: Int) {
+        val list = _screenshots.value
+        if (index in list.indices) {
+            _selectedIndex.value = index
+            // [关键] 同步设置当前正在分析的图片 (setImage 是我们之前定义的)
+            setImage(list[index])
+        }
+    }
+
+    /**
+     * 关闭截图 Tab
+     */
+    fun closeScreenshot(index: Int) {
+        val currentList = _screenshots.value.toMutableList()
+        if (index !in currentList.indices) return
+
+        currentList.removeAt(index)
+        _screenshots.value = currentList
+
+        // 如果列表空了，清空当前显示
+        if (currentList.isEmpty()) {
+            setImage(null)
+            _selectedIndex.value = -1
+        } else {
+            // 否则选中前一张或第一张
+            val newIndex = (index - 1).coerceAtLeast(0)
+            selectScreenshot(newIndex)
+        }
+    }
+
+    // ============================================================================================
+    // Actions (动作)
+    // ============================================================================================
+
+    fun activateTool(tool: PickingToolState) {
+        _currentTool.value = tool
+        if (tool is PickingToolState.None) {
+            clearPreview()
+        }
+    }
+
+    /**
+     * 设置当前工作的图层
+     * [修改点]：接收 ImageLayer
+     */
+    fun setImage(layer: ImageLayer?) {
+        // 通过 ID 判断是否是同一张图，避免重复刷新
+        if (_displayImage.value?.id != layer?.id) {
+            _displayImage.value = layer
+
+            // 切换图片时，重置会话状态
+            _featurePoints.value = emptyList()
+            _targetRegionRaw = null
+            _binaryResultState.value = null
+            clearPreview()
+        }
+    }
+
+    /**
+     * 设置二值化分析的目标区域
+     */
+    fun setTargetRegion(image: BufferedImage?) {
+        _targetRegionRaw = image
+        recalculateBinarization()
+    }
+
+    /**
+     * 更新放大镜预览
+     */
+    fun updatePreview(x: Int, y: Int, color: Color, magnifier: ImageBitmap) {
         _previewState.update {
             it.copy(
                 hasContent = true,
@@ -71,78 +161,70 @@ class PickingToolViewModel : ViewModel() {
         _previewState.update { it.copy(hasContent = false) }
     }
 
-    /**
-     * 设置目标区域 (当用户在画布上框选结束时调用)
-     */
-    fun setTargetRegion(image: BufferedImage?) {
-        _targetRegionRaw = image
-        recalculateBinarization() // 立即计算一次
-    }
+    // ============================================================================================
+    // Feature Point Management (特征点管理)
+    // ============================================================================================
 
-    /**
-     * 重新计算二值化
-     * (当 setTargetRegion 调用，或者 pickedRecords 发生变化时调用)
-     */
-    private fun recalculateBinarization() {
-        val raw = _targetRegionRaw ?: return
-        val records = _pickedRecords.value
+    fun addPoint(x: Int, y: Int, color: Color) {
+        val currentList = _featurePoints.value
+        val newIndex = currentList.size + 1
 
-        viewModelScope.launch(Dispatchers.Default) {
-            // 如果没有取色点，全黑；如果有，开始计算
-            val result = if (records.isEmpty()) {
-                // 或者显示全黑，或者显示原图灰度，看需求。这里暂定全黑表示“没匹配到任何东西”
-                // 也可以逻辑设定为：没选颜色时显示原图方便看
-                generateBinaryImage(raw, emptyList())
-            } else {
-                generateBinaryImage(raw, records)
-            }
-            _binaryResultState.value = result
-        }
-    }
+        val newPoint = FeaturePoint(
+            index = newIndex,
+            x = x,
+            y = y,
+            colorHex = color.toHexString(),
+            tolerance = "101010",
+            isChecked = true
+        )
 
-    /**
-     * 处理取色点击事件 (由 ToolLayer 调用)
-     * 不仅仅是 emit event，更重要的是存入 List
-     */
-    fun emitColorPick(x: Int, y: Int, color: Color) {
-        viewModelScope.launch {
-            // 1. 发送事件 (保持兼容性，也许有其他地方监听)
-            _pickEvent.emit(PickEvent.ColorPicked(x, y, color, color.toHexString(false)))
-
-            // 2. 存入记录列表
-            val newIndex = (_pickedRecords.value.maxOfOrNull { it.index } ?: 0) + 1
-            val newRecord = PickRecord(
-                index = newIndex,
-                x = x,
-                y = y,
-                color = color
-            )
-            _pickedRecords.update { it + newRecord }
-
-            recalculateBinarization()
-        }
-    }
-    fun emitPointPick(x: Int, y: Int) {
-        viewModelScope.launch {
-            _pickEvent.emit(
-                PickEvent.PointPicked(x, y)
-            )
-        }
-    }
-
-    fun removeRecord(id: String) {
-        _pickedRecords.update { list -> list.filterNot { it.id == id } }
-
+        _featurePoints.update { it + newPoint }
         recalculateBinarization()
     }
 
-    /**
-     * 核心算法：针对特定图片进行二值化
-     */
-    private fun generateBinaryImage(image: BufferedImage, records: List<PickRecord>): ImageBitmap {
+    fun removePoint(index: Int) {
+        _featurePoints.update { list ->
+            list.filter { it.index != index }
+                .mapIndexed { i, point -> point.copy(index = i + 1) }
+        }
+        recalculateBinarization()
+    }
+
+    fun removePointById(id: String) {
+        _featurePoints.update { list ->
+            list.filter { it.id != id }
+                .mapIndexed { i, point -> point.copy(index = i + 1) }
+        }
+        recalculateBinarization()
+    }
+
+    fun updatePoint(point: FeaturePoint) {
+        _featurePoints.update { list ->
+            list.map { if (it.id == point.id) point else it }
+        }
+        recalculateBinarization()
+    }
+
+    // ============================================================================================
+    // Logic (二值化计算)
+    // ============================================================================================
+
+    private fun recalculateBinarization() {
+        val rawImage = _targetRegionRaw ?: return
+        val points = _featurePoints.value
+
+        viewModelScope.launch(Dispatchers.Default) {
+            val binaryBitmap = generateBinaryImage(rawImage, points)
+            _binaryResultState.value = binaryBitmap
+        }
+    }
+
+    private fun generateBinaryImage(image: BufferedImage, points: List<FeaturePoint>): ImageBitmap {
         val width = image.width
         val height = image.height
         val binaryImage = BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB)
+
+        val activePoints = points.filter { it.isChecked }
 
         for (y in 0 until height) {
             for (x in 0 until width) {
@@ -151,15 +233,19 @@ class PickingToolViewModel : ViewModel() {
                 val pixelColor = Color(javaColor.red, javaColor.green, javaColor.blue, javaColor.alpha)
 
                 var isMatch = false
-                for (record in records) {
-                    // 使用之前的 ColorMatcher 工具
-                    if (ColorMatcher.isMatch(record.color, pixelColor, record.offsetColor)) {
-                        isMatch = true
-                        break
+
+                if (activePoints.isEmpty()) {
+                    isMatch = false
+                } else {
+                    for (point in activePoints) {
+                        val targetColor = parseHexColor(point.colorHex)
+                        if (ColorMatcher.isMatch(targetColor, pixelColor, point.tolerance)) {
+                            isMatch = true
+                            break
+                        }
                     }
                 }
 
-                // 匹配显示白色，不匹配显示黑色
                 val resultColor = if (isMatch) java.awt.Color.WHITE.rgb else java.awt.Color.BLACK.rgb
                 binaryImage.setRGB(x, y, resultColor)
             }
@@ -167,4 +253,14 @@ class PickingToolViewModel : ViewModel() {
         return binaryImage.toComposeImageBitmap()
     }
 
+    private fun parseHexColor(hex: String): Color {
+        return try {
+            val cleanHex = hex.removePrefix("#")
+            val rgb = cleanHex.toLong(16)
+            val argb = if (cleanHex.length == 6) rgb or 0xFF000000 else rgb
+            Color(argb)
+        } catch (e: Exception) {
+            Color.Black
+        }
+    }
 }

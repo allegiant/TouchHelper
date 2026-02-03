@@ -25,7 +25,7 @@ import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.unit.dp
 import org.eu.freex.tools.common.components.LoadingOverlay
 import org.eu.freex.tools.common.components.ToastOverlay
-import org.eu.freex.tools.common.model.PickingToolState
+import org.eu.freex.tools.common.model.PickEvent
 import org.eu.freex.tools.common.model.WorkbenchTab
 import org.eu.freex.tools.modules.image.presentation.features.editor.EditorCanvasPanel
 import org.eu.freex.tools.modules.image.presentation.features.editor.layers.SegmentationLayer
@@ -37,8 +37,8 @@ import org.eu.freex.tools.modules.image.presentation.features.project.ProjectLis
 import org.eu.freex.tools.modules.image.presentation.features.tools.dialogs.CodeGenDialog
 import org.eu.freex.tools.modules.image.presentation.features.tools.dialogs.ScreenCropperDialog
 import org.eu.freex.tools.modules.image.presentation.viewmodel.EditorCanvasViewModel
+import org.eu.freex.tools.modules.image.presentation.viewmodel.ImageWorkbenchViewModel
 import org.eu.freex.tools.modules.image.presentation.viewmodel.MainViewModel
-import org.eu.freex.tools.modules.image.presentation.viewmodel.PickingToolViewModel
 import org.eu.freex.tools.modules.image.presentation.viewmodel.ProjectListViewModel
 import org.eu.freex.tools.modules.image.presentation.viewmodel.SegmentationViewModel
 import org.koin.compose.koinInject
@@ -48,24 +48,18 @@ import java.awt.Cursor
 fun ImageWorkbench(
     mainViewModel: MainViewModel = koinInject(),
     projectListViewModel: ProjectListViewModel = koinInject(),
+    workbenchViewModel: ImageWorkbenchViewModel = koinInject(),
     editorViewModel: EditorCanvasViewModel = koinInject(),
     segmentationViewModel: SegmentationViewModel = koinInject(),
-    pickingViewModel: PickingToolViewModel = koinInject()
 ) {
+
+
     val mainState by mainViewModel.uiState.collectAsState()
-    val editorState by editorViewModel.uiState.collectAsState()
+    val workbenchState by workbenchViewModel.uiState.collectAsState()
 
     var currentTab by remember { mutableStateOf(WorkbenchTab.FILTER) }
     var showCodeDialog by remember { mutableStateOf(false) }
     var generatedCode by remember { mutableStateOf("") }
-
-    // === 2. 监听工具点击事件并分发 ===
-    LaunchedEffect(Unit) {
-        pickingViewModel.pickEvent.collect { event ->
-            // 极简调用
-            ToolRegistry.handleEvent(event, editorViewModel)
-        }
-    }
 
 
     Box(modifier = Modifier.fillMaxSize()) {
@@ -95,7 +89,8 @@ fun ImageWorkbench(
             Column(modifier = Modifier.weight(1f).fillMaxHeight()) {
                 EditorCanvasPanel(
                     modifier = Modifier.weight(1f).fillMaxWidth(),
-                    cursorIcon = PointerIcon(Cursor.getPredefinedCursor(editorState.activeTool.cursor)),
+                    displayImage = workbenchState.displayImage,
+                    cursorIcon = PointerIcon(Cursor.getPredefinedCursor(workbenchState.activeTool.cursor)),
                     // [核心修复区]
                     content = {
                         // 1. 业务层
@@ -105,21 +100,38 @@ fun ImageWorkbench(
                         }
 
                         // 2. 工具交互层 [注册表模式实现]
-                        if (editorState.displayImage?.image != null) {
-                            val image = editorState.displayImage!!.image!!
+                        if (workbenchState.displayImage?.image != null) {
+                            val image = workbenchState.displayImage!!.image!!
                             // 直接用 Editor 的状态查表！
-                            val renderer = ToolRegistry.getRenderer(editorState.activeTool)
-                            renderer.Content(image = image)
+
+                            ToolRegistry.getRenderer(workbenchState.activeTool).Content(
+                                image = image,
+                                onEvent = { event ->
+                                    // === 事件分发中心 ===
+                                    // 这里决定了“在主编辑器里点击”会发生什么
+                                    when (event) {
+                                        // 场景 1: 取色 (例如用于设置滤镜参数)
+                                        is PickEvent.ColorPicked -> {
+                                            workbenchViewModel.pickColor(event.color)
+                                        }
+                                        // 场景 3: 取点 (例如特征匹配)
+                                        is PickEvent.PointPicked -> {
+                                            workbenchViewModel.pickPoint(event.x, event.y)
+                                        }
+                                        else -> {println("Unknown event: $event")}
+                                    }
+                                }
+                            )
                         }
                     },
                     overlay = { size, hoverPos ->
-                        if (editorState.displayImage?.image != null) {
+                        if (workbenchState.displayImage?.image != null) {
                             SmartHoverLayer(
-                                sourceImage = editorState.displayImage!!.image!!,
+                                sourceImage = workbenchState.displayImage!!.image!!,
                                 containerSize = size,
                                 transformState = editorViewModel.transformState.value,
                                 hoverPixelPos = hoverPos,
-                                showMagnifier =editorState.activeTool.showMagnifier
+                                showMagnifier = workbenchState.activeTool.showMagnifier
                             )
                         }
                     }
@@ -139,11 +151,11 @@ fun ImageWorkbench(
         if (showCodeDialog) {
             CodeGenDialog(code = generatedCode, onDismiss = { showCodeDialog = false })
         }
-        editorState.cropperLayer?.let { layer ->
+        workbenchState.cropperLayer?.let { layer ->
             ScreenCropperDialog(
                 imageLayer = layer,
-                onConfirm = { rect -> editorViewModel.confirmCrop(rect) },
-                onDismiss = { editorViewModel.exitCropMode() }
+                onConfirm = { rect -> workbenchViewModel.confirmCrop(rect) },
+                onDismiss = { workbenchViewModel.exitCropMode() }
             )
         }
         if (mainState.isLoading) {

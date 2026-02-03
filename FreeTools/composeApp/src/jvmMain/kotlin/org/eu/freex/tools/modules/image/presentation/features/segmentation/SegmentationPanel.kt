@@ -1,10 +1,30 @@
 package org.eu.freex.tools.modules.image.presentation.features.segmentation
 
-import androidx.compose.foundation.layout.*
+// 引入组件
+
+// Models
+
+// ViewModels
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.Button
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ImageBitmap
@@ -14,34 +34,29 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.eu.freex.tools.common.model.PickingToolState
-import org.koin.compose.koinInject
-import java.awt.image.BufferedImage
-import java.util.ArrayList
-
-// 引入组件
+import org.eu.freex.tools.modules.image.domain.model.SegmentationConfig
+import org.eu.freex.tools.modules.image.presentation.features.segmentation.components.LabelingDialog
 import org.eu.freex.tools.modules.image.presentation.features.segmentation.components.SegmentationConfigSection
 import org.eu.freex.tools.modules.image.presentation.features.segmentation.components.SegmentationResultGrid
-import org.eu.freex.tools.modules.image.presentation.features.segmentation.components.LabelingDialog
-
-// Models
-import org.eu.freex.tools.modules.image.domain.model.SegmentationConfig
-
-// ViewModels
-import org.eu.freex.tools.modules.image.presentation.viewmodel.SegmentationViewModel
 import org.eu.freex.tools.modules.image.presentation.viewmodel.EditorCanvasViewModel
 import org.eu.freex.tools.modules.image.presentation.viewmodel.FontLibraryViewModel
+import org.eu.freex.tools.modules.image.presentation.viewmodel.ImageWorkbenchViewModel
+import org.eu.freex.tools.modules.image.presentation.viewmodel.SegmentationViewModel
+import org.koin.compose.koinInject
+import java.awt.image.BufferedImage
 
 @Composable
 fun SegmentationPanel(
     modifier: Modifier = Modifier,
     segViewModel: SegmentationViewModel = koinInject(),
+    workbenchViewModel: ImageWorkbenchViewModel = koinInject(),
     editorViewModel: EditorCanvasViewModel = koinInject(),
     fontViewModel: FontLibraryViewModel = koinInject()
 ) {
     val segState by segViewModel.uiState.collectAsState()
-    val editorState by editorViewModel.uiState.collectAsState()
+    val uiState = workbenchViewModel.uiState.collectAsState()
 
-    val sourceImage = editorState.displayImage?.image
+    val sourceImage = uiState.value.displayImage?.image
 
     val project = segState.project
     val config = project?.config ?: SegmentationConfig()
@@ -56,7 +71,7 @@ fun SegmentationPanel(
     val currentConfig by rememberUpdatedState(config)
 
     LaunchedEffect(Unit) {
-        editorViewModel.pickEvent.collect { event ->
+        workbenchViewModel.pickEvent.collect { event ->
             if (event is IntOffset) {
                 // 使用 currentConfig (最新状态) 进行拷贝
                 val newConfig = currentConfig.copy(startX = event.x, startY = event.y)
@@ -65,7 +80,7 @@ fun SegmentationPanel(
                 segViewModel.runSegmentation(newConfig)
 
                 // 取点完成后退出取点模式
-                editorViewModel.setActiveTool(PickingToolState.None)
+                workbenchViewModel.activeTool(PickingToolState.None)
             }
         }
     }
@@ -117,7 +132,7 @@ fun SegmentationPanel(
                 config = config,
                 onChange = { newConfig -> segViewModel.runSegmentation(newConfig) },
                 onPickPoint = {
-                    editorViewModel.setActiveTool(PickingToolState.PointPicker)
+                    workbenchViewModel.activeTool(PickingToolState.PointPicker)
                 }
             )
         }

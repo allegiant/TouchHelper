@@ -35,12 +35,11 @@ import kotlin.math.min
 @Composable
 fun RegionPickerLayer(
     sourceImage: BufferedImage,
-    viewModel: PickingToolViewModel = koinInject()
+    onCrop: (BufferedImage) -> Unit
 ) {
     // 记录拖拽状态
     var startOffset by remember { mutableStateOf<Offset?>(null) }
     var currentOffset by remember { mutableStateOf<Offset?>(null) }
-
     // 记录最终确定的矩形 (用于持续显示，直到下一次操作)
     var selectionRect by remember { mutableStateOf<Rect?>(null) }
 
@@ -83,10 +82,7 @@ fun RegionPickerLayer(
                                         rect.height.toInt()
                                     )
                                     // 3. 提交给 VM
-                                    viewModel.setTargetRegion(crop)
-
-                                    // 4. (可选) 框选完自动切回指针模式？
-                                    // viewModel.activateTool(PickingToolState.None)
+                                    onCrop(crop)
                                 } catch (e: Exception) {
                                     e.printStackTrace()
                                 }

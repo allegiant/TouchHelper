@@ -1,6 +1,7 @@
 package org.eu.freex.tools.modules.image.presentation.features.editor.registry
 
 import androidx.compose.runtime.Composable
+import org.eu.freex.tools.common.model.PickEvent
 import java.awt.image.BufferedImage
 
 /**
@@ -9,5 +10,5 @@ import java.awt.image.BufferedImage
  */
 fun interface ToolRenderer {
     @Composable
-    fun Content(image: BufferedImage)
+    fun Content(image: BufferedImage, onEvent: (PickEvent) -> Unit)
 }

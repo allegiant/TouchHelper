@@ -30,12 +30,15 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import org.eu.freex.tools.common.utils.toHexString
-import org.eu.freex.tools.modules.image.presentation.viewmodel.model.PickRecord
+import org.eu.freex.tools.modules.image.domain.model.FeaturePoint
 
 @Composable
 fun ColorRecordTable(
-    records: List<PickRecord>,
+    // [修改] 数据源改为 FeaturePoint
+    records: List<FeaturePoint>,
+    // [新增] 更新回调 (用于 Checkbox 勾选)
+    onUpdate: (FeaturePoint) -> Unit,
+    // [修改] 删除回调 (使用 ID 或 Index，这里 FeaturePoint 有 ID)
     onRemove: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -50,18 +53,22 @@ fun ColorRecordTable(
         ) {
             HeaderCell("序号", 30.dp)
             HeaderCell("坐标", 60.dp)
-            HeaderCell("颜色", 60.dp)
-            HeaderCell("偏色", 60.dp)
+            HeaderCell("颜色", 70.dp)
+            HeaderCell("偏色", 50.dp)
             Spacer(Modifier.weight(1f))
-            HeaderCell("操作", 30.dp)
+            HeaderCell("操作", 40.dp) // 稍微宽一点容纳 Checkbox 和 Delete
         }
 
         HorizontalDivider()
 
         // 列表内容
         LazyColumn(modifier = Modifier.weight(1f)) {
-            items(records) { record ->
-                RecordRow(record = record, onRemove = { onRemove(record.id) })
+            items(records, key = { it.id }) { point ->
+                RecordRow(
+                    point = point,
+                    onUpdate = onUpdate,
+                    onRemove = { onRemove(point.id) }
+                )
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
             }
         }
@@ -69,63 +76,88 @@ fun ColorRecordTable(
 }
 
 @Composable
-private fun RecordRow(record: PickRecord, onRemove: () -> Unit) {
+private fun RecordRow(
+    point: FeaturePoint,
+    onUpdate: (FeaturePoint) -> Unit,
+    onRemove: () -> Unit
+) {
+    // 解析颜色用于显示 (FeaturePoint 存的是 Hex String)
+    val displayColor = try {
+        val hex = point.colorHex.removePrefix("#")
+        val alpha = if (hex.length == 8) hex.substring(0, 2) else "FF"
+        val rgb = if (hex.length == 8) hex.substring(2) else hex
+        val fullHex = "$alpha$rgb"
+        Color(fullHex.toLong(16))
+    } catch (e: Exception) {
+        Color.Gray
+    }
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(32.dp) // 紧凑行高
+            .height(32.dp)
             .padding(horizontal = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // 序号
+        // 1. 序号
         Text(
-            text = "${record.index}",
+            text = "${point.index}",
             fontSize = 12.sp,
             modifier = Modifier.width(30.dp)
         )
 
-        // 坐标
+        // 2. 坐标
         Text(
-            text = "${record.x},${record.y}",
+            text = "${point.x},${point.y}",
             fontSize = 11.sp,
             fontFamily = FontFamily.Monospace,
             modifier = Modifier.width(60.dp)
         )
 
-        // 颜色 (块 + Hex)
+        // 3. 颜色 (块 + Hex)
         Row(modifier = Modifier.width(70.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(
                 modifier = Modifier
                     .size(12.dp)
-                    .background(record.color)
+                    .background(displayColor)
                     .border(1.dp, Color.Gray)
             )
             Spacer(Modifier.width(4.dp))
             Text(
-                text = record.color.toHexString(false).uppercase(), // false = 不带 Alpha
+                text = point.colorHex.uppercase().takeLast(6), // 只显示后6位，简洁点
                 fontSize = 11.sp,
                 fontFamily = FontFamily.Monospace
             )
         }
 
-        // 偏色 (暂时写死/展示)
+        // 4. 偏色 (Tolerance)
+        // 这里暂时只显示文本，点击可以弹出修改框(未来实现)
         Text(
-            text = record.offsetColor,
+            text = point.tolerance,
             fontSize = 11.sp,
             color = Color.Gray,
-            modifier = Modifier.width(60.dp)
+            modifier = Modifier
+                .width(50.dp)
+            // .clickable { /* TODO: 弹出偏色编辑框 */ }
         )
 
         Spacer(Modifier.weight(1f))
 
-        // 操作区
+        // 5. 操作区
         Row(verticalAlignment = Alignment.CenterVertically) {
+            // 勾选框
             Checkbox(
-                checked = record.isChecked,
-                onCheckedChange = {}, // TODO: 实现 Toggle 逻辑
+                checked = point.isChecked,
+                onCheckedChange = { isChecked ->
+                    onUpdate(point.copy(isChecked = isChecked))
+                },
                 modifier = Modifier.size(24.dp),
                 colors = CheckboxDefaults.colors(checkedColor = MaterialTheme.colorScheme.primary)
             )
+
+            Spacer(Modifier.width(4.dp))
+
+            // 删除按钮
             IconButton(onClick = onRemove, modifier = Modifier.size(24.dp)) {
                 Icon(Icons.Default.Delete, "删除", modifier = Modifier.size(16.dp))
             }
