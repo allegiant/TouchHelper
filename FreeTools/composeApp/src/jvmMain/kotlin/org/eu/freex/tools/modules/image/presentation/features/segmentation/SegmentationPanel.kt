@@ -24,6 +24,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -32,6 +33,9 @@ import androidx.compose.ui.graphics.toComposeImageBitmap
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.filterIsInstance
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.eu.freex.tools.common.model.PickEvent
 import org.eu.freex.tools.common.model.PickingToolState
@@ -70,21 +74,7 @@ fun SegmentationPanel(
     // [核心修复] 使用 rememberUpdatedState 保持对最新 config 的引用
     // 这样在 LaunchedEffect 内部就能总是获取到界面上最新的配置，而不是第一次加载时的旧配置
     val currentConfig by rememberUpdatedState(config)
-
-    LaunchedEffect(Unit) {
-        workbenchViewModel.pickEvent.collect { event ->
-            if (event is PickEvent.PointPicked) {
-                // 使用 currentConfig (最新状态) 进行拷贝
-                val newConfig = currentConfig.copy(startX = event.x, startY = event.y)
-
-                // 更新并运行算法
-                segViewModel.runSegmentation(newConfig)
-
-                // 取点完成后退出取点模式
-                workbenchViewModel.activeTool(PickingToolState.None)
-            }
-        }
-    }
+    val scope = rememberCoroutineScope()
 
     LaunchedEffect(results, sourceImage) {
         if (sourceImage == null || results.isEmpty()) {
@@ -133,7 +123,13 @@ fun SegmentationPanel(
                 config = config,
                 onChange = { newConfig -> segViewModel.runSegmentation(newConfig) },
                 onPickPoint = {
-                    workbenchViewModel.activeTool(PickingToolState.PointPicker)
+                    scope.launch {
+                        workbenchViewModel.activeTool(PickingToolState.PointPicker)
+                        val event = workbenchViewModel.pickEvent.filterIsInstance<PickEvent.PointPicked>().first()
+                        val newConfig = currentConfig.copy(startX = event.x, startY = event.y)
+                        segViewModel.runSegmentation(newConfig)
+                        workbenchViewModel.activeTool(PickingToolState.None)
+                    }
                 }
             )
         }
