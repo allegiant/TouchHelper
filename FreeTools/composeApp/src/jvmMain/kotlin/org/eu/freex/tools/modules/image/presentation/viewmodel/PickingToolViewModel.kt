@@ -19,6 +19,7 @@ import org.eu.freex.tools.modules.image.domain.model.ImageLayer
 import org.eu.freex.tools.modules.image.presentation.viewmodel.model.PreviewState
 import java.awt.image.BufferedImage
 import java.util.UUID
+import org.eu.freex.tools.common.model.ColorRule
 
 // [新增] 查找方向枚举
 enum class FindDirection(val label: String, val code: Int) {
@@ -34,6 +35,46 @@ class PickingToolViewModel : ViewModel() {
     // ============================================================================================
     // State (原有状态)
     // ============================================================================================
+    private val _multiColorRules = MutableStateFlow<List<ColorRule>>(emptyList())
+    val multiColorRules = _multiColorRules.asStateFlow()
+
+    private val _multiColorInvert = MutableStateFlow(false)
+    val multiColorInvert = _multiColorInvert.asStateFlow()
+
+    private val _multiColorKeepOriginal = MutableStateFlow(false)
+    val multiColorKeepOriginal = _multiColorKeepOriginal.asStateFlow()
+    
+    private val _pendingPickRuleIndex = MutableStateFlow(-1)
+    val pendingPickRuleIndex = _pendingPickRuleIndex.asStateFlow()
+
+    fun setPendingPickRuleIndex(index: Int) {
+        _pendingPickRuleIndex.value = index
+    }
+
+    fun clearPendingPickRuleIndex() {
+        _pendingPickRuleIndex.value = -1
+    }
+
+    fun setMultiColorRules(rules: List<ColorRule>) {
+        _multiColorRules.value = rules
+    }
+
+    fun setMultiColorInvert(value: Boolean) {
+        _multiColorInvert.value = value
+    }
+
+    fun setMultiColorKeepOriginal(value: Boolean) {
+        _multiColorKeepOriginal.value = value
+    }
+
+    fun updateMultiColorRuleTargetHex(index: Int, targetHex: String) {
+        _multiColorRules.update { rules ->
+            if (index !in rules.indices) return@update rules
+            val next = rules.toMutableList()
+            next[index] = next[index].copy(targetHex = targetHex)
+            next
+        }
+    }
 
     private val _currentTool = MutableStateFlow<PickingToolState>(PickingToolState.None)
     val currentTool = _currentTool.asStateFlow()
@@ -126,12 +167,48 @@ class PickingToolViewModel : ViewModel() {
         }
     }
 
+    // [新增] 开始规则拾色（统一入口）
+    fun beginRuleColorPick(index: Int) {
+        _pendingPickRuleIndex.value = index
+        activateTool(PickingToolState.ColorPicker)
+    }
+
+    // [新增] 取消规则拾色（统一出口）
+    fun cancelRuleColorPick() {
+        _pendingPickRuleIndex.value = -1
+        if (_currentTool.value is PickingToolState.ColorPicker) {
+            activateTool(PickingToolState.None)
+        }
+    }
+
+    // [新增] 应用拾色到规则；成功返回 true
+    fun applyPickedColorToPendingRule(targetHex: String): Boolean {
+        val index = _pendingPickRuleIndex.value
+        if (index !in _multiColorRules.value.indices) return false
+
+        _multiColorRules.update { rules ->
+            val next = rules.toMutableList()
+            next[index] = next[index].copy(targetHex = targetHex)
+            next
+        }
+
+        _pendingPickRuleIndex.value = -1
+        if (_currentTool.value is PickingToolState.ColorPicker) {
+            activateTool(PickingToolState.None)
+        }
+        return true
+    }
+
     // ============================================================================================
     // Actions & Logic (保持不变)
     // ============================================================================================
 
     fun activateTool(tool: PickingToolState) {
         _currentTool.value = tool
+        if (tool !is PickingToolState.ColorPicker && _pendingPickRuleIndex.value != -1) {
+            _pendingPickRuleIndex.value = -1
+        }
+        
         if (tool is PickingToolState.None) {
             clearPreview()
         }
